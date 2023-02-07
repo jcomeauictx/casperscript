@@ -44,6 +44,9 @@
 #include "store.h"
 #include "scanchar.h"
 
+/* Allow scanner to use either '%' or '#' to introduce a comment */
+int char_COMMENT = '%';
+
 /*
  * Level 2 includes some changes in the scanner:
  *      - \ is always recognized in strings, regardless of the data source;
