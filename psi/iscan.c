@@ -787,6 +787,7 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
                 if (comment_count == 0)
                     {
                         char_COMMENT = '#';
+			goto begin_name;  /* don't fall through to case '%' */
                     }
                 else
                     {
