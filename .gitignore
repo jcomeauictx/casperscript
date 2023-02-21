@@ -136,3 +136,6 @@ doc/.buildinfo
 # gs/*.png
 # gs/*.tif
 # gs/*.tiff
+
+# ignore casperscript testing stuff
+showargs
