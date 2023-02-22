@@ -783,22 +783,21 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
                     goto nx;
             }
         case '#':
-	    {
-                if (comment_count == 0)
-                    {
-                        char_COMMENT = '#';
-			goto begin_name;  /* don't fall through to case '%' */
-                    }
-                else
-                    {
-                        goto begin_name;
-                    }
-            }
+            if (comment_count == 0)  /* first comment we've run across */
+                {
+                    char_COMMENT = '#';
+                }
+            else if (char_COMMENT == '%')  /* using PostScript '%' */
+                {
+                    goto begin_name;  /* '#' then used as a name */
+                }
+	    /* falls through to comment processing */
         case '%':
             {                   /* Scan as much as possible within the buffer. */
                 const byte *base = sptr;
                 const byte *end;
 
+                if (c == '%' && char_COMMENT == '#') goto begin_name;
 		comment_count++;
 
                 while (++sptr < endptr)         /* stop 1 char early */
@@ -1279,3 +1278,4 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
     sstate.s_scan_type = scanning_none;
     goto save;
 }
+// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
