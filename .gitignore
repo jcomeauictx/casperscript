@@ -139,3 +139,5 @@ doc/.buildinfo
 
 # ignore casperscript testing stuff
 showargs
+gs.xxd
+gs.dsm
