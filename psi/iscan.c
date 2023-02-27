@@ -44,10 +44,6 @@
 #include "store.h"
 #include "scanchar.h"
 
-/* Allow scanner to use either '%' or '#' to introduce a comment */
-int char_COMMENT = '%';
-int comment_count = 0;
-
 /*
  * Level 2 includes some changes in the scanner:
  *      - \ is always recognized in strings, regardless of the data source;
@@ -782,23 +778,10 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
                     sstate.s_da.is_dynamic = false;
                     goto nx;
             }
-        case '#':
-            if (comment_count == 0)  /* first comment we've run across */
-                {
-                    char_COMMENT = '#';
-                }
-            else if (char_COMMENT == '%')  /* using PostScript '%' */
-                {
-                    goto begin_name;  /* '#' then used as a name */
-                }
-	    /* falls through to comment processing */
         case '%':
             {                   /* Scan as much as possible within the buffer. */
                 const byte *base = sptr;
                 const byte *end;
-
-                if (c == '%' && char_COMMENT == '#') goto begin_name;
-		comment_count++;
 
                 while (++sptr < endptr)         /* stop 1 char early */
                     switch (*sptr) {
@@ -992,6 +975,7 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
             /* simple compilers to use a dispatch rather than tests. */
         case '!':
         case '"':
+        case '#':
         case '$':
         case '&':
         case '\'':
@@ -1278,4 +1262,3 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
     sstate.s_scan_type = scanning_none;
     goto save;
 }
-// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
