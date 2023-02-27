@@ -15,6 +15,7 @@
 
 
 /* Token scanner for Ghostscript interpreter */
+#include <syslog.h>
 #include "ghost.h"
 #include "memory_.h"
 #include "string_.h"
@@ -783,6 +784,7 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
                 const byte *base = sptr;
                 const byte *end;
 
+                syslog(LOG_USER | LOG_DEBUG, "processing comment %s", sptr);
                 while (++sptr < endptr)         /* stop 1 char early */
                     switch (*sptr) {
                         case char_CR:
@@ -1262,3 +1264,4 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
     sstate.s_scan_type = scanning_none;
     goto save;
 }
+// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
