@@ -1,7 +1,8 @@
 #!/usr/src/jcomeauictx/casperscript/bin/cs --
 (testing...) =
-/a (a) def
+/ARGUMENTS dup where {(ARGUMENTS: ) print exch get ==} {pop} ifelse
+/abc (abc) def
 10 10 moveto
 /Helvetica 20 selectfont
-a show
+abc show
 showpage
