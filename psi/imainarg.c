@@ -288,14 +288,15 @@ gs_main_init_with_args2(gs_main_instance * minst)
 int
 gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 {
-    int code = gs_main_init_with_args01(minst, argc, argv);
+    int code;
     char *program_name = NULL;
     syslog(LOG_USER | LOG_DEBUG, "argv[0]: %s", argv[0]);
     program_name = basename(argv[0]);
     syslog(LOG_USER | LOG_DEBUG, "program name: %s", program_name);
-    for (int i = 0; i < argc; i++)
+    for (int i = 1; i < argc; i++)
         syslog(LOG_USER | LOG_DEBUG, "argv[%d]: %s", i, argv[i]);
 
+    code = gs_main_init_with_args01(minst, argc, argv);
     if (code < 0)
         return code;
     return gs_main_init_with_args2(minst);
