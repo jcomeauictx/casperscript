@@ -116,7 +116,6 @@ static void print_help_trailer(const gs_main_instance *);
 /* ------ Main program ------ */
 
 /* Process the command line with a given instance. */
-char *program_name = NULL;
 static stream *
 gs_main_arg_sopen(const char *fname, void *vminst)
 {
@@ -146,9 +145,6 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
                     gs_main_arg_sopen, (void *)minst,
                     minst->get_codepoint,
                     minst->heap);
-    syslog(LOG_USER | LOG_DEBUG, "argv[0]: %s", argv[0]);
-    program_name = basename(argv[0]);
-    syslog(LOG_USER | LOG_DEBUG, "program name: %s", program_name);
     if (code < 0)
         return code;
     code = gs_main_init0(minst, 0, 0, 0, GS_MAX_LIB_DIRS);
@@ -293,6 +289,10 @@ int
 gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 {
     int code = gs_main_init_with_args01(minst, argc, argv);
+    char *program_name = NULL;
+    syslog(LOG_USER | LOG_DEBUG, "argv[0]: %s", argv[0]);
+    program_name = basename(argv[0]);
+    syslog(LOG_USER | LOG_DEBUG, "program name: %s", program_name);
 
     if (code < 0)
         return code;
@@ -1469,3 +1469,4 @@ print_help_trailer(const gs_main_instance *minst)
         p = use_htm;
     outprintf(minst->heap, help_trailer, p);
 }
+// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
