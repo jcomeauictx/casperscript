@@ -4,25 +4,30 @@
  * that makes it explicit. I'm opting for -S which is what `env` use; but
  * this means I'll need to modify gs options parsing which already accepts
  * -S<string> as a synonym for -s<string>, defining a string variable.
+ * the 2nd arg, argv[1], will be the combined args, if such exist.
  */
 #include <stdio.h>
 #include <string.h>
-char *signal = "-S ";
-size_t offset = strlen(signal);
-int main(int argc, char **argv)
-    {
-        char *argp[1024];  /* likely overkill but still well under 1 MB */
-        char *substring;  /* for string which may be split */
-        int i = 1, j = 1, argn;
-        /* store argv[0], the program name, first */
-        argp[0] = argv[0];
-        if (strncmp(signal, argv[i], offset) == 0) {
-            substring = &argv[i][offset]
-            while(argp[j] = strtok(substring, " \t") != NULL) {
-                j++; substring = NULL;
-            }
-        for (; i < argc; i++, j++) argp[j] = argv[i];
-        fprintf(stderr, "dumping argp\n");
-        for (i = 1; i < argn; i++) fprintf(stderr, "%s\n", argp[i]);
+const char signal[] = "-S ";
+const size_t offset = sizeof(signal) - 1;
+const char delimiters[] = " \t";  /* space or tab only ones expected */
+
+int main(int argc, char **argv) {
+    char *argp[1024];  /* likely overkill but still well under 1 MB */
+    char *substring;  /* for string which may be split */
+    int i = 1, j = 1;
+    fprintf(stderr, "signal: %s, offset: %d\n", signal, offset);
+    /* store argv[0], the program name, first */
+    argp[0] = argv[0];
+    if (strncmp(signal, argv[i], offset) == 0) {
+        substring = &argv[i][offset];
+        while((argp[j] = strtok(substring, delimiters)) != NULL) {
+            j++; substring = NULL;
+        }
     }
+    for (; i < argc; i++, j++) argp[j] = argv[i];
+    fprintf(stderr, "dumping argp\n");
+    for (i = 1; i < j; i++) fprintf(stderr, "%s\n", argp[i]);
+    return 0;
+}
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
