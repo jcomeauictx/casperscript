@@ -8,27 +8,33 @@
  */
 #include <stdio.h>
 #include <string.h>
+#include "splitargs.h"
+
 const char signal[] = "-S ";
 const size_t offset = sizeof(signal) - 1;
 const char delimiters[] = " \t";  /* space or tab only ones expected */
 
-int main(int argc, char **argv) {
-    char *argp[1024];  /* likely overkill but still well under 1 MB */
+int splitargs(int argc, char **argv, char **argp) {
     char *substring;  /* for string which may be split */
     int i = 1, j = 1;
-    fprintf(stderr, "signal: %s, offset: %d\n", signal, offset);
     /* store argv[0], the program name, first */
     argp[0] = argv[0];
     if (argc > 1 && strncmp(signal, argv[i], offset) == 0) {
         substring = &argv[i++][offset];
         while((argp[j] = strtok(substring, delimiters)) != NULL) {
-            fprintf(stderr, "found token %s\n", argp[j]);
             j++; substring = NULL;
         }
     }
     for (; i < argc; i++, j++) argp[j] = argv[i];
-    fprintf(stderr, "dumping argp\n");
-    for (i = 0; i < j; i++) fprintf(stderr, "argp[%d]: %s\n", i, argp[i]);
     return j;
+}
+int main(int argc, char **argv) {
+    char *argp[1024];  /* likely overkill but still well under 1 MB */
+    size_t size;
+    int i;
+    size = splitargs(argc, argv, argp);
+    fprintf(stderr, "dumping argp\n");
+    for (i = 0; i < size; i++) fprintf(stderr, "argp[%d]: %s\n", i, argp[i]);
+    return size;
 }
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
