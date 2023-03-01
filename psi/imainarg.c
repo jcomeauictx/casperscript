@@ -23,6 +23,7 @@
 #include <libgen.h>	/* casperscript program name determination */
 #include <stdlib.h>     /* for qsort */
 
+#include "splitargs.h"  /* casperscript shebang-line arg splitting */
 #include "ghost.h"
 #include "gp.h"
 #include "gsargs.h"
