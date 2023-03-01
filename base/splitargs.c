@@ -1,10 +1,13 @@
 /* split shebang-supplied multiple options into individual arguments */
-#include <syslog.h>
+#include <stdio.h>
 int main(int argc, char **argv)
     {
-        char *splitargs[1024];  /* likely overkill but still only 1 MB */
-        int argn = 0, i;
-        for (i = 0; i < argc; i++) {splitargs[i] = argv[i]; argn++;}
-        for (i = 0; i < argn; i++) syslog(LOG_USER | LOG_DEBUG, splitargs[i]);
+        char *argp[1024];  /* likely overkill but still only 1 MB */
+        int argn = 1, i;
+        /* store argv[0], the program name, first */
+        argp[0] = argv[0];
+        for (i = 1; i < argc; i++) {argp[i] = argv[i]; argn++;}
+        fprintf(stderr, "dumping argp\n");
+        for (i = 1; i < argn; i++) fprintf(stderr, "%s\n", argp[i]);
     }
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
