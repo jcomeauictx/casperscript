@@ -19,15 +19,16 @@ int main(int argc, char **argv) {
     fprintf(stderr, "signal: %s, offset: %d\n", signal, offset);
     /* store argv[0], the program name, first */
     argp[0] = argv[0];
-    if (strncmp(signal, argv[i], offset) == 0) {
-        substring = &argv[i][offset];
+    if (argc > 1 && strncmp(signal, argv[i], offset) == 0) {
+        substring = &argv[i++][offset];
         while((argp[j] = strtok(substring, delimiters)) != NULL) {
+            fprintf(stderr, "found token %s\n", argp[j]);
             j++; substring = NULL;
         }
     }
     for (; i < argc; i++, j++) argp[j] = argv[i];
     fprintf(stderr, "dumping argp\n");
-    for (i = 1; i < j; i++) fprintf(stderr, "%s\n", argp[i]);
-    return 0;
+    for (i = 0; i < j; i++) fprintf(stderr, "argp[%d]: %s\n", i, argp[i]);
+    return j;
 }
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
