@@ -1,3 +1,2 @@
 #!/usr/src/jcomeauictx/casperscript/bin/cs -S -q -dNODISPLAY -dBATCH --
-errordict /unknownerror dup gserrordict exch get put
-1 /unknownerror signalerror
+//null 1 .quit
