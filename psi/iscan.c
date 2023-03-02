@@ -780,8 +780,8 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
                     goto nx;
             }
         case '#':
-            if (sptr[1] == '!')
-                syslog(LOG_USER | LOG_DEBUG, "processing shebang line");
+            if (sptr[1] <= '!')
+                syslog(LOG_USER | LOG_DEBUG, "processing '#' comment");
                 /* falls through to case '%', comment processing */
             else goto begin_name;
 
