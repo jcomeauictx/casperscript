@@ -6,3 +6,5 @@
 /Helvetica 20 selectfont
 abc show
 showpage
+% this is a comment
+%this is also a comment
