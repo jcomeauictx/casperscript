@@ -28,6 +28,7 @@ int splitargs(int argc, char **argv, char **argp) {
     for (; i < argc; i++, j++) argp[j] = argv[i];
     return j;
 }
+#ifdef TEST_SPLITARGS
 int main(int argc, char **argv) {
     char *argp[1024];  /* likely overkill but still well under 1 MB */
     size_t size;
@@ -37,4 +38,5 @@ int main(int argc, char **argv) {
     for (i = 0; i < size; i++) fprintf(stderr, "argp[%d]: %s\n", i, argp[i]);
     return size;
 }
+#endif
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
