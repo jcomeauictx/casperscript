@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2022 Artifex Software, Inc.
+# Copyright (C) 2001-2023 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -13,7 +13,7 @@
 # CA 94945, U.S.A., +1(415)492-9861, for further information.
 #
 
-extract_cc = $(CC) $(CCFLAGS) -DEXTRACT_CV=0 $(I_)$(EXTRACT_DIR)/include$(_I) $(I_)$(ZSRCDIR)$(_I) $(O_)
+extract_cc = $(CC) $(CCFLAGS) -DEXTRACT_CV=0 $(I_)$(EXTRACT_DIR)$(D)include$(_I) $(I_)$(EXTRACT_DIR)$(D)src$(_I) $(I_)$(ZSRCDIR)$(_I) $(O_)
 extract_out_prefix = $(GLOBJDIR)$(D)extract_
 
 $(extract_out_prefix)alloc.$(OBJ):          $(EXTRACT_DIR)/src/alloc.c $(MAKEDIRS)
@@ -45,6 +45,9 @@ $(extract_out_prefix)join.$(OBJ):           $(EXTRACT_DIR)/src/join.c $(MAKEDIRS
 
 $(extract_out_prefix)html.$(OBJ):            $(EXTRACT_DIR)/src/html.c $(MAKEDIRS)
 	$(extract_cc)$@ $(C_) $(EXTRACT_DIR)/src/html.c
+
+$(extract_out_prefix)json.$(OBJ):           $(EXTRACT_DIR)/src/json.c $(MAKEDIRS)
+	$(extract_cc)$@ $(C_) $(EXTRACT_DIR)/src/json.c
 
 $(extract_out_prefix)mem.$(OBJ):            $(EXTRACT_DIR)/src/mem.c $(MAKEDIRS)
 	$(extract_cc)$@ $(C_) $(EXTRACT_DIR)/src/mem.c
@@ -84,6 +87,7 @@ EXTRACT_OBJS = \
 	$(extract_out_prefix)extract.$(OBJ) \
 	$(extract_out_prefix)html.$(OBJ) \
 	$(extract_out_prefix)join.$(OBJ) \
+	$(extract_out_prefix)json.$(OBJ) \
 	$(extract_out_prefix)mem.$(OBJ) \
 	$(extract_out_prefix)odt.$(OBJ) \
 	$(extract_out_prefix)odt_template.$(OBJ) \

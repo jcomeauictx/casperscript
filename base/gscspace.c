@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2021 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -109,9 +109,11 @@ gs_cspace_final(const gs_memory_t *cmem, void *vptr)
     if_debug2m('c', cmem, "[c]cspace final "PRI_INTPTR" %d\n", (intptr_t)pcs, (int)pcs->id);
     rc_decrement_only_cs(pcs->base_space, "gs_cspace_final");
     pcs->base_space = NULL;
-    if (pcs->params.device_n.devn_process_space != NULL) {
-        rc_decrement_only_cs(pcs->params.device_n.devn_process_space, "gs_cspace_final");
-        pcs->params.device_n.devn_process_space = NULL;
+    if (gs_color_space_get_index(pcs) == gs_color_space_index_DeviceN) {
+        if (pcs->params.device_n.devn_process_space != NULL) {
+            rc_decrement_only_cs(pcs->params.device_n.devn_process_space, "gs_cspace_final");
+            pcs->params.device_n.devn_process_space = NULL;
+        }
     }
     /* No need to decrement the ICC profile data.  It is handled
        by the finalize of the ICC space which is called above using
@@ -135,6 +137,7 @@ gs_cspace_alloc_with_id(gs_memory_t *mem, ulong id,
     pcs->interpreter_data = NULL;
     pcs->interpreter_free_cspace_proc = NULL;
     pcs->cmm_icc_profile_data = NULL;
+    pcs->ICC_Alternate_space = gs_ICC_Alternate_None;
     pcs->icc_equivalent = NULL;
     pcs->params.device_n.devn_process_space = NULL;
     return pcs;
@@ -1045,8 +1048,13 @@ ENUM_PTRS_BEGIN_PROC(color_space_enum_ptrs)
         return ENUM_OBJ(pcs->pclient_color_space_data);
     if (index == 2)
         return ENUM_OBJ(pcs->icc_equivalent);
-    if (index == 3)
-        return ENUM_OBJ(pcs->params.device_n.devn_process_space);
+    if (index == 3) {
+        if (gs_color_space_get_index(pcs) == gs_color_space_index_DeviceN)
+            return ENUM_OBJ(pcs->params.device_n.devn_process_space);
+        else
+            return ENUM_OBJ(NULL);
+    }
+
     return ENUM_USING(*pcs->type->stype, vptr, size, index - 4);
     ENUM_PTRS_END_PROC
 }
@@ -1056,7 +1064,8 @@ RELOC_PTRS_WITH(color_space_reloc_ptrs, gs_color_space *pcs)
     RELOC_VAR(pcs->base_space);
     RELOC_VAR(pcs->pclient_color_space_data);
     RELOC_VAR(pcs->icc_equivalent);
-    RELOC_VAR(pcs->params.device_n.devn_process_space);
+    if (gs_color_space_get_index(pcs) == gs_color_space_index_DeviceN)
+        RELOC_VAR(pcs->params.device_n.devn_process_space);
     RELOC_USING(*pcs->type->stype, vptr, size);
 }
 RELOC_PTRS_END

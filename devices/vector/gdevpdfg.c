@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2022 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -224,7 +224,14 @@ pdf_viewer_state_from_gs_gstate_aux(pdf_viewer_state *pvs, const gs_gstate *pgs)
     pvs->text_knockout = pgs->text_knockout;
     pvs->fill_overprint = false;
     pvs->stroke_overprint = false;
-    pvs->stroke_adjust = false;
+    /* The PDF Reference says that the default is 'false' but experiments show (bug #706407)
+     * that Acrobat defaults to true. Also Ghostscript, at low resolution at least, defaults
+     * to true as well. By setting the initial value to neither true nor false we can ensure
+     * that any input file which sets it, whether true or false, will cause it not to match
+     * the initial value, so we will write it out, thus preserving the value, no matter what
+     * the default.
+     */
+    pvs->stroke_adjust = -1;
     pvs->line_params.half_width = 0.5;
     pvs->line_params.start_cap = 0;
     pvs->line_params.end_cap = 0;
@@ -3269,13 +3276,32 @@ pdf_try_prepare_stroke(gx_device_pdf *pdev, const gs_gstate *pgs, bool for_text)
         pdev->fill_overprint = pgs->stroke_overprint;
     }
     if (pdev->state.stroke_adjust != pgs->stroke_adjust) {
-        code = pdf_open_gstate(pdev, &pres);
-        if (code < 0)
-            return code;
-        code = cos_dict_put_c_key_bool(resource_dict(pres), "/SA", pgs->stroke_adjust);
-        if (code < 0)
-            return code;
-        pdev->state.stroke_adjust = pgs->stroke_adjust;
+        /* Frankly this is awfully hacky. There is a problem with ps2write and type 3 fonts, for
+         * reasons best known to itself it does not seem to collect all the /Resources required
+         * for CharProcs when we meddle with the stroke adjustment. This 'seems' to be because it
+         * only collects them when it runs the BuildChar, if we use the existing CharProc in a
+         * different font then it can miss the Resources needed for the ExtGState.
+         * This does not happen with pdfwrite!
+         * Since ps2write doesn't require us to store teh staroke adjustment in an ExtGState
+         * anyway, just emit it directly.
+         * File exhibiting this is tests_private/comparefiles/Bug688967.ps
+         */
+        if (!pdev->ForOPDFRead) {
+            code = pdf_open_gstate(pdev, &pres);
+            if (code < 0)
+                return code;
+            code = cos_dict_put_c_key_bool(resource_dict(pres), "/SA", pgs->stroke_adjust);
+            if (code < 0)
+                return code;
+            pdev->state.stroke_adjust = pgs->stroke_adjust;
+        } else {
+            if (pgs->stroke_adjust)
+                stream_puts(gdev_vector_stream((gx_device_vector *)pdev), "true setstrokeadjust\n");
+            else
+                stream_puts(gdev_vector_stream((gx_device_vector *)pdev), "false setstrokeadjust\n");
+            pdev->state.stroke_adjust = pgs->stroke_adjust;
+        }
+
     }
     return pdf_end_gstate(pdev, pres);
 }

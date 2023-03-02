@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2022 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -383,6 +383,7 @@ static int setup_type3_image(gx_device_pdf *pdev, const gs_gstate * pgs,
             gs_matrix_scale(&pim3a.ImageMatrix, 1, 1.0 / sy, &pim3a.ImageMatrix);
         }
         gs_matrix_multiply(&mi, &pim3a.MaskDict.ImageMatrix, &pim3a.MaskDict.ImageMatrix);
+        pim3a.imagematrices_are_untrustworthy = 1;
         pic1 = (gs_image_common_t *)&pim3a;
         /* Setting pdev->converting_image_matrix to communicate with pdf_image3_make_mcde. */
         gs_matrix_multiply(&mi, &ctm_only(pgs), &pdev->converting_image_matrix);
@@ -1911,8 +1912,29 @@ static int
 pdf_end_and_do_image(gx_device_pdf *pdev, pdf_image_writer *piw,
                      const gs_matrix *mat, gs_id ps_bitmap_id, pdf_image_usage_t do_image)
 {
-    int code = pdf_end_write_image(pdev, piw);
-    pdf_resource_t *pres = piw->pres;
+    int code = 0;
+    pdf_resource_t *pres = NULL;
+
+    /* In order to identify duplicated images which use the same SMask we must
+     * add the SMask entry to the image dictionary before we call pdf_end_write_image
+     * because that will hash the dictionaries and streams. If we haven't already
+     * added the SMask then the hash will not match any existing image which uses an SMask.
+     */
+    if (do_image == USE_AS_IMAGE) {
+        if (pdev->image_mask_id != gs_no_id && piw->pres && piw->pres->object) {
+            char buf[20];
+
+            gs_snprintf(buf, sizeof(buf), "%ld 0 R", pdev->image_mask_id);
+            code = cos_dict_put_string_copy((cos_dict_t *)piw->pres->object,
+                    pdev->image_mask_is_SMask ? "/SMask" : "/Mask", buf);
+            (*(piw->pres->object)).md5_valid = 0;
+            if (code < 0)
+                return code;
+        }
+    }
+
+    code = pdf_end_write_image(pdev, piw);
+    pres = piw->pres;
 
     switch (code) {
     default:
@@ -1922,16 +1944,6 @@ pdf_end_and_do_image(gx_device_pdf *pdev, pdf_image_writer *piw,
         break;
     case 0:
         if (do_image == USE_AS_IMAGE) {
-            if (pdev->image_mask_id != gs_no_id) {
-                char buf[20];
-
-                gs_snprintf(buf, sizeof(buf), "%ld 0 R", pdev->image_mask_id);
-                code = cos_dict_put_string_copy((cos_dict_t *)pres->object,
-                        pdev->image_mask_is_SMask ? "/SMask" : "/Mask", buf);
-                (*(pres->object)).md5_valid = 0;
-                if (code < 0)
-                    return code;
-            }
             if (pdev->image_mask_skip)
                 code = 0;
             else

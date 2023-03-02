@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2022 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -483,7 +483,7 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
         return_error(gs_error_rangecheck);
     }
 
-    /* Separations are only valid with a subrtractive color model */
+    /* Separations are only valid with a subtractive color model */
     if (pdev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE) {
         /*
          * Process the SeparationColorNames.  Remove any names that already
@@ -813,13 +813,10 @@ static bool devn_params_equal(const gs_devn_params *p1, const gs_devn_params *p2
     return true;
 }
 
-/*
- * Utility routine for handling DeviceN related parameters in a
- * standard raster printer type device.
- */
 int
-devn_printer_put_params(gx_device * pdev, gs_param_list * plist,
-    gs_devn_params * pdevn_params, equivalent_cmyk_color_params * pequiv_colors)
+devn_generic_put_params(gx_device *pdev, gs_param_list *plist,
+                        gs_devn_params *pdevn_params, equivalent_cmyk_color_params *pequiv_colors,
+                        int is_printer)
 {
     int code;
     /* Save current data in case we have a problem */
@@ -834,7 +831,7 @@ devn_printer_put_params(gx_device * pdev, gs_param_list * plist,
     code = devn_put_params(pdev, plist, pdevn_params, pequiv_colors);
 
     /* Check for default printer parameters */
-    if (code >= 0)
+    if (is_printer && code >= 0)
         code = gdev_prn_put_params(pdev, plist);
 
     /* If we have an error then restore original data. */
@@ -876,6 +873,17 @@ devn_printer_put_params(gx_device * pdev, gs_param_list * plist,
      */
     code = pdf14_put_devn_params(pdev, pdevn_params, plist);
     return code;
+}
+
+/*
+ * Utility routine for handling DeviceN related parameters in a
+ * standard raster printer type device.
+ */
+int
+devn_printer_put_params(gx_device *pdev, gs_param_list *plist,
+        gs_devn_params *pdevn_params, equivalent_cmyk_color_params *pequiv_colors)
+{
+    return devn_generic_put_params(pdev, plist, pdevn_params, pequiv_colors, 1);
 }
 
 /*

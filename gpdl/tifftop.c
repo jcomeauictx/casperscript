@@ -510,16 +510,17 @@ blend_alpha(tiff_interp_instance_t *tiff, size_t n)
 static uint32_t
 safe_mla(const gs_memory_t *mem, int *code, uint32_t a, uint32_t b, uint32_t c, uint32_t d)
 {
-    if (UINT_MAX/b > a)
+    /* UINT_MAX < b*a means overflow, but we can't calculate that... */
+    if (UINT_MAX/b < a)
         goto fail;
     a *= b;
-    if (UINT_MAX/c > a)
+    if (UINT_MAX/c < a)
         goto fail;
     a *= c;
     if (UINT_MAX-c < d)
         goto fail;
 
-    return c+d;
+    return a+d;
 
 fail:
     emprintf(mem, "Numeric overflow!\n");
@@ -531,16 +532,17 @@ fail:
 static size_t
 size_mla(const gs_memory_t *mem, int *code, size_t a, size_t b, size_t c, size_t d)
 {
-    if (SIZE_MAX/b > a)
+    /* SIZE_MAX < b*a means overflow, but we can't calculate that... */
+    if (SIZE_MAX/b < a)
         goto fail;
     a *= b;
-    if (SIZE_MAX/c > a)
+    if (SIZE_MAX/c < a)
         goto fail;
     a *= c;
     if (SIZE_MAX-c < d)
         goto fail;
 
-    return c+d;
+    return a+d;
 
 fail:
     emprintf(mem, "Numeric overflow!\n");
@@ -726,6 +728,8 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                     goto fail_decode;
             } else if (tiff->tiled) {
                 tiff->samples = gs_alloc_bytes(tiff->memory, TIFFTileSize(tiff->handle), "tiff_tile");
+            } else if (planar == PLANARCONFIG_SEPARATE) {
+                tiff->samples = gs_alloc_bytes(tiff->memory, tiff->byte_width * tiff->num_comps, "tiff_scan");
             } else {
                 tiff->samples = gs_alloc_bytes(tiff->memory, tiff->byte_width, "tiff_scan");
             }
@@ -1000,8 +1004,10 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                                 goto fail_decode;
                             }
                         } else {
-                            int span = tiff->byte_width / tiff->num_comps;
+                            int span = tiff->byte_width;
                             byte *in_row = tiff->samples;
+                            if (planar != PLANARCONFIG_SEPARATE)
+                                span /= tiff->num_comps;
                             row = tiff->proc_samples;
                             for (s = 0; s < tiff->num_comps; s++) {
                                 plane_data[s].data = row;

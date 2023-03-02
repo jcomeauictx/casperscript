@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2022 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -247,6 +247,10 @@ alpha_buffer_init(gs_gstate * pgs, fixed extra_x, fixed extra_y, int alpha_bits,
     mdev->width = width;
     mdev->height = height;
     mdev->bitmap_memory = mem;
+    /* Set the horrible hacky flag that tells people that the width/height here
+     * have been set for *our* convenience, rather than accurately depicting the
+     * size of the device for callers. */
+    mdev->non_strict_bounds = 1;
     if ((*dev_proc(mdev, open_device)) ((gx_device *) mdev) < 0) {
         /* No room for bits, punt. */
         gs_free_object(mem, mdev, "alpha_buffer_init");

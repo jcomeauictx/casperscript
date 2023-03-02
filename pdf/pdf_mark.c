@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2022 Artifex Software, Inc.
+/* Copyright (C) 2020-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -397,21 +397,46 @@ static int pdfi_pdfmark_add_Page_View(pdf_context *ctx, pdf_dict *link_dict, pdf
         page_num = ((pdf_num *)page_dict)->value.i;
     } else {
         if (pdfi_type_of(page_dict) != PDF_DICT) {
-            code = gs_note_error(gs_error_typecheck);
-            goto exit;
+            if (pdfi_type_of(page_dict) != PDF_NULL) {
+                code = gs_note_error(gs_error_typecheck);
+                goto exit;
+            }
+            page_num = 0;
+        } else {
+            /* Find out which page number this is */
+            code = pdfi_page_get_number(ctx, page_dict, &page_num);
+            if (code < 0) goto exit;
         }
-
-        /* Find out which page number this is */
-        code = pdfi_page_get_number(ctx, page_dict, &page_num);
-        if (code < 0) goto exit;
     }
 
     page_num += ctx->Pdfmark_InitialPage;
 
-    /* Add /Page key to the link_dict
-     * Of course pdfwrite is numbering its pages starting at 1, because... of course :(
+    if (pdfi_type_of(page_dict) != PDF_NULL)
+        /* Add /Page key to the link_dict
+         * Of course pdfwrite is numbering its pages starting at 1, because... of course :(
+         */
+        code = pdfi_dict_put_int(ctx, link_dict, "Page", page_num+1);
+    else
+        code = pdfi_dict_put_int(ctx, link_dict, "Page", 0);
+
+    if (code < 0)
+        goto exit;
+
+    /* Get and check the destination type, again without storing the deref in the array.
+     * In this case a memory leak  can only happen if the destination
+     * is an invalid type, but lets take no chances.
      */
-    code = pdfi_dict_put_int(ctx, link_dict, "Page", page_num+1);
+    code = pdfi_array_get_no_store_R(ctx, dest_array, 1, &temp_obj);
+    if (code < 0) goto exit;
+
+    if (pdfi_type_of(temp_obj) != PDF_NAME) {
+        pdfi_countdown(temp_obj);
+        temp_obj = NULL;
+        code = gs_note_error(gs_error_typecheck);
+        goto exit;
+    }
+    pdfi_countdown(temp_obj);
+    temp_obj = NULL;
 
     /* Build an array for /View, out of the remainder of the Dest entry */
     array_size = pdfi_array_size(dest_array) - 1;
@@ -728,9 +753,9 @@ error:
     return code;
 }
 
-static int pdfi_get_name_from_node(pdf_context *ctx, pdf_dict *node, char *str, pdf_obj **Name, bool is_root)
+static int pdfi_get_name_from_node(pdf_context *ctx, pdf_dict *node, char *str, int len, pdf_obj **Name, bool is_root)
 {
-    int i = 0, len = strlen(str), code = 0;
+    int i = 0, code = 0;
     pdf_string *StrKey = NULL;
     pdf_array *NamesArray = NULL;
     pdf_dict *Kid = NULL;
@@ -773,7 +798,7 @@ static int pdfi_get_name_from_node(pdf_context *ctx, pdf_dict *node, char *str, 
             if (code < 0)
                 goto error;
 
-            if (StrKey->length == len && strncmp((const char *)StrKey->data, str, len) == 0) {
+            if (StrKey->length == len && memcmp((const char *)StrKey->data, str, len) == 0) {
                 code = pdfi_array_get(ctx, NamesArray, (i * 2) + 1, (pdf_obj **)Name);
                 goto error;
             }
@@ -794,7 +819,7 @@ static int pdfi_get_name_from_node(pdf_context *ctx, pdf_dict *node, char *str, 
         if (code < 0)
             goto error;
 
-        code = pdfi_get_name_from_node(ctx, Kid, str, Name, false);
+        code = pdfi_get_name_from_node(ctx, Kid, str, len, Name, false);
         pdfi_countdown(Kid);
         Kid = NULL;
         if (code == 0)
@@ -848,7 +873,7 @@ static int pdfi_get_named_dest(pdf_context *ctx, pdf_obj *Named, pdf_obj **Dest)
         str[len] = 0;
     }
 
-    code = pdfi_get_name_from_node(ctx, Dests, str, Dest, true);
+    code = pdfi_get_name_from_node(ctx, Dests, str, len, Dest, true);
 
 error:
     if (pdfi_type_of(Named) == PDF_NAME)

@@ -189,6 +189,7 @@ AC_SUBST(SED_EXTENDED_REGEX_OPT)
 
 AC_PROG_RANLIB
 #AC_PROG_INSTALL
+AC_PROG_GREP
 
 # If the caller has gives a specific pkg-config to use, then
 # use it, and skip the tests.
@@ -220,6 +221,16 @@ if test x"$host" != x"$build" ; then
   if test x"$BUILD_STRIP_XE" = x"$STRIP_XE" ; then
     STRIP_XE=
   fi
+fi
+
+dnl --------------------------------------------------
+dnl Are we GPL?
+dnl --------------------------------------------------
+
+GPL_CONF=yes
+grep "GPL Ghostscript" $srcdir/base/gscdefs.h &> /dev/null
+if test "$?" != "0" ; then
+  GPL_CONF=no
 fi
 
 dnl --------------------------------------------------
@@ -1084,10 +1095,17 @@ fi
 AC_SUBST(HAVE_LIBIDN)
 AC_SUBST(UTF8DEVS)
 
+if test x"$GPL_CONF" = x"yes" ; then
+
 dnl Tests for libpaper (to determine system default paper size)
-AC_ARG_WITH([libpaper],
+
+  AC_ARG_WITH([libpaper],
             AS_HELP_STRING([--without-libpaper],
                            [disable libpaper support]))
+else
+    with_libpaper=no
+fi
+
 if test x$with_libpaper != xno; then
     AC_CHECK_LIB(paper, systempapername, [with_libpaper=yes],
     [
@@ -2218,8 +2236,24 @@ if test x$with_so != xno; then
     ENABLESO="\$(D_)SO_INCLUDED\$(_D)"
     GPDL_SO_TOP_OBJ="\$(GPDLOBJ)/\$(GPDL_SO_TOP_OBJ_FILE)"
     # This will do for now, though clearly it's not ideal.
-    SO_PDFEXPORT_LIB="\$(SOSRCDIR)/lib/linux/x64/smart-office-lib.a"
-fi
+    case $host in
+        i*86*-linux*|i*86*-gnu)
+            SO_PDFEXPORT_LIB="\$(SOSRCDIR)/lib/linux/x86/smart-office-lib.a"
+        ;;
+        *-linux*|*-gnu)
+            SO_PDFEXPORT_LIB="\$(SOSRCDIR)/lib/linux/x64/smart-office-lib.a"
+        ;;
+        *arm64*-darwin*)
+            SO_PDFEXPORT_LIB="\$(SOSRCDIR)/lib/macos/arm64/smart-office-lib.a"
+        ;;
+        *i*86-darwin*)
+            SO_PDFEXPORT_LIB="\$(SOSRCDIR)/lib/macos/x86/smart-office-lib.a"
+        ;;
+        *-darwin*)
+            SO_PDFEXPORT_LIB="\$(SOSRCDIR)/lib/macos/x64/smart-office-lib.a"
+        ;;
+    esac
+  fi
 fi
 
 AC_SUBST(ENABLESO)
@@ -3130,9 +3164,13 @@ AC_SUBST(FT_HIDDEN_CFLAGS)
 AC_SUBST(XML_HIDDEN_CFLAGS)
 
 AC_ARG_ENABLE([dynamic], AS_HELP_STRING([--enable-dynamic],
-    [Enable dynamically loaded drivers]),
+    [Enable dynamically loaded drivers (note: this option is deprecated because it is incompatible with hidden symbols - use --disable-hidden-visibility]),
 [
   if test "x$enable_dynamic" != xno; then
+    if test x"$hide_symbols" = x"yes" ; then
+       AC_MSG_ERROR([Sorry, (deprecated) dynamic driver support not compatible with hidden symbols - use --disable-hidden-visibility])
+    fi
+
     case $host in
       *-linux*|*-gnu)
         INSTALL_SHARED="install-shared"

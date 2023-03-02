@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2022 Artifex Software, Inc.
+/* Copyright (C) 2019-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -688,7 +688,7 @@ format3_fdselect_proc(const byte *p, const byte *pe, unsigned int i)
 static byte *
 pdfi_read_cff_real(byte *p, byte *e, float *val)
 {
-    char buf[64];
+    char buf[65];
     char *txt = buf;
 
     /* b0 was 30 */
@@ -2051,7 +2051,7 @@ pdfi_alloc_cff_cidfont(pdf_context *ctx, pdf_cidfont_type0 ** font, uint32_t obj
        we won't worry about working without FAPI */
     pfont->procs.encode_char = pdfi_encode_char;
     pfont->procs.glyph_name = ctx->get_glyph_name;
-    pfont->procs.decode_glyph = pdfi_decode_glyph;
+    pfont->procs.decode_glyph = pdfi_cidfont_decode_glyph;
     pfont->procs.define_font = gs_no_define_font;
     pfont->procs.make_font = gs_no_make_font;
     pfont->procs.font_info = gs_default_font_info;
@@ -3017,11 +3017,6 @@ pdfi_copy_cff_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, pd
     if (uid_is_XUID(&font->pfont->UID))
         uid_free(&font->pfont->UID, font->pfont->memory, "pdfi_read_type1_font");
     uid_set_invalid(&font->pfont->UID);
-
-    code = pdfi_font_generate_pseudo_XUID(ctx, font_dict, font->pfont);
-    if (code < 0) {
-        goto error;
-    }
 
     if (ctx->args.ignoretounicode != true) {
         code = pdfi_dict_get(ctx, font_dict, "ToUnicode", (pdf_obj **)&tmp);
