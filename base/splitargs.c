@@ -1,7 +1,7 @@
 /* split shebang-supplied multiple options into individual arguments
  *
  * we could do this just by looking for spaces, or we could have a switch
- * that makes it explicit. I'm opting for -S which is what `env` use; but
+ * that makes it explicit. I'm opting for -S which is what `env` uses; but
  * this means I'll need to modify gs options parsing which already accepts
  * -S<string> as a synonym for -s<string>, defining a string variable.
  * the 2nd arg, argv[1], will be the combined args, if such exist.
