@@ -1053,12 +1053,13 @@ argproc(gs_main_instance * minst, const char *arg)
 
     code = gs_add_control_path(minst->heap, gs_permit_file_reading, arg);
     if (code < 0) return code;
-
     if (minst->run_buffer_size) {
         /* Run file with run_string. */
+        syslog(LOG_USER | LOG_DEBUG, "run_buffered(minst, \"%s\")", arg);
         code = run_buffered(minst, arg);
     } else {
         /* Run file directly in the normal way. */
+        syslog(LOG_USER | LOG_DEBUG, "runarg(minst, \"\", \"%s\", ...)", arg);
         code = runarg(minst, "", arg, ".runfile", runInit | runFlush, minst->user_errors, NULL, NULL);
     }
 
