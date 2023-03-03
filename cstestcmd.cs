@@ -1,4 +1,4 @@
-#!/usr/src/jcomeauictx/casperscript/bin/cs -S -q -dNODISPLAY -dBATCH --
+#!/usr/src/jcomeauictx/casperscript/bin/gs -S -q -dNODISPLAY -dBATCH --
 (testing...) =
 /ARGUMENTS dup where {(ARGUMENTS: ) print exch get ==} {pop} ifelse
 /abc (abc) def
