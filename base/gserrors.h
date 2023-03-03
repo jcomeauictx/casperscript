@@ -170,8 +170,7 @@ int gs_log_error(int, const char *, int);
 
 const char *gs_errstr(int code);
 
-int gs_throw_imp(const char *func, const char *file, int line,
-        int op, int code, const char *fmt, ...) __printflike(6, 7);
+int gs_throw_imp(const char *func, const char *file, int line, int op, int code, const char *fmt, ...) __printflike(6, 7);
 
 /* Use throw at origin of error
 */
