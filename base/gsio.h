@@ -46,7 +46,7 @@
 /* don't provide the strerror function, we can't.  (No Artifex-maintained */
 /* code uses perror.) */
 #undef printf
-#define printf Function._printf_.unavailable
+#define printf Function_printf_unavailable
 #undef putchar
 #define putchar(c) Function._putchar_.unavailable
 #undef puts
