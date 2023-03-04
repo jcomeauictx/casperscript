@@ -1,2 +1,2 @@
 #!bin/gs -S -q -dNODISPLAY -dBATCH --
-/defaultdevice cvx 1 .quit
+/defaultdevice cvx -102 .quit
