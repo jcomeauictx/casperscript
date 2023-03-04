@@ -130,6 +130,9 @@ enum gs_error_type {
  */
     gs_error_handled = -111,
 
+/* Silent exit with error code 1, for utilities like csbin/false */
+    gs_error_silent = -112,
+
 };
 
 /* We do provide a typedef type for external API use */

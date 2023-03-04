@@ -1192,6 +1192,7 @@ static int
 run_finish(gs_main_instance *minst, int code, int exit_code,
            ref * perror_object)
 {
+    syslog(LOG_USER | LOG_DEBUG, "run_finish(*minst, %d, %d, ...)", code, exit_code);
     switch (code) {
         case gs_error_Quit:
         case 0:
@@ -1207,6 +1208,7 @@ run_finish(gs_main_instance *minst, int code, int exit_code,
         default:
             gs_main_dump_stack(minst, code, perror_object);
     }
+    syslog(LOG_USER | LOG_DEBUG, "run_finish returning code %d", code);
     return code;
 }
 

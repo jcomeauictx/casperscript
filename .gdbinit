@@ -1,3 +1,4 @@
 set disassemble-next-line on
 break gs_scan_token
-run cstest.cs
+break run_finish
+run csbin/false
