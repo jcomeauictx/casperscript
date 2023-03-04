@@ -32,6 +32,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <locale.h>
+#include <syslog.h>  /* casperscript debugging */
 #include <gtk/gtk.h>
 #define __PROTOTYPES__
 #include "ierrors.h"
