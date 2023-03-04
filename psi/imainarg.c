@@ -1194,13 +1194,13 @@ run_finish(gs_main_instance *minst, int code, int exit_code,
 {
     syslog(LOG_USER | LOG_DEBUG, "run_finish(*minst, %d, %d, ...)", code, exit_code);
     switch (code) {
-        case gs_error_Quit:
+        case gs_error_Quit:  /* -101 */
         case 0:
             break;
-        case gs_error_Fatal:
-            if (exit_code == gs_error_InterpreterExit)
+        case gs_error_Fatal:  /* -100, returned as code by .quit */
+            if (exit_code == gs_error_InterpreterExit)  /* -102 */
                 code = exit_code;
-            else
+            else if (exit_code != gs_error_silent)  /* -112 */
                 emprintf1(minst->heap,
                           "Unrecoverable error, exit code %d\n",
                           exit_code);

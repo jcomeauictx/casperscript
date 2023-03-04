@@ -1251,10 +1251,10 @@ int main(int argc, char *argv[])
     exit_status = 0;
     switch (code) {
         case 0:
-        case gs_error_Info:
-        case gs_error_Quit:
+        case gs_error_Info:  /* -110 */
+        case gs_error_Quit:  /* -101 */
             break;
-        case gs_error_Fatal:
+        case gs_error_Fatal:  /* -100 */
             exit_status = 1;
             break;
         default:
