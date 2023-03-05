@@ -19,6 +19,7 @@
 #include "ctype_.h"
 #include "memory_.h"
 #include "string_.h"
+#include "substr.h"
 #include <syslog.h>	/* casperscript debugging */
 #include <libgen.h>	/* casperscript program name determination */
 #include <stdlib.h>     /* for qsort */
@@ -1173,7 +1174,10 @@ run_string(gs_main_instance *minst,
     int exit_code;
     ref error_object;
     int code;
+    char buffer[1024];
 
+    syslog(LOG_USER | LOG_DEBUG, "run_string(minst, \"%s...\", ...)",
+           substr(buffer, str, 0, 128));
     if (pexit_code == NULL)
         pexit_code = &exit_code;
     if (perror_object == NULL)
