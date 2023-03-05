@@ -17,6 +17,7 @@
 /* Common support for interpreter front ends */
 
 
+#include <syslog.h>
 #include "malloc_.h"
 #include "memory_.h"
 #include "string_.h"
@@ -839,6 +840,7 @@ gs_run_init_file(gs_main_instance * minst, int *pexit_code, ref * perror_object)
     int code;
     scanner_state state;
 
+    syslog(LOG_USER | LOG_DEBUG, "imain running %s", gs_init_file);
     gs_main_set_lib_paths(minst);
     code = gs_main_run_file_open(minst, gs_init_file, &ifile);
     if (code < 0) {
