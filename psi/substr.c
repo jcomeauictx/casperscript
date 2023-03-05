@@ -5,16 +5,28 @@
 #include <string.h>
 #include <syslog.h>
 
-char *substr(char *dest, const char *src, int start);
+char *substr(char *dest, const char *src, int start, int length);
 
-char *substr(char *dest, const char *src, int start) {
-	return strncpy(dest, src + start, strlen(dest));
+char *substr(char *dest, const char *src, int start, int length) {
+    return strncpy(dest, src + start, length);
 }
 
 int main(int argc, char **argv) {
-	if (argc == 4) {
-		char *buffer = argv[1];
-		int start = atoi(argv[3]);
-		printf("\"%s\"\n", substr(buffer, argv[2], start));
-	}
+    char *buffer;
+    int start, length;
+    if (argc > 2) {
+        buffer = argv[1];
+        if (argc >= 4) start = atoi(argv[3]); else start = 0;
+        if (argc >= 5) length = atoi(argv[4]); else length = strlen(argv[1]);
+        if (length > strlen(argv[1])) {
+            fprintf(stderr, "Length will overflow buffer, shortening\n");
+            length = strlen(argv[1]);
+        }
+        if (argc >= 6) fprintf(stderr, "Extra args ignored\n");
+        printf("\"%s\"\n", substr(buffer, argv[2], start, length));
+        return 0;
+    } else {
+        fprintf(stderr, "Must at least specify buffer and source strings\n");
+    }
 }
+// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
