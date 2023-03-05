@@ -1055,11 +1055,9 @@ argproc(gs_main_instance * minst, const char *arg)
     if (code < 0) return code;
     if (minst->run_buffer_size) {
         /* Run file with run_string. */
-        syslog(LOG_USER | LOG_DEBUG, "run_buffered(minst, \"%s\")", arg);
         code = run_buffered(minst, arg);
     } else {
         /* Run file directly in the normal way. */
-        syslog(LOG_USER | LOG_DEBUG, "runarg(minst, \"\", \"%s\", ...)", arg);
         code = runarg(minst, "", arg, ".runfile", runInit | runFlush, minst->user_errors, NULL, NULL);
     }
 
@@ -1076,6 +1074,7 @@ run_buffered(gs_main_instance * minst, const char *arg)
     ref error_object;
     int code;
 
+    syslog(LOG_USER | LOG_DEBUG, "run_buffered(minst, \"%s\")", arg);
     if (in == 0) {
         outprintf(minst->heap, "Unable to open %s for reading", arg);
         return_error(gs_error_invalidfileaccess);
@@ -1123,6 +1122,7 @@ runarg(gs_main_instance *minst,
     int code;
     char *line;
 
+    syslog(LOG_USER | LOG_DEBUG, "runarg(minst, \"\", \"%s\", ...)", arg);
     if (options & runInit) {
         code = gs_main_init2(minst);    /* Finish initialization */
 

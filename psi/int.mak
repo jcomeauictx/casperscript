@@ -259,6 +259,8 @@ main_h=$(PSSRC)main.h
 sbwbs_h=$(PSSRC)sbwbs.h
 shcgen_h=$(PSSRC)shcgen.h
 smtf_h=$(GLSRC)smtf.h
+splitargs_h=$(GLSRC)splitargs.h
+substr_h=$(PSSRC)substr.h
 # Nested include files
 bfont_h=$(PSSRC)bfont.h
 icontext_h=$(PSSRC)icontext.h
@@ -299,7 +301,7 @@ $(PSOBJ)iscan.$(OBJ) : $(PSSRC)iscan.c $(GH) $(memory__h)\
  $(iscan_h) $(iscanbin_h) $(iscannum_h)\
  $(istruct_h) $(istream_h) $(iutil_h) $(ivmspace_h)\
  $(ostack_h) $(store_h)\
- $(sa85d_h) $(stream_h) $(strimpl_h) $(sfilter_h) $(scanchar_h)\
+ $(sa85d_h) $(stream_h) $(strimpl_h) $(sfilter_h) $(scanchar_h) $(substr_h) \
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)iscan.$(OBJ) $(C_) $(PSSRC)iscan.c
 
@@ -329,7 +331,7 @@ $(PSOBJ)zcontrol.$(OBJ) : $(PSSRC)zcontrol.c $(OP) $(string__h)\
 
 $(PSOBJ)zdict.$(OBJ) : $(PSSRC)zdict.c $(OP)\
  $(dstack_h) $(iddict_h) $(ilevel_h) $(iname_h) $(ipacked_h) $(ivmspace_h)\
- $(store_h) $(iscan_h) $(INT_MAK) $(MAKEDIRS)
+ $(store_h) $(iscan_h) $(substr_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zdict.$(OBJ) $(C_) $(PSSRC)zdict.c
 
 $(PSOBJ)zfile.$(OBJ) : $(PSSRC)zfile.c $(OP)\
@@ -378,7 +380,7 @@ $(PSOBJ)ziodev.$(OBJ) : $(PSSRC)ziodev.c $(OP)\
  $(gp_h) $(gpcheck_h)\
  $(gxiodev_h)\
  $(files_h) $(ialloc_h) $(iscan_h) $(ivmspace_h)\
- $(scanchar_h) $(store_h) $(stream_h) $(istream_h) $(ierrors_h)\
+ $(scanchar_h) $(store_h) $(stream_h) $(istream_h) $(ierrors_h) $(substr_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)ziodev.$(OBJ) $(C_) $(PSSRC)ziodev.c
 
@@ -398,7 +400,8 @@ $(PSOBJ)zalg.$(OBJ) : $(PSSRC)zalg.c $(OP) $(ghost_h) $(gserrors_h)\
 
 $(PSOBJ)zmisc.$(OBJ) : $(PSSRC)zmisc.c $(OP) $(gscdefs_h) $(gp_h)\
  $(errno__h) $(memory__h) $(string__h) $(iscan_h)\
- $(ialloc_h) $(idict_h) $(dstack_h) $(iname_h) $(ivmspace_h) $(ipacked_h) $(store_h)\
+ $(ialloc_h) $(idict_h) $(dstack_h) $(iname_h) $(ivmspace_h) $(ipacked_h)\
+ $(store_h) $(substr_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zmisc.$(OBJ) $(C_) $(PSSRC)zmisc.c
 
@@ -428,7 +431,7 @@ $(PSOBJ)ztoken.$(OBJ) : $(PSSRC)ztoken.c $(OP) $(string__h) $(stat__h)\
  $(gsstruct_h) $(gsutil_h)\
  $(dstack_h) $(estack_h) $(files_h)\
  $(idict_h) $(iname_h) $(iscan_h) $(itoken_h)\
- $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h)\
+ $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h) $(substr_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)ztoken.$(OBJ) $(C_) $(PSSRC)ztoken.c
 
@@ -437,6 +440,7 @@ $(PSOBJ)ztype.$(OBJ) : $(PSSRC)ztype.c $(OP)\
  $(gsexit_h)\
  $(dstack_h) $(idict_h) $(imemory_h) $(iname_h)\
  $(iscan_h) $(iutil_h) $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h)\
+ $(substr_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)ztype.$(OBJ) $(C_) $(PSSRC)ztype.c
 
@@ -566,7 +570,7 @@ Z10OPS=zht zimage zmatrix zmatrix2
 Z11OPS=zpaint zpath pantone zcolor_pdf
 # We have to be a little underhanded with *config.$(OBJ) so as to avoid
 # circular definitions.
-INT_MAIN=$(PSOBJ)imain.$(OBJ) $(PSOBJ)imainarg.$(OBJ) $(GLOBJ)gsargs.$(OBJ) $(PSOBJ)idisp.$(OBJ) $(PSOBJ)splitargs.$(OBJ)
+INT_MAIN=$(PSOBJ)imain.$(OBJ) $(PSOBJ)imainarg.$(OBJ) $(GLOBJ)gsargs.$(OBJ) $(PSOBJ)idisp.$(OBJ) $(PSOBJ)splitargs.$(OBJ) $(PSOBJ)substr.$(OBJ)
 INT_OBJS=$(INT_MAIN)\
  $(INT1) $(INT2) $(INT3) $(INT4) $(INT5) $(INT6) $(INT7)\
  $(Z1) $(Z2) $(Z3) $(Z4) $(Z5) $(Z6) $(Z7) $(Z8) $(Z9) $(Z10) $(Z11) $(Z12)
@@ -1839,23 +1843,23 @@ $(PSOBJ)zpdf_r6.$(OBJ) : $(PSSRC)zpdf_r6.c $(OP) $(MAKEFILE) $(INT_MAK) $(MAKEDI
 
 $(PSOBJ)gs.$(OBJ) : $(PSSRC)gs.c $(GH)\
  $(ierrors_h) $(iapi_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gsmalloc_h)\
- $(locale__h) $(INT_MAK) $(MAKEDIRS)
+ $(splitargs_h) $(locale__h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)gs.$(OBJ) $(C_) $(PSSRC)gs.c
 
 $(PSOBJ)apitest.$(OBJ) : $(PSSRC)apitest.c $(GH)\
  $(ierrors_h) $(iapi_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gsmalloc_h)\
- $(locale__h) $(gp_h) $(INT_MAK) $(MAKEDIRS)
+ $(splitargs_h) $(locale__h) $(gp_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)apitest.$(OBJ) $(C_) $(PSSRC)apitest.c
 
 $(PSOBJ)iapi.$(OBJ) : $(PSSRC)iapi.c $(AK) $(psapi_h)\
  $(string__h) $(ierrors_h) $(gscdefs_h) $(gstypes_h) $(iapi_h)\
  $(iref_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gslibctx_h)\
- $(gsstate_h) $(icstate_h) $(INT_MAK) $(MAKEDIRS)
+ $(gsstate_h) $(icstate_h) $(splitargs_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)iapi.$(OBJ) $(C_) $(PSSRC)iapi.c
 
 $(PSOBJ)psapi.$(OBJ) : $(PSSRC)psapi.c $(AK)\
  $(string__h) $(ierrors_h) $(gscdefs_h) $(gstypes_h) $(iapi_h)\
- $(iref_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gslibctx_h)\
+ $(iref_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gslibctx_h) $(splitargs_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)psapi.$(OBJ) $(C_) $(PSSRC)psapi.c
 
@@ -1880,6 +1884,9 @@ $(PSOBJ)idisp.$(OBJ) : $(PSSRC)idisp.c $(OP) $(stdio__h) $(gp_h)\
 $(PSOBJ)splitargs.$(OBJ) : $(GLSRC)splitargs.c
 	$(PSCC) $(PSO_)$(@F) $(C_) $<
 
+$(PSOBJ)substr.$(OBJ) : $(PSSRC)substr.c
+	$(PSCC) $(PSO_)$(@F) $(C_) $<
+
 $(PSOBJ)imainarg.$(OBJ) : $(PSSRC)imainarg.c $(GH)\
  $(ctype__h) $(memory__h) $(string__h)\
  $(gp_h)\
@@ -1888,8 +1895,8 @@ $(PSOBJ)imainarg.$(OBJ) : $(PSSRC)imainarg.c $(GH)\
  $(ierrors_h) $(estack_h) $(files_h)\
  $(iapi_h) $(ialloc_h) $(iconf_h) $(imain_h) $(imainarg_h) $(iminst_h)\
  $(iname_h) $(interp_h) $(iscan_h) $(iutil_h) $(ivmspace_h)\
- $(ostack_h) $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h) \
- $(vdtrace_h) $(INT_MAK) $(MAKEDIRS)
+ $(ostack_h) $(sfilter_h) $(splitargs_h) $(store_h) $(stream_h) $(strimpl_h) \
+ $(substr_h) $(vdtrace_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)imainarg.$(OBJ) $(C_) $(PSSRC)imainarg.c
 
 $(PSOBJ)imain.$(OBJ) : $(PSSRC)imain.c $(GH) $(memory__h) $(string__h)\
@@ -1899,7 +1906,7 @@ $(PSOBJ)imain.$(OBJ) : $(PSSRC)imain.c $(GH) $(memory__h) $(string__h)\
  $(ialloc_h) $(iconf_h) $(idebug_h) $(iddict_h) $(idisp_h) $(iinit_h)\
  $(iname_h) $(interp_h) $(iplugin_h) $(isave_h) $(iscan_h) $(ivmspace_h)\
  $(iinit_h) $(main_h) $(oper_h) $(ostack_h)\
- $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h) $(zfile_h)\
+ $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h) $(substr_h) $(zfile_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)imain.$(OBJ) $(C_) $(PSSRC)imain.c
 
@@ -1911,7 +1918,7 @@ $(PSOBJ)interp.$(OBJ) : $(PSSRC)interp.c $(GH) $(memory__h) $(string__h)\
  $(iname_h) $(inamedef_h) $(interp_h) $(ipacked_h)\
  $(isave_h) $(iscan_h) $(istack_h) $(itoken_h) $(iutil_h) $(ivmspace_h)\
  $(oper_h) $(ostack_h) $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h)\
- $(gpcheck_h) $(INT_MAK) $(MAKEDIRS)
+ $(substr_h) $(gpcheck_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)interp.$(OBJ) $(C_) $(PSSRC)interp.c
 
 $(PSOBJ)ireclaim.$(OBJ) : $(PSSRC)ireclaim.c $(GH)\

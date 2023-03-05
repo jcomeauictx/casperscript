@@ -4,13 +4,13 @@
 #include <stdlib.h>
 #include <string.h>
 #include <syslog.h>
-
-char *substr(char *dest, const char *src, int start, int length);
+#include "substr.h"
 
 char *substr(char *dest, const char *src, int start, int length) {
     return strncpy(dest, src + start, length);
 }
 
+#ifdef TEST_SPLITARGS
 int main(int argc, char **argv) {
     char *buffer;
     int start, length;
@@ -29,4 +29,5 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Must at least specify buffer and source strings\n");
     }
 }
+#endif
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
