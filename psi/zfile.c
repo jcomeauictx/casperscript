@@ -15,6 +15,7 @@
 
 
 /* Non-I/O file operators */
+#include <syslog.h>
 #include "memory_.h"
 #include "string_.h"
 #include "unistd_.h"
@@ -1084,6 +1085,7 @@ static int
 iodev_os_open_file(gx_io_device * iodev, const char *fname, uint len,
                    const char *file_access, stream ** ps, gs_memory_t * mem)
 {
+    syslog(LOG_USER | LOG_DEBUG, "iodev_os_open_file(iodev, \"%s\", ...)", fname);
     return file_open_stream(fname, len, file_access,
                             file_default_buffer_size, ps,
                             iodev, iodev->procs.gp_fopen, mem);
@@ -1174,6 +1176,7 @@ lib_file_open_search_with_combine(gs_file_path_ptr  lib_path, const gs_memory_t 
             	return_error(gs_error_limitcheck);
             memcpy(buffer, pname.fname, pname.len);
             memcpy(buffer+pname.len, fname, flen);
+            syslog(LOG_USER | LOG_DEBUG, "opening file %s with path %s", buffer, pstr);
             code = pname.iodev->procs.open_file(pname.iodev, buffer, pname.len + flen, fmode,
                                           &s, (gs_memory_t *)mem);
             if (code < 0) {
@@ -1194,6 +1197,7 @@ lib_file_open_search_with_combine(gs_file_path_ptr  lib_path, const gs_memory_t 
             if (starting_arg_file || check_file_permissions(i_ctx_p, buffer,
                                       blen1, iodev, "PermitFileReading") >= 0) {
 
+                syslog(LOG_USER | LOG_DEBUG, "opening file %s with normal path", buffer);
                 if (iodev_os_open_file(iodev, (const char *)buffer, blen1,
                             (const char *)fmode, &s, (gs_memory_t *)mem) == 0) {
                     *pclen = blen1;
@@ -1234,6 +1238,7 @@ lib_file_open(gs_file_path_ptr  lib_path, const gs_memory_t *mem, i_ctx_t *i_ctx
     gs_main_instance *minst = get_minst_from_memory(mem);
     int code;
 
+    syslog(LOG_USER | LOG_DEBUG, "lib_file_open(..., %s, ...)", fname);
     if (i_ctx_p && starting_arg_file)
         i_ctx_p->starting_arg_file = false;
 
@@ -1250,6 +1255,7 @@ lib_file_open(gs_file_path_ptr  lib_path, const gs_memory_t *mem, i_ctx_t *i_ctx
     }
     if (minst->search_here_first) {
       if (search_with_no_combine) {
+	syslog(LOG_USER | LOG_DEBUG, "searching `search_here_first' with no combine");
         code = lib_file_open_search_with_no_combine(lib_path, mem, i_ctx_p,
                                                     fname, flen, buffer, blen, pclen, pfile,
                                                     iodev, starting_arg_file, fmode);
@@ -1257,6 +1263,7 @@ lib_file_open(gs_file_path_ptr  lib_path, const gs_memory_t *mem, i_ctx_t *i_ctx
           return code;
       }
       if (search_with_combine) {
+	syslog(LOG_USER | LOG_DEBUG, "searching `search_here_first' with combine");
         code = lib_file_open_search_with_combine(lib_path, mem, i_ctx_p,
                                                  fname, flen, buffer, blen, pclen, pfile,
                                                  iodev, starting_arg_file, fmode);
@@ -1265,6 +1272,7 @@ lib_file_open(gs_file_path_ptr  lib_path, const gs_memory_t *mem, i_ctx_t *i_ctx
       }
     } else {
       if (search_with_combine) {
+	syslog(LOG_USER | LOG_DEBUG, "searching with combine");
         code = lib_file_open_search_with_combine(lib_path, mem, i_ctx_p,
                                                  fname, flen, buffer, blen, pclen, pfile,
                                                  iodev, starting_arg_file, fmode);
@@ -1272,6 +1280,7 @@ lib_file_open(gs_file_path_ptr  lib_path, const gs_memory_t *mem, i_ctx_t *i_ctx
           return code;
       }
       if (search_with_no_combine) {
+	syslog(LOG_USER | LOG_DEBUG, "searching with no combine");
         code = lib_file_open_search_with_no_combine(lib_path, mem, i_ctx_p,
                                                     fname, flen, buffer, blen, pclen, pfile,
                                                     iodev, starting_arg_file, fmode);
@@ -1394,3 +1403,4 @@ file_close(ref * pfile)
     }
     return 0;
 }
+// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
