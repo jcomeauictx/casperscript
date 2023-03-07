@@ -15,7 +15,11 @@
 
 
 /* Non-I/O file operators */
+#ifdef CASPER_DEBUG
 #include <syslog.h>
+#else
+#define syslog(...) do {} while(0)
+#endif
 #include "memory_.h"
 #include "string_.h"
 #include "unistd_.h"

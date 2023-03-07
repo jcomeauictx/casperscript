@@ -366,7 +366,6 @@ PS_INIT_DEPS=\
 	$(PSRESDIR)$(D)Init$(D)FCOfontmap-PCLPS2 \
 	$(PSRESDIR)$(D)Init$(D)Fontmap \
 	$(PSRESDIR)$(D)Init$(D)Fontmap.GS \
-	$(PSRESDIR)$(D)Init$(D)casperscript_init.ps \
 	$(PSRESDIR)$(D)Init$(D)gs_agl.ps \
 	$(PSRESDIR)$(D)Init$(D)gs_btokn.ps \
 	$(PSRESDIR)$(D)Init$(D)gs_cff.ps \

@@ -1,6 +1,9 @@
+EXTRA := EXTRA_INIT_FILES="../Resource/Init/casperscript.ps"
 default: Makefile
-	make -f $<
+	make $(EXTRA) -f $<
 %:	| Makefile
-	make -f Makefile "$@"
-Makefile: | autogen.sh
+	make $(EXTRA) -f Makefile "$@"
+Makefile: | configure
+	./configure
+configure: | autogen.sh
 	./autogen.sh
