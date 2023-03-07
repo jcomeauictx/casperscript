@@ -1563,3 +1563,4 @@ gs_main_force_dimensions(gs_main_instance *minst, const long *dimensions)
     make_int(&value, dimensions[1]);
     return i_initial_enter_name(minst->i_ctx_p, "DEVICEHEIGHT", &value);
 }
+// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
