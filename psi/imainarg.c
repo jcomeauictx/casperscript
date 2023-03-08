@@ -16,6 +16,9 @@
 
 /* Command line parsing and dispatching */
 
+#include <limits.h>  /* for realpath() */
+#include <libgen.h>  /* for dirname() and basename() */
+#include <syslog.h>  /* for casperscript debugging */
 #include "ctype_.h"
 #include "memory_.h"
 #include "string_.h"
@@ -284,11 +287,21 @@ gs_main_init_with_args2(gs_main_instance * minst)
     return code;
 }
 
+char canonicalized_path[PATH_MAX];
+char development_libs[PATH_MAX];
+char *programdirectory;
+char *programname;
+
 int
 gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 {
     int code;
     char *argp[1024];
+    /* get program name and directory for possible use later */
+    programdirectory = dirname(realpath(argv[0], canonicalized_path));
+    programname = basename(canonicalized_path);
+    syslog(LOG_USER | LOG_DEBUG, "program name %s in %s", programname,
+		    programdirectory);
     /* split shebang args if preceded by '-S ' */
     argc = splitargs(argc, argv, argp);
     code = gs_main_init_with_args01(minst, argc, argp);
