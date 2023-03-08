@@ -1,3 +1,7 @@
 /#! {{currentfile 128 string readline {exit} if} loop} bind def
 /# {#!} bind def  % also enable # comments
 /.silent -112 def  % gs_error_silent in base/gserrors.h
+% add some helpful words from FORTH, starting with `words`
+/words {  % dict -  % print to stdout all the words (keys) in the dictionary
+ {pop cvx ==only ( ) =only} forall
+} bind def
