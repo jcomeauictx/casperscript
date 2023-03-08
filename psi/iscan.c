@@ -15,7 +15,6 @@
 
 
 /* Token scanner for Ghostscript interpreter */
-#include <syslog.h>
 #include "ghost.h"
 #include "memory_.h"
 #include "string_.h"
@@ -44,7 +43,6 @@
 #include "ivmspace.h"
 #include "store.h"
 #include "scanchar.h"
-#include "substr.h"
 
 /*
  * Level 2 includes some changes in the scanner:
@@ -780,20 +778,11 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
                     sstate.s_da.is_dynamic = false;
                     goto nx;
             }
-        case '#':
-            if (sptr[1] <= '!')
-                syslog(LOG_USER | LOG_DEBUG, "processing '#' comment");
-                /* falls through to case '%', comment processing */
-            else goto begin_name;
-
         case '%':
             {                   /* Scan as much as possible within the buffer. */
                 const byte *base = sptr;
                 const byte *end;
-                byte buffer[1024];
 
-                syslog(LOG_USER | LOG_DEBUG, "processing comment %s",
-                        substr(buffer, sptr, 0, 128));
                 while (++sptr < endptr)         /* stop 1 char early */
                     switch (*sptr) {
                         case char_CR:
@@ -986,6 +975,7 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
             /* simple compilers to use a dispatch rather than tests. */
         case '!':
         case '"':
+        case '#':
         case '$':
         case '&':
         case '\'':
@@ -1272,4 +1262,3 @@ gs_scan_token(i_ctx_t *i_ctx_p, ref * pref, scanner_state * pstate) /* lgtm [cpp
     sstate.s_scan_type = scanning_none;
     goto save;
 }
-// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
