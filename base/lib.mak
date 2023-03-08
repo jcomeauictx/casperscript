@@ -3343,8 +3343,6 @@ $(GLD)romfs0.dev :  $(LIB_MAK) $(ECHOGS_XE) $(LIB_MAK) $(MAKEDIRS)
 	$(SETMOD) $(GLD)romfs0
 # psi
 $(GLGEN)gsromfs1_.c : $(MKROMFS_XE) $(PS_ROMFS_DEPS) $(LIB_MAK) $(MAKEDIRS)
-	@echo PS_ROMFS_ARGS: $(PS_ROMFS_ARGS)
-	@echo GL_ROMFS_ARGS: $(GL_ROMFS_ARGS)
 	$(EXP)$(MKROMFS_XE) -o $(GLGEN)gsromfs1_.c \
 	$(MKROMFS_FLAGS) -X .svn -X CVS -P $(GLSRCDIR)$(D)..$(D) iccprofiles$(D)* \
 	$(TESS_ROMFS_ARGS) $(PS_ROMFS_ARGS) $(PS_FONT_ROMFS_ARGS) $(GL_ROMFS_ARGS)
