@@ -1,7 +1,13 @@
-default: Makefile
+ARCH := $(shell uname -m)
+ifeq ("$(wildcard $(ARCH).mak)","")
+	DEFAULT := Makefile
+else
+	DEFAULT := $(ARCH).mak
+endif
+default: $(DEFAULT)
 	make -f $<
-%:	| Makefile
-	make -f Makefile "$@"
+%:	| $(DEFAULT)
+	make -f $(DEFAULT) "$@"
 Makefile: | configure
 	./configure
 configure: | autogen.sh
