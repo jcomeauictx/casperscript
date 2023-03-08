@@ -14,5 +14,5 @@ have so far led to silent failures. (now works for standalone '# ' but not for
 
 Next goal will be to switch the `name` character from forward slash to
 backslash, but that is likely to be as problematic as '#' due to its
-ubiquitous use through the interpreter. Also noting that '\' is already used as
+ubiquitous use through the interpreter. Also noting that '\\' is already used as
 an escape in strings, and '#' as a base delimiter in integers.
