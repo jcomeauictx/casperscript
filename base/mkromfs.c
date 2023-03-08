@@ -83,7 +83,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <memory.h>
-
 #include <zlib.h>
 
 int gs_log_error(int err, const char *file, int line);
@@ -2373,6 +2372,7 @@ mergefile(const char *os_prefix, const char *inname, FILE * in, FILE * config,
     int level = 1;
     bool first = true;
 
+    fprintf(stderr, "mergefile(%s, %s, ...)\n", os_prefix, inname);
     buf[0] = 0;
     while (rl(in, line, LINE_SIZE)) {
         char psname[LINE_SIZE + 1];
@@ -2394,7 +2394,10 @@ mergefile(const char *os_prefix, const char *inname, FILE * in, FILE * config,
                 if (ps == 0) {
                     fprintf(stderr, "Failed to open '%s' - aborting\n", psname+1);
                     exit(1);
-                }
+                } else {
+		    fprintf(stderr, "prefix_open(%s, %s+1) successful\n",
+			    os_prefix, psname);
+		}
                 mergefile(os_prefix, psname + 1, ps, config, intact || do_intact, verbose);
             } else if (!strcmp(psname, "INITFILES")) {
                 /*
@@ -2413,6 +2416,8 @@ mergefile(const char *os_prefix, const char *inname, FILE * in, FILE * config,
                         ps = prefix_open(os_prefix, psname + 9, verbose);
                         if (ps == 0)
                             exit(1);
+		    	else fprintf(stderr, "prefix_open(%s, %s+9) successful\n",
+			    os_prefix, psname);
                         mergefile(os_prefix, psname + 9, ps, config, false, verbose);
                     }
             } else {

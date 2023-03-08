@@ -1754,6 +1754,10 @@ currentdict /.useloresscreen .undef
 %% Replace 1 (gs_img.ps)
 (gs_img.ps) runlibfile
 
+% enable casperscript extensions
+%% Replace 1 (casperscript.ps)
+(casperscript.ps) runlibfile
+
 (END IMAGE) VMDEBUG
 
 % Auxiliary procedures for generating file name templates.
@@ -1936,9 +1940,6 @@ currentdict /.loadinitialfonts .undef
 } ifelse
 
 (END FONTS) VMDEBUG
-
-% enable casperscript extensions
-(casperscript.ps) runlibfile
 
 % Restore the real definition of runlibfile.
 /runlibfile /.runlibfile load def
