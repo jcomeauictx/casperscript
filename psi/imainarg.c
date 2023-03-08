@@ -19,9 +19,6 @@
 #include "ctype_.h"
 #include "memory_.h"
 #include "string_.h"
-#include "substr.h"
-#include <syslog.h>	/* casperscript debugging */
-#include <libgen.h>	/* casperscript program name determination */
 #include <stdlib.h>     /* for qsort */
 
 #include "splitargs.h"  /* casperscript shebang-line arg splitting */
@@ -291,13 +288,7 @@ int
 gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 {
     int code;
-    char *program_name = NULL;
     char *argp[1024];
-    syslog(LOG_USER | LOG_DEBUG, "argv[0]: %s", argv[0]);
-    program_name = basename(argv[0]);
-    syslog(LOG_USER | LOG_DEBUG, "program name: %s", program_name);
-    for (int i = 1; i < argc; i++)
-        syslog(LOG_USER | LOG_DEBUG, "argv[%d]: %s", i, argv[i]);
     /* split shebang args if preceded by '-S ' */
     argc = splitargs(argc, argv, argp);
     code = gs_main_init_with_args01(minst, argc, argp);
@@ -1075,7 +1066,6 @@ run_buffered(gs_main_instance * minst, const char *arg)
     ref error_object;
     int code;
 
-    syslog(LOG_USER | LOG_DEBUG, "run_buffered(minst, \"%s\")", arg);
     if (in == 0) {
         outprintf(minst->heap, "Unable to open %s for reading", arg);
         return_error(gs_error_invalidfileaccess);
@@ -1123,7 +1113,6 @@ runarg(gs_main_instance *minst,
     int code;
     char *line;
 
-    syslog(LOG_USER | LOG_DEBUG, "runarg(minst, \"\", \"%s\", ...)", arg);
     if (options & runInit) {
         code = gs_main_init2(minst);    /* Finish initialization */
 
@@ -1174,10 +1163,7 @@ run_string(gs_main_instance *minst,
     int exit_code;
     ref error_object;
     int code;
-    char buffer[1024];
 
-    syslog(LOG_USER | LOG_DEBUG, "run_string(minst, \"%s...\", ...)",
-           substr(buffer, str, 0, 128));
     if (pexit_code == NULL)
         pexit_code = &exit_code;
     if (perror_object == NULL)
@@ -1196,7 +1182,6 @@ static int
 run_finish(gs_main_instance *minst, int code, int exit_code,
            ref * perror_object)
 {
-    syslog(LOG_USER | LOG_DEBUG, "run_finish(*minst, %d, %d, ...)", code, exit_code);
     switch (code) {
         case gs_error_Quit:  /* -101 */
         case 0:
@@ -1212,7 +1197,6 @@ run_finish(gs_main_instance *minst, int code, int exit_code,
         default:
             gs_main_dump_stack(minst, code, perror_object);
     }
-    syslog(LOG_USER | LOG_DEBUG, "run_finish returning code %d", code);
     return code;
 }
 

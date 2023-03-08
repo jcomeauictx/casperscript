@@ -32,7 +32,6 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <locale.h>
-#include <syslog.h>  /* casperscript debugging */
 #include <gtk/gtk.h>
 #define __PROTOTYPES__
 #include "ierrors.h"
@@ -1251,10 +1250,10 @@ int main(int argc, char *argv[])
     exit_status = 0;
     switch (code) {
         case 0:
-        case gs_error_Info:  /* -110 */
-        case gs_error_Quit:  /* -101 */
+        case gs_error_Info:
+        case gs_error_Quit:
             break;
-        case gs_error_Fatal:  /* -100 */
+        case gs_error_Fatal:
             exit_status = 1;
             break;
         default:

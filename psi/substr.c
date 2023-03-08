@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <syslog.h>
 #include "substr.h"
 
 char *substr(char *dest, const char *src, int start, int length) {
