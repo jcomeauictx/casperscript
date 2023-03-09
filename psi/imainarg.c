@@ -704,6 +704,9 @@ run_stdin:
                     path = arg;
                 if (path == NULL)
                     return gs_error_Fatal;
+#ifdef USE_DEVELOPMENT_INITFILES
+                if (strcmp(path, "_DEV_") == 0) path = developmentlibs;
+#endif
                 gs_main_add_lib_path(minst, path);
             }
             break;

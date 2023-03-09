@@ -1,4 +1,4 @@
-#! bin/gs -S -q -dNODISPLAY -dBATCH --
+#! bin/gs -S -q -dNODISPLAY -dBATCH -I_DEV_ --
 (testing...) =
 /ARGUMENTS dup where {(ARGUMENTS: ) print exch get ==} {pop} ifelse
 /abc (abc) def
