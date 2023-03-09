@@ -20,7 +20,6 @@
 #include <limits.h>  /* for realpath() */
 #include <libgen.h>  /* for dirname() and basename() */
 #endif
-#include <syslog.h>  /* for casperscript debugging */
 #include "ctype_.h"
 #include "memory_.h"
 #include "string_.h"
@@ -312,10 +311,6 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     programname = basename(canonicalized_path[1]);
     strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
     realpath(buffer, canonicalized_path[2]);
-    syslog(LOG_USER | LOG_DEBUG, "program name \"%s\" in \"%s\"", programname,
-		    programdirectory);
-    syslog(LOG_USER | LOG_DEBUG, "add to lib path in imain.c: \"%s\"",
-                    developmentlibs);
 #endif
     /* split shebang args if preceded by '-S ' */
     argc = splitargs(argc, argv, argp);
