@@ -1,4 +1,5 @@
 ARCH := $(shell uname -m)
+export XCFLAGS ?= -DUSE_DEVELOPMENT_INITFILES=1
 ifeq ("$(wildcard $(ARCH).mak)","")
 	DEFAULT := Makefile
 else
@@ -6,9 +7,9 @@ else
 endif
 default: $(DEFAULT)
 	make -f $<
-%:	| $(DEFAULT)
-	make -f $(DEFAULT) "$@"
 Makefile: | configure
 	./configure
 configure: | autogen.sh
 	./autogen.sh
+%:	| $(DEFAULT)
+	make -f $(DEFAULT) "$@"

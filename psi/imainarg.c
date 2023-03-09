@@ -16,8 +16,10 @@
 
 /* Command line parsing and dispatching */
 
+#ifdef USE_DEVELOPMENT_INITFILES
 #include <limits.h>  /* for realpath() */
 #include <libgen.h>  /* for dirname() and basename() */
+#endif
 #include <syslog.h>  /* for casperscript debugging */
 #include "ctype_.h"
 #include "memory_.h"
@@ -287,18 +289,23 @@ gs_main_init_with_args2(gs_main_instance * minst)
     return code;
 }
 
+#ifdef USE_DEVELOPMENT_INITFILES
 char canonicalized_path[3][PATH_MAX + 256] = {"", "", ""};
 char *programdirectory = canonicalized_path[0];
 char *programname = canonicalized_path[1];
 char *developmentlibs = canonicalized_path[2];
+#endif
 
 int
 gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 {
+#ifdef USE_DEVELOPMENT_INITFILES
     char buffer[PATH_MAX + 256];
+#endif
     char *argp[1024];
     int code;
 
+#ifdef USE_DEVELOPMENT_INITFILES
     /* get program name and directory for possible use later */
     strcpy(canonicalized_path[1], realpath(argv[0], canonicalized_path[0]));
     programdirectory = dirname(canonicalized_path[0]);
@@ -309,6 +316,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 		    programdirectory);
     syslog(LOG_USER | LOG_DEBUG, "add to lib path in imain.c: \"%s\"",
                     developmentlibs);
+#endif
     /* split shebang args if preceded by '-S ' */
     argc = splitargs(argc, argv, argp);
     code = gs_main_init_with_args01(minst, argc, argp);
