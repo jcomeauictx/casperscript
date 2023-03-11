@@ -226,6 +226,7 @@ $(PSOBJ)iplugin.$(OBJ) : $(PSSRC)iplugin.c $(GH) $(malloc__h) $(string__h)\
 # Binary tokens are a Level 2 feature, but we need to refer to them
 # in the scanner.
 btoken_h=$(PSSRC)btoken.h
+chop_extension_h=$(GLSRC)chop_extension.h
 files_h=$(PSSRC)files.h
 fname_h=$(PSSRC)fname.h
 psapi_h=$(PSSRC)psapi.h
@@ -570,7 +571,7 @@ Z10OPS=zht zimage zmatrix zmatrix2
 Z11OPS=zpaint zpath pantone zcolor_pdf
 # We have to be a little underhanded with *config.$(OBJ) so as to avoid
 # circular definitions.
-INT_MAIN=$(PSOBJ)imain.$(OBJ) $(PSOBJ)imainarg.$(OBJ) $(GLOBJ)gsargs.$(OBJ) $(PSOBJ)idisp.$(OBJ) $(PSOBJ)splitargs.$(OBJ) $(PSOBJ)substr.$(OBJ)
+INT_MAIN=$(PSOBJ)imain.$(OBJ) $(PSOBJ)imainarg.$(OBJ) $(GLOBJ)gsargs.$(OBJ) $(PSOBJ)idisp.$(OBJ) $(PSOBJ)splitargs.$(OBJ) $(PSOBJ)substr.$(OBJ) $(PSOBJ)chop_extension.$(OBJ)
 INT_OBJS=$(INT_MAIN)\
  $(INT1) $(INT2) $(INT3) $(INT4) $(INT5) $(INT6) $(INT7)\
  $(Z1) $(Z2) $(Z3) $(Z4) $(Z5) $(Z6) $(Z7) $(Z8) $(Z9) $(Z10) $(Z11) $(Z12)
@@ -1843,18 +1844,19 @@ $(PSOBJ)zpdf_r6.$(OBJ) : $(PSSRC)zpdf_r6.c $(OP) $(MAKEFILE) $(INT_MAK) $(MAKEDI
 
 $(PSOBJ)gs.$(OBJ) : $(PSSRC)gs.c $(GH)\
  $(ierrors_h) $(iapi_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gsmalloc_h)\
- $(splitargs_h) $(locale__h) $(INT_MAK) $(MAKEDIRS)
+ $(splitargs_h) $(chop_extension_h) $(locale__h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)gs.$(OBJ) $(C_) $(PSSRC)gs.c
 
 $(PSOBJ)apitest.$(OBJ) : $(PSSRC)apitest.c $(GH)\
  $(ierrors_h) $(iapi_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gsmalloc_h)\
- $(splitargs_h) $(locale__h) $(gp_h) $(INT_MAK) $(MAKEDIRS)
+ $(splitargs_h) $(chop_extension_h) $(locale__h) $(gp_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)apitest.$(OBJ) $(C_) $(PSSRC)apitest.c
 
 $(PSOBJ)iapi.$(OBJ) : $(PSSRC)iapi.c $(AK) $(psapi_h)\
  $(string__h) $(ierrors_h) $(gscdefs_h) $(gstypes_h) $(iapi_h)\
  $(iref_h) $(imain_h) $(imainarg_h) $(iminst_h) $(gslibctx_h)\
- $(gsstate_h) $(icstate_h) $(splitargs_h) $(INT_MAK) $(MAKEDIRS)
+ $(gsstate_h) $(icstate_h) $(splitargs_h) $(chop_extension_h) \
+ $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)iapi.$(OBJ) $(C_) $(PSSRC)iapi.c
 
 $(PSOBJ)psapi.$(OBJ) : $(PSSRC)psapi.c $(AK)\
@@ -1884,6 +1886,9 @@ $(PSOBJ)idisp.$(OBJ) : $(PSSRC)idisp.c $(OP) $(stdio__h) $(gp_h)\
 $(PSOBJ)splitargs.$(OBJ) : $(GLSRC)splitargs.c
 	$(PSCC) $(PSO_)$(@F) $(C_) $<
 
+$(PSOBJ)chop_extension.$(OBJ) : $(GLSRC)chop_extension.c
+	$(PSCC) $(PSO_)$(@F) $(C_) $<
+
 $(PSOBJ)substr.$(OBJ) : $(PSSRC)substr.c
 	$(PSCC) $(PSO_)$(@F) $(C_) $<
 
@@ -1895,7 +1900,8 @@ $(PSOBJ)imainarg.$(OBJ) : $(PSSRC)imainarg.c $(GH)\
  $(ierrors_h) $(estack_h) $(files_h)\
  $(iapi_h) $(ialloc_h) $(iconf_h) $(imain_h) $(imainarg_h) $(iminst_h)\
  $(iname_h) $(interp_h) $(iscan_h) $(iutil_h) $(ivmspace_h)\
- $(ostack_h) $(sfilter_h) $(splitargs_h) $(store_h) $(stream_h) $(strimpl_h) \
+ $(ostack_h) $(sfilter_h) $(splitargs_h) $(chop_extension_h) \
+ $(store_h) $(stream_h) $(strimpl_h) \
  $(substr_h) $(vdtrace_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)imainarg.$(OBJ) $(C_) $(PSSRC)imainarg.c
 

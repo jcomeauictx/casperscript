@@ -25,6 +25,7 @@
 #include "string_.h"
 #include <stdlib.h>     /* for qsort */
 
+#include "chop_extension.h"
 #include "splitargs.h"  /* casperscript shebang-line arg splitting */
 #include "ghost.h"
 #include "gp.h"
@@ -308,7 +309,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     /* get program name and directory for possible use later */
     strcpy(canonicalized_path[1], realpath(argv[0], canonicalized_path[0]));
     programdirectory = dirname(canonicalized_path[0]);
-    programname = basename(canonicalized_path[1]);
+    programname = chop_extension(basename(canonicalized_path[1]));
     strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
     realpath(buffer, canonicalized_path[2]);
 #endif
