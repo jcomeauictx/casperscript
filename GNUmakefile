@@ -1,4 +1,5 @@
 ARCH := $(shell uname -m)
+CONFIG_ARGS ?= --with-gs=cs --with-x --prefix=$(HOME)
 export XCFLAGS ?= -DUSE_DEVELOPMENT_INITFILES=1
 ifeq ("$(wildcard $(ARCH).mak)","")
 	DEFAULT := Makefile
@@ -8,8 +9,8 @@ endif
 default: $(DEFAULT)
 	make -f $<
 Makefile: | configure
-	./configure
+	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
-	./autogen.sh
+	./autogen.sh $(CONFIG_ARGS)
 %:	| $(DEFAULT)
 	make -f $(DEFAULT) "$@"
