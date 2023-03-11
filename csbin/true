@@ -1,2 +1,2 @@
-#! bin/gs -S -q -dNODISPLAY -dBATCH --
+#! bin/cs -S -q -dNODISPLAY -dBATCH --
 /defaultdevice cvx 0 .quit
