@@ -3,14 +3,14 @@
  * must use basename *first*, otherwise will overwrite a dot anywhere in path.
  */
 #include <stdio.h>
-#include <strings.h>
+#include <string.h>
 #include "chop_extension.h"
 
 int delimiter = '.';
 
 char *chop_extension(char *filename) {
     char *p;
-    if ((p = rindex(filename, delimiter)) != NULL) *p = '\0';
+    if ((p = strrchr(filename, delimiter)) != NULL) *p = '\0';
     return filename;
 }
 #ifdef TEST_CHOP_EXTENSION
