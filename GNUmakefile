@@ -10,6 +10,7 @@ else
 endif
 default: $(CS_MAKEFILES)
 	make -f $<
+	cd bin && ln -s cs cs.exe  # for cstestcmd.cs, will fail on Windows
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh

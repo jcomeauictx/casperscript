@@ -19,6 +19,7 @@
 #ifdef USE_DEVELOPMENT_INITFILES
 #include <limits.h>  /* for realpath() */
 #include <libgen.h>  /* for dirname() and basename() */
+#include <syslog.h>
 #endif
 #include "ctype_.h"
 #include "memory_.h"
@@ -312,6 +313,8 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     programname = chop_extension(basename(canonicalized_path[1]));
     strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
     realpath(buffer, canonicalized_path[2]);
+    syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s", programname,
+            programdirectory);
 #endif
     /* split shebang args if preceded by '-S ' */
     argc = splitargs(argc, argv, argp);
