@@ -10,7 +10,10 @@ else
 endif
 default: $(CS_MAKEFILES)
 	make -f $<
-	cd bin && ln -s cs cs.exe  # for cstestcmd.cs, will fail on Windows
+	# trick for cstestcmd.cs test on unix-y systems
+	if [ \! -e bin/cs.exe ]; then \
+		cd bin && ln -s cs cs.exe; \
+	fi
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
