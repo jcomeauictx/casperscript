@@ -407,7 +407,7 @@ gs_scan_string_token_options(i_ctx_t *i_ctx_p, ref * pstr, ref * pref,
                 break;
             /* falls through */
         case 0:         /* read a token */
-        case scan_BOS:
+        case scan_BOS:  /* 1, stands for Binary Object Sequence */
             {
                 uint pos = stell(s);
 
