@@ -1,6 +1,6 @@
 ARCH := $(shell uname -m)
 CONFIG_ARGS ?= --with-gs=cs --with-x --prefix=$(HOME)
-export XCFLAGS ?= -DUSE_DEVELOPMENT_INITFILES=1
+export XCFLAGS ?= -DUSE_DEVELOPMENT_INITFILES=1 -DSYSLOG_DEBUGGING=1
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)

@@ -8,6 +8,11 @@
  */
 #include <stdio.h>
 #include <string.h>
+#ifdef SYSLOG_DEBUGGING
+#include <syslog.h>
+#else
+#define syslog(...)
+#endif
 #include "splitargs.h"
 
 const char signal[] = "-S ";
@@ -17,6 +22,7 @@ const char delimiters[] = " \t";  /* space or tab only ones expected */
 int splitargs(int argc, char **argv, char **argp) {
     char *substring;  /* for string which may be split */
     int i = 1, j = 1;
+    syslog(LOG_USER | LOG_DEBUG, "starting splitargs()");
     /* store argv[0], the program name, first */
     argp[0] = argv[0];
     if (argc > 1 && strncmp(signal, argv[i], offset) == 0) {
@@ -26,6 +32,7 @@ int splitargs(int argc, char **argv, char **argp) {
         }
     }
     for (; i < argc; i++, j++) argp[j] = argv[i];
+    syslog(LOG_USER | LOG_DEBUG, "ending splitargs()");
     return j;
 }
 #ifdef TEST_SPLITARGS

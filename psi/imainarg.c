@@ -19,7 +19,11 @@
 #ifdef USE_DEVELOPMENT_INITFILES
 #include <limits.h>  /* for realpath() */
 #include <libgen.h>  /* for dirname() and basename() */
+#endif
+#ifdef SYSLOG_DEBUGGING
 #include <syslog.h>
+#else
+#define syslog(...)
 #endif
 #include "ctype_.h"
 #include "memory_.h"
@@ -308,6 +312,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 
 #ifdef USE_DEVELOPMENT_INITFILES
     /* get program name and directory for possible use later */
+    syslog(LOG_USER | LOG_DEBUG, "getting program name and directory");
     strcpy(canonicalized_path[1], realpath(argv[0], canonicalized_path[0]));
     programdirectory = dirname(canonicalized_path[0]);
     programname = chop_extension(basename(canonicalized_path[1]));
@@ -317,6 +322,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
             programdirectory);
 #endif
     /* split shebang args if preceded by '-S ' */
+    syslog(LOG_USER | LOG_DEBUG, "starting gs main init");
     argc = splitargs(argc, argv, argp);
     code = gs_main_init_with_args01(minst, argc, argp);
     if (code < 0)

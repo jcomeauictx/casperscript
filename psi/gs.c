@@ -30,6 +30,12 @@
 #  endif
 #endif
 
+#ifdef SYSLOG_DEBUGGING
+#include <syslog.h>
+#else
+#define syslog(...)
+#endif
+
 /* Define an optional array of strings for testing. */
 /*#define RUN_STRINGS */
 #ifdef RUN_STRINGS
@@ -69,6 +75,7 @@ main(int argc, char *argv[])
 {
     int exit_status, code;
     void *minst = NULL;
+    syslog(LOG_USER | LOG_DEBUG, "starting main()");
 
 #ifdef NEED_COMMIT_STACK   /* hack for bug in gcc 2.96 */
     commit_stack_pages();

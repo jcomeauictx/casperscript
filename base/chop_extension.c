@@ -4,13 +4,20 @@
  */
 #include <stdio.h>
 #include <string.h>
+#ifdef SYSLOG_DEBUGGING
+#include <syslog.h>
+#else
+#define syslog(...)
+#endif
 #include "chop_extension.h"
 
 int delimiter = '.';
 
 char *chop_extension(char *filename) {
     char *p;
+    syslog(LOG_USER | LOG_DEBUG, "starting chop_extension(\"%s\")", filename);
     if ((p = strrchr(filename, delimiter)) != NULL) *p = '\0';
+    syslog(LOG_USER | LOG_DEBUG, "ending chop_extension()");
     return filename;
 }
 #ifdef TEST_CHOP_EXTENSION

@@ -61,6 +61,12 @@
 
 #include "valgrind.h"
 
+#ifdef SYSLOG_DEBUGGING
+#include <syslog.h>
+#else
+#define syslog(...)
+#endif
+
 /* ------ Exported data ------ */
 
 /** using backpointers retrieve minst from any memory pointer
@@ -129,6 +135,7 @@ gs_main_init0(gs_main_instance * minst, gp_file * in, gp_file * out, gp_file * e
     ref *array;
     int code = 0;
 
+    syslog(LOG_USER | LOG_DEBUG, "gs_main_init0() starting");
     if (gs_debug_c(gs_debug_flag_init_details))
         dmprintf1(minst->heap, "%% Init phase 0 started, instance "PRI_INTPTR"\n",
                   (intptr_t)minst);
