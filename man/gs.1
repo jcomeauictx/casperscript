@@ -217,6 +217,10 @@ program fragment
 whereas \fB\-sname=35\fR is equivalent to
 .br
 	/name (35) def
+.br
+Note that if the very first arg is \-S without a following definition, it will
+signal to the initialization routine that the first arg needs to be split at
+each whitespace character, as with the `env` utility program. (casperscript)
 .TP
 .B \-P
 Makes Ghostscript to look first in the current directory for library files.
