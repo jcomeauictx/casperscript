@@ -4,11 +4,7 @@
  */
 #include <stdio.h>
 #include <string.h>
-#ifdef SYSLOG_DEBUGGING
-#include <syslog.h>
-#else
-#define syslog(...)
-#endif
+#include "syslog.h"
 #include "chop_extension.h"
 
 int delimiter = '.';

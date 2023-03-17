@@ -8,11 +8,7 @@
  */
 #include <stdio.h>
 #include <string.h>
-#ifdef SYSLOG_DEBUGGING
-#include <syslog.h>
-#else
-#define syslog(...)
-#endif
+#include "syslog.h"
 #include "splitargs.h"
 
 const char signal[] = "-S ";

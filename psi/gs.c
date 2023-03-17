@@ -30,11 +30,7 @@
 #  endif
 #endif
 
-#ifdef SYSLOG_DEBUGGING
-#include <syslog.h>
-#else
-#define syslog(...)
-#endif
+#include "syslog.h"
 
 /* Define an optional array of strings for testing. */
 /*#define RUN_STRINGS */

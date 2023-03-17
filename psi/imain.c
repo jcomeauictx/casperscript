@@ -61,11 +61,7 @@
 
 #include "valgrind.h"
 
-#ifdef SYSLOG_DEBUGGING
-#include <syslog.h>
-#else
-#define syslog(...)
-#endif
+#include "syslog.h"
 
 /* ------ Exported data ------ */
 
