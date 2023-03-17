@@ -306,20 +306,30 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 {
 #ifdef USE_DEVELOPMENT_INITFILES
     char buffer[PATH_MAX + 256];
+    char *temp;
 #endif
     char *argp[1024];
     int code;
 
 #ifdef USE_DEVELOPMENT_INITFILES
     /* get program name and directory for possible use later */
-    syslog(LOG_USER | LOG_DEBUG, "getting program name and directory");
-    strcpy(canonicalized_path[1], realpath(argv[0], canonicalized_path[0]));
-    programdirectory = dirname(canonicalized_path[0]);
-    programname = chop_extension(basename(canonicalized_path[1]));
-    strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
-    realpath(buffer, canonicalized_path[2]);
-    syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s", programname,
-            programdirectory);
+    syslog(LOG_USER | LOG_DEBUG, "getting program name from %s", argv[0]);
+    temp = realpath(argv[0], canonicalized_path[0]);
+    if (temp != NULL) {
+        strcpy(canonicalized_path[1], temp);
+        syslog(LOG_USER | LOG_DEBUG, "copied path into canonicalized_path[1]");
+        programdirectory = dirname(canonicalized_path[0]);
+        syslog(LOG_USER | LOG_DEBUG, "`programdirectory` now has path");
+        programname = chop_extension(basename(canonicalized_path[1]));
+        syslog(LOG_USER | LOG_DEBUG, "`programname` now has name");
+        strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
+        syslog(LOG_USER | LOG_DEBUG, "resources located relative to binary");
+        realpath(buffer, canonicalized_path[2]);
+        syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s",
+                programname, programdirectory);
+    } else {
+        outprintf(minst->heap, "cannot determine path from %s", argv[0]);
+    }
 #endif
     /* split shebang args if preceded by '-S ' */
     syslog(LOG_USER | LOG_DEBUG, "starting gs main init");
