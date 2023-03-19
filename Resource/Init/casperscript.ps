@@ -1,20 +1,45 @@
+% top-level definitions go into systemdict
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
 /# /#! load def  % also enable # comments
 /.silent -112 def  % gs_error_silent in base/gserrors.h
-% add some helpful words from FORTH, starting with `words`
-/dictwords {  % dict -  % print to stdout all the words (keys) in the dictionary
-  {pop cvx ==only ( ) =only} forall () =
+
+/forthdict 1024 dict def
+forthdict begin
+  % add some helpful words from FORTH, starting with `words`
+  /dictwords {  % dict -
+    % print to stdout all the words (keys) in the dictionary
+    {pop cvx ==only ( ) =only} forall () =
+  } bind def
+  /words {  % -
+    % print to stdout all words from all dictionaries, like FORTH
+    countdictstack array dictstack {dictwords} forall
+  } bind def
+end  % forthdict
+
+/casperdict 1024 dict def
+casperdict begin
+  % add some generally useful words without polluting systemdict
+  /topdown {  % -
+    % changes behavior of interpreter to allow topdown design
+    % instead of causing /undefined errors, lets you run program at every
+    % phase of development, showing a placeholder for undefined words.
+    errordict begin
+      /undefined {
+        (\(/) print =only ( not yet defined\) ) print
+      } bind def
+    end
+  } bind def
+  /alias {  % /currentname /newname -
+    % alias currentname to newname
+    exch load def
+  } bind def
+end  % casperdict
+
+/casper {  % -
+  % initialize for programming with casper extensions
+  % first copy above dictionaries into userdict
+  forthdict userdict copy casperdict exch copy pop
+  % now enable top-down programming method
+  topdown
 } bind def
-/words {  % -  % print to stdout all words from all dictionaries, like FORTH
-  countdictstack array dictstack {dictwords} forall
-} bind def
-/topdown {
-  errordict begin
-    /undefined {
-      (\(/) print =only ( not yet defined\) ) print
-    } bind def
-  end
-} bind def
-/alias {  % /currentname /newname -  % alias currentname to newname
-  exch load def
-} bind def
+% vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
