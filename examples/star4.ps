@@ -1,4 +1,4 @@
-%!ps
+%!PS-Adobe-3.0
 % from PLRM page 255
 << /PatternType 1 % Tiling pattern
 /PaintType 1 % Colored
@@ -13,9 +13,9 @@
 closepath fill
 grestore
 } bind
-(
 /PaintProc
 { begin % Push pattern on dictionary stack
+(
  0.3 setgray % Set color for dark gray stars
 15 15 translate star
 30 30 translate star
@@ -23,8 +23,10 @@ grestore
 –30 0 translate star
 30 –30 translate star
  end
+)
  } bind
 >> % End prototype pattern dictionary
+(
 matrix % Identity matrix
 makepattern % Instantiate the pattern
 /Star4 exch def
@@ -37,4 +39,4 @@ Star4 setcolor rectfill % Fill rectangle with stars
 0.9 setgray 0 0 moveto (A) show % Paint glyph with gray
 Star4 setpattern 0 0 moveto (A) show % Paint glyph with stars
 showpage
-) pop
+)
