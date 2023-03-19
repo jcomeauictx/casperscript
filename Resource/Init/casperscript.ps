@@ -1,11 +1,11 @@
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
-/# {#!} bind def  % also enable # comments
+/# /#! load def  % also enable # comments
 /.silent -112 def  % gs_error_silent in base/gserrors.h
 % add some helpful words from FORTH, starting with `words`
 /dictwords {  % dict -  % print to stdout all the words (keys) in the dictionary
   {pop cvx ==only ( ) =only} forall () =
 } bind def
-/words {  % - print to stdout all words from all dictionaries, like FORTH
+/words {  % -  % print to stdout all words from all dictionaries, like FORTH
   countdictstack array dictstack {dictwords} forall
 } bind def
 /topdown {
@@ -14,4 +14,7 @@
       (\(/) print =only ( not yet defined\) ) print
     } bind def
   end
+} bind def
+/alias {  % /currentname /newname -  % alias currentname to newname
+  exch load def
 } bind def
