@@ -13,6 +13,7 @@
 closepath fill
 grestore
 } bind
+(
 /PaintProc
 { begin % Push pattern on dictionary stack
  0.3 setgray % Set color for dark gray stars
@@ -36,3 +37,4 @@ Star4 setcolor rectfill % Fill rectangle with stars
 0.9 setgray 0 0 moveto (A) show % Paint glyph with gray
 Star4 setpattern 0 0 moveto (A) show % Paint glyph with stars
 showpage
+) pop
