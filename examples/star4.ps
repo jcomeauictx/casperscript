@@ -1,0 +1,38 @@
+%!ps
+% from PLRM page 255
+<< /PatternType 1 % Tiling pattern
+/PaintType 1 % Colored
+/TilingType 1
+/BBox [0 0 60 60]
+/XStep 60
+/YStep 60
+/star
+{ gsave % Private procedure used by PaintProc
+0 12 moveto
+4 {144 rotate 0 12 lineto} repeat
+closepath fill
+grestore
+} bind
+/PaintProc
+{ begin % Push pattern on dictionary stack
+ 0.3 setgray % Set color for dark gray stars
+15 15 translate star
+30 30 translate star
+ 0.7 setgray % Set color for light gray stars
+–30 0 translate star
+30 –30 translate star
+ end
+ } bind
+>> % End prototype pattern dictionary
+matrix % Identity matrix
+makepattern % Instantiate the pattern
+/Star4 exch def
+120 120 184 120 4 copy % Two copies of rectangle operands
+/Pattern setcolorspace
+Star4 setcolor rectfill % Fill rectangle with stars
+0.0 setgray rectstroke % Stroke black outline
+/Times-Roman 270 selectfont
+160 100 translate
+0.9 setgray 0 0 moveto (A) show % Paint glyph with gray
+Star4 setpattern 0 0 moveto (A) show % Paint glyph with stars
+showpage
