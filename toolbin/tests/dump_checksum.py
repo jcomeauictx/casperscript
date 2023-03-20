@@ -36,10 +36,10 @@ if __name__ == "__main__":
         filename=gsconf.baselinedb
 
     if not os.path.exists(filename):
-        print "cannot open",filename
+        print("cannot open",filename)
         sys.exit(1)
 
-    print "opening ", filename
+    print("opening ", filename)
     db = anydbm.open(filename)
 
     if db:
@@ -50,9 +50,9 @@ if __name__ == "__main__":
         for k in keys:
             count+=1
             if options.verbose:
-                print '%s %s' % (db[k], k)
+                print('%s %s' % (db[k], k))
 
-        print options.myself,"number of entries",count,"in database",filename
+        print(options.myself,"number of entries",count,"in database",filename)
 
     else:
-        print options.myself,"no entries in database",filename
+        print(options.myself,"no entries in database",filename)

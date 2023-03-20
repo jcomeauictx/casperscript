@@ -41,7 +41,7 @@ def logMessage(message,file,revision,printMessage=True):
     message_time=time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
     message=myself+" "+revision+" "+message_time+" "+message
     if printMessage:
-        print message
+        print(message)
     if file:
         message+="\n"
         file.write(message)
@@ -120,10 +120,10 @@ def update_ghostscript(revision,release,
     myself=options.myself+" update_ghostscript"
 
     if options and options.__dict__.has_key("verbose") and options.verbose:
-        print myself,gsroot
+        print(myself,gsroot)
 
     if release:
-        print myself,"release not yet supported"
+        print(myself,"release not yet supported")
 
     if options and options.__dict__.has_key("capture") and options.capture:
         captureOutput = True
@@ -345,7 +345,7 @@ if __name__ == "__main__":
     myself=options.myself
 
     if options.version:
-        print options.myself,"version",myversion
+        print(options.myself,"version",myversion)
         sys.exit(1)
 
     options.svn       = not options.nosvn
@@ -369,7 +369,7 @@ if __name__ == "__main__":
     else:
         now=time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
     
-    print myself,revision
+    print(myself,revision)
     if revision == "HEAD":
         prefix=logdir+now+"."
         gsroot=gsconf.gsroot
@@ -402,7 +402,7 @@ if __name__ == "__main__":
                              cumulative_file=None
                              )
     if err != 0:
-        print message
+        print(message)
         sys.exit(1)
 
     revision=get_revision(gsroot)
@@ -414,12 +414,12 @@ if __name__ == "__main__":
 
     if options.remove:
         if os.path.exists(gsroot):
-            print "shutil.rmtree(gsroot)",gsroot
+            print("shutil.rmtree(gsroot)",gsroot)
             shutil.rmtree(gsroot)
             if gsinstall:
-                print "shutil.rmtree(gsinstall)",gsinstall
+                print("shutil.rmtree(gsinstall)",gsinstall)
                 shutil.rmtree(gsinstall)            
 
-    print myself,revision,"done"
+    print(myself,revision,"done")
 
     sys.exit(0)

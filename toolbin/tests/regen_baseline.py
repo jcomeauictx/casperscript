@@ -17,7 +17,7 @@ def regen_baseline(rasterdir,workdir,baselinedbname,listfile,options=None):
         myself=options.myself
 
     if listfile:               # listfile may be a subset of the files in rasterdir
-        print listfile
+        print(listfile)
         f=open(listfile)
         rasterfiles=f.readlines()
         f.close
@@ -30,29 +30,29 @@ def regen_baseline(rasterdir,workdir,baselinedbname,listfile,options=None):
 
     total=len(rasterfiles)
     all=0
-    print "%50s %s %i" % (rasterdir,"total files",total)
+    print("%50s %s %i" % (rasterdir,"total files",total))
     gzmatch=re.compile('.*gz$')
     for rasterfile_raw in rasterfiles:
         rasterfile_raw=rasterfile_raw.strip("\n")
         fullname=rasterdir+rasterfile_raw
 #        if not os.path.isfile(fullname):
-#            print myself,"ignoring (not regular file)",fullname
+#            print(myself,"ignoring (not regular file)",fullname)
 #            continue
         if not gzmatch.match(rasterfile_raw):
-            print myself,"ignoring (not gz)",rasterfile_raw
+            print(myself,"ignoring (not gz)",rasterfile_raw)
             continue
 
         rasterfile=rasterfile_raw.replace(".gz","")
         rasterfilepath=workdir+rasterfile
 
         if not os.path.exists(rasterfilepath):
-            if options.verbose: print "gz ",rasterfile_raw
+            if options.verbose: print("gz ",rasterfile_raw)
             rasterdb.get_file(rasterfile,rasterdir,output=rasterfilepath)
 
-        if options.verbose: print rasterfilepath
+        if options.verbose: print(rasterfilepath)
         sum=gssum.add_file(rasterfilepath,baselinedbname)
         all+=1
-        if options.verbose: print "%100s %s %i %s %i" % (rasterfile,sum,all,"of",total)
+        if options.verbose: print("%100s %s %i %s %i" % (rasterfile,sum,all,"of",total))
         if options.delete and os.path.exists(rasterfilepath):
             os.unlink(rasterfilepath)
 
@@ -72,16 +72,16 @@ if __name__ == "__main__":
     baselinedb=gsconf.baselinedb
     if options.new:
         now=time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
-        print options.myself,now
+        print(options.myself,now)
         if os.path.exists(baselinedb):
             baselinedb_backup=baselinedb+"."+now
-            print "saving",baselinedb,"to",baselinedb_backup
+            print("saving",baselinedb,"to",baselinedb_backup)
             os.rename(baselinedb,baselinedb_backup)
-        print options.myself,"create new baseline database"
+        print(options.myself,"create new baseline database")
         db = anydbm.open(baselinedb, 'c')
     else:
-        print options.myself,"use existing baseline database"
+        print(options.myself,"use existing baseline database")
         db = anydbm.open(baselinedb, 'r')
 
-    print baselinedb
+    print(baselinedb)
     regen_baseline(gsconf.rasterdbdir,gsconf.workdir,baselinedb,listfile=listfile,options=options)

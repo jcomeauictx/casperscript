@@ -31,9 +31,9 @@ import string
 import gsconf
 
 def usage():
-    print "usage: get_baselines <date>"
+    print("usage: get_baselines <date>")
     print
-    print "Dates should be specificied in ctime format."
+    print("Dates should be specificied in ctime format.")
     print
     sys.exit(1)
 
@@ -41,7 +41,7 @@ if len(sys.argv) == 2:
     try:
         from_date = time.mktime(time.strptime(sys.argv[1]))
     except:
-        print "ERROR: Could not parse date."
+        print("ERROR: Could not parse date.")
         sys.exit(1)
 else:
     usage()
@@ -50,7 +50,7 @@ else:
 try:
     baseline_log = open(name)
 except:
-    print "ERROR: cannot open baseline log",name
+    print("ERROR: cannot open baseline log",name)
     sys.exit(1)
 
 changes = {}
@@ -63,8 +63,8 @@ for line in baseline_log.readlines():
 
 if len(changes) > 0:
     for k in changes.keys():
-        print k
+        print(k)
 else:
-    print "No baseline updates."
+    print("No baseline updates.")
 
    

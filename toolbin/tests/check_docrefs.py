@@ -25,6 +25,8 @@
 # +src, or +lib execute SRC_LIST, LIB_LIST below.
 
 # Define the Ghostscript-specific parameter lists.
+from __future__ import print_function
+
 SRC_LIST = [
     '+from', 'doc/Develop.htm',
     '+to', 'lib', 'src',
@@ -106,7 +108,7 @@ def mainArgs(arglist, root, fromProc, toProc):
         elif arg == '-to':
             do, adding = toProc, 0
         elif re.match('[+-]', arg):
-            print sys.stderr >> 'Unknown switch: ' + arg
+            print('Unknown switch: ' + arg, file=sys.stderr)
             exit(1)
         elif arg.find('*') >= 0:
             for f in glob.glob(os.path.join(root, arg)): do(f, adding)

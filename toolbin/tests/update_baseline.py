@@ -45,7 +45,7 @@ def update_databases(outputfile,device,dpi,band,revision,options):
     message=time.ctime() + " " + testfile +" "+outputdevice+ " updated "+revision
 
     if options and options.dryrun:
-        print "dryrun",message
+        print("dryrun",message)
     else:
         log.write(message+"\n")
         log.close()
@@ -67,11 +67,11 @@ def update_databases(outputfile,device,dpi,band,revision,options):
 def make_entry(testfile, device, dpi, band,revision,options):
     testfilepath=gsconf.comparefileall + testfile
     if not os.path.exists(testfilepath):
-        print options.myself,"cannot find","\""+testfilepath+"\""
+        print(options.myself,"cannot find","\""+testfilepath+"\"")
 
 
     outputfile = "%s.%s.%d.%d" % (testfile, device, dpi, band)
-    print "update_baseline.py: " + outputfile
+    print("update_baseline.py: " + outputfile)
     sys.stdout.flush()
 
     gs = gstestgs.Ghostscript()
@@ -79,7 +79,7 @@ def make_entry(testfile, device, dpi, band,revision,options):
     gs.gsroot = gsconf.installtree
     gs.command = gsconf.installtree+"bin/gs"
     if not os.path.exists(gs.command):
-        print options.myself,"gs executable does not exist",gs.command
+        print(options.myself,"gs executable does not exist",gs.command)
         return
 
     if gsconf.gs_stdout and gsconf.gs_stderr:
@@ -94,15 +94,15 @@ def make_entry(testfile, device, dpi, band,revision,options):
     if gs.process():
         update_databases(outputfile,device,dpi,band,revision=revision,options=options)
     else:
-	print options.myself,"error from gs.process",testfilepath,device,dpi,band
+	print(options.myself,"error from gs.process",testfilepath,device,dpi,band)
 
 def make_pdf_entry(testfile, device, dpi, band,revision,options):
     testfilepath=gsconf.comparefileall + testfile
     if not os.path.exists(testfilepath):
-        print options.myself,"cannot find","\""+testfilepath+"\""
+        print(options.myself,"cannot find","\""+testfilepath+"\"")
 
     outputfile = "%s.pdf.%s.%d.%d" % (testfile, device, dpi, band)
-    print "update_baseline.py (pdf): " + outputfile
+    print("update_baseline.py (pdf): " + outputfile)
     sys.stdout.flush()
 
     gs = gstestgs.Ghostscript()
@@ -110,7 +110,7 @@ def make_pdf_entry(testfile, device, dpi, band,revision,options):
     gs.gsroot = gsconf.installtree
     gs.command = gsconf.installtree+"bin/gs"
     if not os.path.exists(gs.command):
-        print options.myself,"gs executable does not exist",gs.command
+        print(options.myself,"gs executable does not exist",gs.command)
         return
 
     gs.log_stdout = gsconf.logdir+gsconf.gs_stdout
@@ -126,7 +126,7 @@ def make_pdf_entry(testfile, device, dpi, band,revision,options):
     gs.dpi = None
 
     if not gs.process():
-	print options.myself,"error (->pdf)",testfilepath,device,dpi,band
+	print(options.myself,"error (->pdf)",testfilepath,device,dpi,band)
         return
 
     gs.infile = intermediate_pdf_file
@@ -137,7 +137,7 @@ def make_pdf_entry(testfile, device, dpi, band,revision,options):
     if gs.process():
         update_databases(outputfile,device,dpi,band,revision=revision,options=options)
     else:
-	print options.myself,"error.",testfilepath,device,dpi,band
+	print(options.myself,"error.",testfilepath,device,dpi,band)
 
 def make_entries_paramsets(testfile,options):
     buildroot=gsconf.gsroot
@@ -195,7 +195,7 @@ if __name__ == '__main__':
             testfile = os.path.basename(files.pop(0))
             testfilepath=gsconf.comparefileall + testfile
             if not os.path.exists(testfilepath):
-                print myself,"cannot find","\""+testfilepath+"\""
+                print(myself,"cannot find","\""+testfilepath+"\"")
                 continue
             make_entries_paramsets(testfile,options)
 
@@ -205,7 +205,7 @@ if __name__ == '__main__':
             testfile = os.path.basename(files.pop(0))
             testfilepath=gsconf.comparefileall + testfile
             if not os.path.exists(testfilepath):
-                print myself,"cannot find","\""+testfilepath+"\""
+                print(myself,"cannot find","\""+testfilepath+"\"")
                 continue
             make_pdf_entries_paramsets(testfile,options)
     

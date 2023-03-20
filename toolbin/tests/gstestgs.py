@@ -120,7 +120,7 @@ class Ghostscript:
 				pass
 
 		if self.__dict__.has_key("verbose") and self.verbose:
-			print fullcommand
+			print(fullcommand)
 
 		if self.log_stdout and self.log_stderr:
 			datecommand='/bin/date +%%s.%%N >> %s 2>> %s' % (self.log_stdout, self.log_stderr)

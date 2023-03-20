@@ -12,7 +12,7 @@ options,arguments=p.parse_args()
 if len(arguments) > 0:
 	filename=arguments.pop(0)
 else:
-	print usage
+	print(usage)
 	sys.exit(1)
 
 file=open(filename,'r')
@@ -34,10 +34,10 @@ for line in listlines:
 		line=discard_comment.sub("",line)
 		testfile=line
 		if len(testfile) > 0:
-			print testfile
+			print(testfile)
 			total+=1
 		else:
-			print fullline
+			print(fullline)
 
 count=0
 for line in lines:
@@ -50,10 +50,10 @@ for line in lines:
 	if len(testfile) > 0:
 		count+=1
 		command="./update_baseline.py "+testfile
-		print command
+		print(command)
 		os.system(command)
 		command="./update_baseline.py --pdf "+testfile
-		print command
+		print(command)
 		os.system(command)
 
 sys.exit(0)

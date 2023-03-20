@@ -31,7 +31,7 @@ def parse_config(file=configdir+"testing.cfg"):
     try:
         cf = open(file, "r")
     except:
-        print "ERROR: Could not open config file '%s'." % (file,)
+        print("ERROR: Could not open config file '%s'." % (file,))
         return
 
     config_re = re.compile("^([^\s]+)\s+(.*)$")

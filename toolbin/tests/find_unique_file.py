@@ -26,7 +26,7 @@ def find_unique(filename):
     testfilelist=testfiles.keys()
     testfilelist.sort()
     for testfile in testfilelist:
-        print testfile
+        print(testfile)
 
 if __name__ == "__main__":
 
@@ -41,6 +41,6 @@ if __name__ == "__main__":
            if os.path.exists(filename):
                find_unique(filename)
            else:
-               print options.myself,"cannot open",filename
+               print(options.myself,"cannot open",filename)
 
     sys.exit(0)

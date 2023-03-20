@@ -58,14 +58,14 @@ def addTests(suite,gsroot,now,options=None, **args):
     comparefiles.sort()
 
     if sys.modules["gsconf"].__dict__.has_key("revision"):
-        print myself,gsconf.revision
+        print(myself,gsconf.revision)
     
 #    for testfile in comparefiles:
-#        print myself,testfile
+#        print(myself,testfile)
 
     for testfile in comparefiles:
         if gsutil.check_extension(testfile):
-            print testfile
+            print(testfile)
 
 if __name__ == '__main__':
     gstestutils.gsRunTestsMain(addTests)

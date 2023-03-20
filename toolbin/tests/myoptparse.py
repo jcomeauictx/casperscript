@@ -64,9 +64,9 @@ if __name__ == "__main__":
     optionsParser.add_option('--nomake','-m',action='store_true',help="no not make")
 
     (options,arguments)=myoptparse.parseCommandLine(optionsParser)
-    print options.revision
-    print options.testfile
-    print arguments
+    print(options.revision)
+    print(options.testfile)
+    print(arguments)
 
 #   (options,arguments)=parseCommandLine(optionsParser,revisionSkip=True)
 #   (options,arguments)=parseCommandLine(optionsParser,revisionSkip=True,testfileSkip=True,listfileSkip=True,deviceSkip=True):

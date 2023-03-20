@@ -34,10 +34,10 @@ import anydbm
 import gsconf
 
 def usage():
-    print "testdiff <old_name> [<new_name>]",version
-    print
-    print "if new_name is omitted, the current date will be used."
-    print
+    print("testdiff <old_name> [<new_name>]",version)
+    print()
+    print("if new_name is omitted, the current date will be used.")
+    print()
     sys.exit(1)
 
 args=sys.argv[:]
@@ -60,35 +60,35 @@ old_dbname = gsconf.dailydir + old_name + '.db'
 new_dbname = gsconf.dailydir + new_name + '.db'
 baseline_db_path = gsconf.baselinedb
 
-print myself,gsconf.dailydir,old_name,new_name,baseline_db_path
+print(myself,gsconf.dailydir,old_name,new_name,baseline_db_path)
 
 try:
     old_db = anydbm.open(old_dbname, 'r')
 except:
     old_db=None
-    print myself,"ERROR: Test results for %s %s were not found." % (old_name,old_dbname)
+    print(myself,"ERROR: Test results for %s %s were not found." % (old_name,old_dbname))
     
 try:
     new_db = anydbm.open(new_dbname, 'r')
 except:
     new_db=None
-    print myself,"ERROR: Test results for %s %s were not found." % (new_name,new_dbname)
+    print(myself,"ERROR: Test results for %s %s were not found." % (new_name,new_dbname))
 
 try:
     baseline_db = anydbm.open(baseline_db_path, 'r')
 except:
     baseline_db=None
-    print myself,"ERROR: Baseline database could not be opened %s." % (baseline_db_path)
+    print(myself,"ERROR: Baseline database could not be opened %s." % (baseline_db_path))
 
 if not old_db:
-    print myself,"empty checksum database",old_dbname
+    print(myself,"empty checksum database",old_dbname)
 if not new_db:
-    print myself,"empty checksum database",new_dbname
+    print(myself,"empty checksum database",new_dbname)
 if not baseline_db:
-    print myself,"empty checksum database",baseline_dbname
+    print(myself,"empty checksum database",baseline_dbname)
 
 if not new_db or not old_db or not baseline_db:
-    print myself,"sys.exit(1) called"
+    print(myself,"sys.exit(1) called")
     sys.exit(1)
 
 # find any checksum in new that is a new mis-match from baseline, then compare with old
@@ -136,7 +136,7 @@ for d in new_diffs:
             banded = int(m.group(4))
 
     if not type:
-        print myself,"WARNING: unknown device",d
+        print(myself,"WARNING: unknown device",d)
         continue
 
     if banded:
@@ -148,13 +148,13 @@ for d in new_diffs:
 
 length = len(list)
 if length>0:
-    print
-    print myself,new_name,"new differences from",old_name,"("+str(length)+" differences)"
+    print()
+    print(myself,new_name,"new differences from",old_name,"("+str(length)+" differences)")
     list.sort()
     for l in list:
-        print "%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4])
+        print("%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4]))
 else:
-    print myself,new_name,"0 differences from",old_name    
+    print(myself,new_name,"0 differences from",old_name)
 
 list = []
 for d in all_diffs:
@@ -181,7 +181,7 @@ for d in all_diffs:
             banded = int(m.group(4))
 
     if not type:
-        print myself,"WARNING: unknown device",d
+        print(myself,"WARNING: unknown device",d)
         continue
 
     if banded:
@@ -193,10 +193,10 @@ for d in all_diffs:
 
 length = len(list)
 if length > 0:
-    print
-    print myself,new_name,"differences from baseline ("+str(length)+" differences)"
+    print()
+    print(myself,new_name,"differences from baseline ("+str(length)+" differences)")
     list.sort()
     for l in list:
-        print "%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4])
+        print("%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4]))
 else:
-    print myself,new_name,"0 differences from baseline",baseline_db_path
+    print(myself,new_name,"0 differences from baseline",baseline_db_path)

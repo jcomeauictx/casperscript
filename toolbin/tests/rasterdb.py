@@ -49,7 +49,7 @@ def get_file(file, dbdir=gsconf.rasterdbdir, output=None):
         zf.close()
         f.close()
     else:
-        print "rasterdb.get_file: does not exist",file
+        print("rasterdb.get_file: does not exist",file)
 
 def put_file(file, dbdir=gsconf.rasterdbdir):
     mode = os.stat(file)[ST_MODE]

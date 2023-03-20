@@ -38,7 +38,7 @@ import gsutil
 def make_compare_entry(dbname,ifile, device, dpi, band):
 
     ofile = "%s.%s.%d.%d" % (ifile, device, dpi, band)
-    print "creating entry: " + ofile + "...",
+    print("creating entry: " + ofile + "...",)
     sys.stdout.flush()
     
     gs = gstestgs.Ghostscript()
@@ -59,22 +59,22 @@ def make_compare_entry(dbname,ifile, device, dpi, band):
 	    try:
        	        gssum.add_file(ofile,dbname)
                 rasterdb.put_file(ofile)
-    	        os.unlink(ofile)
-    	        print "done."
+                os.unlink(ofile)
+                print("done.")
             except OSError:
-                print "no output produced."
+                print("no output produced.")
         else:
-	    print "error."
+	    print("error.")
     else:
-	print "exists."
+	print("exists.")
 
 def make_pdfcompare_entry(dbname,ifile, device, dpi, band):
     ofile = "%s.pdf.%s.%d.%d" % (ifile, device, dpi, band)
-    print "creating entry: " + ofile + "...",
+    print("creating entry: " + ofile + "...",)
     sys.stdout.flush()
 
     if gssum.exists(ofile,dbname):
-        print "exists."
+        print("exists.")
         return
     
     gs = gstestgs.Ghostscript()
@@ -96,7 +96,7 @@ def make_pdfcompare_entry(dbname,ifile, device, dpi, band):
     gs.dpi = None
 
     if not gs.process():
-        print "error."
+        print("error.")
         return
 
     gs.infile = tfile
@@ -110,11 +110,11 @@ def make_pdfcompare_entry(dbname,ifile, device, dpi, band):
             rasterdb.put_file(ofile)
             os.unlink(tfile)
             os.unlink(ofile)
-            print "done."
+            print("done.")
         except OSError:
-            print "no output produced."
+            print("no output produced.")
     else:
-        print "error."
+        print("error.")
 
 
 if __name__ == "__main__":

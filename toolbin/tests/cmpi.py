@@ -86,7 +86,7 @@ class ScrolledCanvas(Frame):
 
     # not used currently - can't decide what we need the mouse for
     def LeftMouse(self, event):
-	print "Left Mouse click at: ", event.x, event.y
+	print("Left Mouse click at: ", event.x, event.y)
 	self.canv.coords(self.line1, 0, event.y, event.x, event.y)
 	self.canv.coords(self.line2, event.x, 0, event.x, event.y)
 
@@ -184,7 +184,7 @@ def h_proc(SC, key):
 
 def m_proc(SC, key):
     if SC.image == SC.image_diff:
-	print 'Cannot mask. First select baseline or compare image.'
+	print('Cannot mask. First select baseline or compare image.')
     SC.mask = 1 - SC.mask
     DoDisplay(SC)
 
@@ -225,7 +225,7 @@ def open_dlg_remove():
 def open_files():
     # collect differences
     # image types: P4:1-bit binary, P5:8-bit gray, P6:8-bit RGB (24-bit)
-    print "Gathering diffs, please wait ..."	##DEBUG	
+    print("Gathering diffs, please wait ...")	##DEBUG
 
     DelHighlights()
     SC.zoom_factor = 1
@@ -368,7 +368,7 @@ def open_files():
 
     SC.master.title("cmpi %s %s" % (baseline_filename, compare_filename) )
 
-    print "Difference area count: ",len(SC.areas)	##DEBUG	
+    print("Difference area count: ",len(SC.areas))	##DEBUG
 
     # set the canvas to display the entire image if it fits, otherwise use the max
     if SC.Width < 0.95*int(SC.master.maxsize()[0]): w = 1.06*int(SC.Width)
@@ -460,9 +460,9 @@ def x_proc(SC, key):
     gw = int(g.split('x')[0])
     gh = g.split('x')[1]
     gh = int(gh.split('+')[0])
-    print "gw x gh = ",gw, " x ", gh	##DEBUG	
-    print "extra X,Y: ",SC.extraX,",",SC.extraY
-    print "zoom_factor: ", SC.zoom_factor
+    print("gw x gh = ",gw, " x ", gh)	##DEBUG
+    print("extra X,Y: ",SC.extraX,",",SC.extraY)
+    print("zoom_factor: ", SC.zoom_factor)
 
     xy = input("Enter factors x,y: ")
     xf = xy[0]
@@ -483,7 +483,7 @@ def zoom(SC, key):
     DoDisplay(SC)
 
 def help_proc(SC, key):
-    print HelpMsg
+    print(HelpMsg)
 
 KeyProcs = { 'b' : b_proc, 'c' : c_proc, 'd' : d_proc,
 	'h' : h_proc, 'm' : m_proc, 'n' : npt_proc, 'o' : o_proc,
@@ -502,8 +502,8 @@ def KeyPress(event):
     	if KeyProcs.has_key(event.char):
 	    KeyProcs[event.char](SC, event.char)
 	else:
-	    print "unknown key function: keysym='%s'" %  event.keysym
-	    print HelpMsg
+	    print("unknown key function: keysym='%s'" %  event.keysym)
+	    print(HelpMsg)
 
 def advance_diff_in_prev_line(diffs_prev_line, index_in_prev_line):
     if index_in_prev_line < len(diffs_prev_line):

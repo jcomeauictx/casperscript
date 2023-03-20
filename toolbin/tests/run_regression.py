@@ -47,20 +47,20 @@ def get_revision_of_HEAD(dir=None):
 def testAll(track,gsroot,now,options):
     suite = gstestutils.GSTestSuite()
 
-    print options.myself,gsconf.comparefiledir
-    print options.myself,"test parameter set: "+gsparamsets.testparamsets_name
+    print(options.myself,gsconf.comparefiledir)
+    print(options.myself,"test parameter set: "+gsparamsets.testparamsets_name)
 
     if not os.path.exists(gsroot):
-        print options.myself,"FATAL: gsroot directory does not exist",gsroot        
+        print(options.myself,"FATAL: gsroot directory does not exist",gsroot)
         sys.exit(1)
 
     gsexecutable=gsroot+"bin/gs"
     if not os.path.exists(gsexecutable):
-        print options.myself,"FATAL: gsexecutable does not exist",gsexecutable        
+        print(options.myself,"FATAL: gsexecutable does not exist",gsexecutable)
         sys.exit(1)
 
     revision=get_revision_of_HEAD(dir=gsroot)
-    print options.myself,"from tree:",gsroot,"revision is:",revision
+    print(options.myself,"from tree:",gsroot,"revision is:",revision)
     
     # Add tests based on running Ghostscript.
     gscheck_all.addTests(suite, gsroot=gsroot, track=track, now=now, options=options)
@@ -74,13 +74,13 @@ def testAll(track,gsroot,now,options):
     cwd=os.getcwd()
 
     start_time=time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
-    print options.myself,start_time,"executing in",gsroot
+    print(options.myself,start_time,"executing in",gsroot)
     os.chdir(gsroot)
 
     result = runner.run(suite)
 
     end_time=time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
-    print options.myself,end_time,"complete",cwd
+    print(options.myself,end_time,"complete",cwd)
     os.chdir(cwd)
 
 if __name__ == "__main__":
@@ -113,18 +113,18 @@ if __name__ == "__main__":
         # create (truncate) the database for the daily checksums
         db = anydbm.open(dbname, "n")
         db.close()
-        print options.myself,"daily database for checksums",dbname
+        print(options.myself,"daily database for checksums",dbname)
     
     testAll(options.track,gsroot,now,options)
 
     if options.track:
         dbname = dbname + ".db" # mhw
         if not os.path.exists(dbname):
-            print options.myself,"ERROR","the checksum database does not exist",dbname
+            print(options.myself,"ERROR","the checksum database does not exist",dbname)
 
         # copy from the db by date to the db by revision
         if revision == "HEAD":
             dbname_by_revision_value = gsconf.dailydir+revision_value+".db"
 
-        print options.myself,"copy from",dbname,"to",dbname_by_revision_value
+        print(options.myself,"copy from",dbname,"to",dbname_by_revision_value)
         shutil.copy(dbname,dbname_by_revision_value)

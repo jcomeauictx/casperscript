@@ -47,7 +47,7 @@ class GSCompareTestCase(gstestgs.GhostscriptTestCase):
 
 	if not os.access(rasterfilename, os.F_OK):
             message="ERROR \ncannot find "+rasterfilename+" for "+filename_details
-            print myself,message
+            print(myself,message)
             self.skip = 1
         else:
             ct = time.localtime(os.stat(rasterfilename)[stat.ST_MTIME])
@@ -134,10 +134,10 @@ def addTests(suite,gsroot,now,options=None, **args):
     comparefiles.sort()
 
     if sys.modules["gsconf"].__dict__.has_key("revision"):
-        print myself,gsconf.revision
+        print(myself,gsconf.revision)
     
 #    for testfile in comparefiles:
-#        print myself,testfile
+#        print(myself,testfile)
 
     for testfile in comparefiles:
         if gsutil.check_extension(testfile):

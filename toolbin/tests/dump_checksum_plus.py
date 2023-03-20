@@ -31,11 +31,11 @@ myself=args.pop(0)
 if len(args) > 0:
     name=args.pop(0)
 else:
-    print "no database name"
+    print("no database name")
     sys.exit(1)
 
 if not os.path.exists(name):
-    print "cannot open",name
+    print("cannot open",name)
     sys.exit(1)
     
 db = anydbm.open(name)
@@ -45,5 +45,5 @@ base=os.path.basename(name)
 keys=db.keys()
 keys.sort()
 for k in keys:
-    print "%50s %15s %s" % (k, base, db[k])
+    print("%50s %15s %s" % (k, base, db[k]))
 

@@ -81,7 +81,7 @@ def logMessage(message,file,revision,printMessage=True):
     message_time=time.strftime("%Y-%m-%d-%H:%M:%S", time.localtime())
     message=myself+" "+revision+" "+message_time+" "+message
     if printMessage:
-        print message
+        print(message)
     message+="\n"
     if file:
         file.write(message)
@@ -106,7 +106,7 @@ def get_count_in_db(dbname):
             count=len(db)
     except:
         count=0
-    print dbname,count
+    print(dbname,count)
 
 def get_revision(dir=None):
     if dir:
@@ -144,7 +144,7 @@ def change_gsproduct(file):
 
     state = 0
     for line in old.readlines():
-        print "checking:", line
+        print("checking:", line)
         if state == 0:
             m = startre.search(line)
             if m:
@@ -156,7 +156,7 @@ def change_gsproduct(file):
             if m:
                 state = 2
                 new.write("\t\"GPL Ghostscript\"\n")
-		print "rewriting '%s' to GPL Ghostscript" % line.strip()
+		print("rewriting '%s' to GPL Ghostscript" % line.strip())
             else:
                 new.write(line)
         elif state == 2:
@@ -233,7 +233,7 @@ def run_nightly(options,arguments):
     hostname=hostname + " (" + hostuname + ')'
 
     if release:
-        print "NOT SUPPORTED: need to build a release",release
+        print("NOT SUPPORTED: need to build a release",release)
         sys.exit(1)
 
     if not revision or revision == "HEAD":
@@ -467,7 +467,7 @@ def run_nightly(options,arguments):
 
         pattern = 'ok$'
         for line in p.readlines():
-            if printRegression: print line
+            if printRegression: print(line)
             if not re.search(pattern, line):
                 regression_results += line
         p.close()
@@ -567,7 +567,7 @@ def run_nightly(options,arguments):
         p = os.popen(command)
         if p:
             for line in p.readlines():
-                if printRegression: print line
+                if printRegression: print(line)
                 difference_results += line
             p.close()
         else:
@@ -651,20 +651,20 @@ def run_nightly(options,arguments):
     email_file.close()
 
     if options.printmailmessage:
-        print
-        print "mail_message start"
-        print mail_message
-        print "mail_message end"    
-        print
+        print()
+        print("mail_message start")
+        print(mail_message)
+        print("mail_message end")
+        print()
 
     while True:
         try:
-            print "sendmail"
+            print("sendmail")
             sendmail(gsconf.report_from, gsconf.report_to, subject, mail_message)
             break
             time.sleep(5)
         except:
-            print "sendmail fail"
+            print("sendmail fail")
             time.sleep(15)
             pass
 
@@ -675,9 +675,9 @@ def run_nightly(options,arguments):
     cumulative_file.close()
     history_file.close()
 
-    print regression_name
-    print cumulative_name
-    print regression_name
+    print(regression_name)
+    print(cumulative_name)
+    print(regression_name)
 
     return 0
 
@@ -721,7 +721,7 @@ if __name__ == "__main__":
     (options,arguments)=myoptparse.parseCommandLine(optionsParser,deviceSkip=True,testfileSkip=True,listfileSkip=True)
 
     if options.version:
-        print options.myself,"version",myversion
+        print(options.myself,"version",myversion)
         sys.exit(1)
 
     result = run_nightly(options,arguments)

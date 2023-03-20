@@ -42,7 +42,7 @@ if __name__ == "__main__":
     (options,arguments)=myoptparse.parseCommandLine(optionsParser,deviceSkip=True,testfileSkip=True,listfileSkip=True,revisionSkip=True)
 
     if options.version:
-        print options.myself,"version",myversion
+        print(options.myself,"version",myversion)
         sys.exit(1)
 
     low=int(options.low)
@@ -54,6 +54,6 @@ if __name__ == "__main__":
         result = run_nightly(options,arguments)
         if result > 0:
             overall_result=1
-        print options.myself,revision,"result",result
+        print(options.myself,revision,"result",result)
 
     sys.exit(overall_result)

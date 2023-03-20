@@ -41,7 +41,7 @@ def add_file(imagefile, dbname, sum=None):
         imagefilebase=os.path.basename(imagefile)
         db[imagefilebase] = sum
     else:
-        print "gssum.add_file failed to create a sum for",imagefile
+        print("gssum.add_file failed to create a sum for",imagefile)
     db.close()
     return sum
 
@@ -49,7 +49,7 @@ def get_sum(imagefile, dbname):
     try:
         db = anydbm.open(dbname)
     except:
-        print "cannot open", dbname, "for", imagefile
+        print("cannot open", dbname, "for", imagefile)
         
     imagefilebase=os.path.basename(imagefile)
     sum = db[imagefilebase]
@@ -60,7 +60,7 @@ def make_sum(imagefile):
     try:
 	mode = os.stat(imagefile)[ST_MODE]
     except OSError:
-        print "gssum.add_file failed to stat",imagefile
+        print("gssum.add_file failed to stat",imagefile)
 	return None
 
     if S_ISREG(mode):
@@ -74,5 +74,5 @@ def make_sum(imagefile):
 
         return sum.hexdigest()
     
-    print "gssum.add_file failed ISREG",imagefile
+    print("gssum.add_file failed ISREG",imagefile)
     return None

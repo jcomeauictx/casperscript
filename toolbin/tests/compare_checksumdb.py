@@ -37,29 +37,29 @@ if __name__ == "__main__":
     optionsParser.add_option('--nomake',action='store_true',help="no not make")
 
     (options,arguments)=myoptparse.parseCommandLine(optionsParser)
-    print options.revision
+    print(options.revision)
 
     old_dbname=arguments.pop(0)
     new_dbname=arguments.pop(0)
 
-    print myself,old_dbname,new_dbname
+    print(myself,old_dbname,new_dbname)
 
     try:
         old_db = anydbm.open(old_dbname, 'r')
     except:
         old_db=None
-        print myself,"ERROR: Test results for %s %s were not found." % (old_name,old_dbname)
+        print(myself,"ERROR: Test results for %s %s were not found." % (old_name,old_dbname))
     
         try:
             new_db = anydbm.open(new_dbname, 'r')
         except:
             new_db=None
-            print myself,"ERROR: Test results for %s %s were not found." % (new_name,new_dbname)
+            print(myself,"ERROR: Test results for %s %s were not found." % (new_name,new_dbname))
 
     if not old_db:
-        print myself,"empty checksum database",old_dbname
+        print(myself,"empty checksum database",old_dbname)
     if not new_db:
-        print myself,"empty checksum database",new_dbname
+        print(myself,"empty checksum database",new_dbname)
 
 
     if not new_db or not old_db:
@@ -106,7 +106,7 @@ if __name__ == "__main__":
             banded = int(m.group(4))
 
     if not type:
-        print myself,"WARNING: unknown device",d
+        print(myself,"WARNING: unknown device",d)
         continue
 
     if banded:
@@ -118,13 +118,13 @@ if __name__ == "__main__":
 
 length = len(list)
 if length>0:
-    print
-    print myself,new_name,"new differences from",old_name,"(",str(length)," differences)"
+    print()
+    print(myself,new_name,"new differences from",old_name,"(",str(length)," differences)")
     list.sort()
     for l in list:
-        print "%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4])
+        print("%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4]))
 else:
-    print myself,new_name,"0 differences from",old_name    
+    print(myself,new_name,"0 differences from",old_name)
 
 list = []
 for d in all_diffs:
@@ -151,7 +151,7 @@ for d in all_diffs:
             banded = int(m.group(4))
 
     if not type:
-        print myself,"WARNING: unknown device",d
+        print(myself,"WARNING: unknown device",d)
         continue
 
     if banded:
@@ -164,9 +164,9 @@ for d in all_diffs:
 length = len(list)
 if length > 0:
     print
-    print myself,new_name,"differences from baseline ("+str(length)+" differences)"
+    print(myself,new_name,"differences from baseline ("+str(length)+" differences)")
     list.sort()
     for l in list:
-        print "%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4])
+        print("%s %s (%s/%d/%s)" % (l[0], l[1], l[2], l[3], l[4]))
 else:
-    print myself,new_name,"0 differences from baseline",baseline_db_path
+    print(myself,new_name,"0 differences from baseline",baseline_db_path)

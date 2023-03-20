@@ -37,14 +37,14 @@ else:
     name=gsconf.baselinedb
 
 if not os.path.exists(name):
-    print "cannot open",name
+    print("cannot open",name)
     sys.exit(1)
 
-print "opening ", name
+print("opening ", name)
 db = anydbm.open(name)
 
 # collect the database as strings
 dump = []
 for k in db.keys():
-    print '-%50s- %s' % (k,db[k])
+    print('-%50s- %s' % (k,db[k]))
 
