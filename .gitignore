@@ -42,6 +42,9 @@ sobin
 sodebugbin
 soobj
 sodebugobj
+*.pyo
+*.pyc
+__pycache__
 
 gs/Makefile
 gs/Makefile.in

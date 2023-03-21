@@ -1,18 +1,27 @@
 # casperscript - ghostscript/postscript made friendlier for Python and C programmers
 
-First by making '#!' equivalent to a comment ('%'), thus enabling
-shebang-line execution, avoiding having to use `binfmt_misc` and a wrapper
-script for the interpreter (because to process args, gs must be run as
-`gs -- myfile.ps arg1 arg2`). (done).
+The goal is to make casperscript an extension of ghostscript optimized for
+general-purpose programming. I don't envision it used for embedded devices,
+although I won't deliberately code the extensions so as to prohibit such.
 
-This will also require splitting the args, since linux returns multiple
-shebang-line args as a single string. (done).
+One of the first steps was to define '#!' as a comment, obviating having to
+use `binfmt_misc` and a wrapper script for the interpreter (because to
+process args, gs must be run as `gs -- myfile.ps arg1 arg2`).
 
-I wanted to use '#' as a general alias to '%', but experimentations with this
-have so far led to silent failures. (now works for standalone '# ' but not for
-'#comment')
+This also required splitting the args, since linux returns multiple
+shebang-line args as a single string.
 
-Next goal will be to switch the `name` character from forward slash to
-backslash, but that is likely to be as problematic as '#' due to its
-ubiquitous use through the interpreter. Also noting that '\\' is already used as
-an escape in strings, and '#' as a base delimiter in integers.
+A change that turned out to be far simpler than expected got rid of the
+/undefined error, enabling easy top-down design: a placeholder is shown
+for any undefined words at time of command execution.
+
+Now the primary goal is to give it the "batteries included" features from
+Python, so budding programmers don't have to "reinvent the wheel" just to
+perform simple tasks.
+
+I was hoping to be able to hijack the entire parser so that '/' could be
+used for division and '#' for comments, on a per-file basis (so real
+postscript code can still be run), but that's going to take a back seat.
+Too complicated.
+
+John Comeau jc@unternet.net 2023-03-21
