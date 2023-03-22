@@ -1,8 +1,8 @@
 ARCH := $(shell uname -m)
 CONFIG_ARGS ?= --with-gs=cs --with-x --prefix=$(HOME)
-XCFLAGS ?=  # uncomment what's needed below
 XCFLAGS += -DUSE_DEVELOPMENT_INITFILES=1
 #XCFLAGS += -DSYSLOG_DEBUGGING=1
+#XCFLAGS += -DTEST_ZCASPER=1
 export XCFLAGS
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
@@ -21,5 +21,11 @@ Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
 	./autogen.sh $(CONFIG_ARGS)
+env:
+	$@
+%:	*/%.c
+	[ "$<" ] || (echo Nothing to do >&2; false)
+	make $(<:.c=)
+	mv $(<D)/$@ .
 %:	| $(CS_MAKEFILES)
 	make -f $(CS_DEFAULT) "$@"

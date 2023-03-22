@@ -45,6 +45,7 @@ sodebugobj
 *.pyo
 *.pyc
 __pycache__
+zcasper
 
 gs/Makefile
 gs/Makefile.in
