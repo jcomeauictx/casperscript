@@ -1,3 +1,4 @@
+#!/usr/bin/python
 # Copyright (C) 2001-2021 Artifex Software, Inc.
 # All Rights Reserved.
 #
@@ -18,32 +19,59 @@
 #
 # configuration file parser for regression tests
 
+from __future__ import print_function
 import os
+import pwd
 import re
 import sys
 import time
+import logging
 
-configdir = os.path.dirname(sys.argv[0])
-if len(configdir) > 0:
-    configdir = configdir + "/"
+# python3 compatibility
+try:
+    FileNotFoundError
+except NameError:
+    FileNotFoundError = OSError
 
-def parse_config(file=configdir+"testing.cfg"):
-    try:
-        cf = open(file, "r")
-    except:
-        print("ERROR: Could not open config file '%s'." % (file,))
-        return
+CALLER = os.path.splitext(os.path.basename(sys.argv[0]))[0]
+FILENAME = os.path.join(os.path.dirname(sys.argv[0]), 'testing.cfg')
+USER = pwd.getpwuid(os.geteuid()).pw_name
+TEST_CONFIG = {  # set some sane (?) defaults in case no testing.cfg exists
+    'report_from': CALLER + '@localhost',
+    'report_to': USER + '@localhost',
+}
+
+def parse_config(source=FILENAME, config=None):
+    r'''
+    read and update configuration from array or from file
+
+    >>> TEST_CONFIG['report_from']
+    'doctest@localhost'
+    >>> parse_config(['#bleah gah\r\r\r', 'parse this!\n\r\n\r\r', '1 2\t '])
+    >>> TEST_CONFIG['1']
+    '2\t '
+    >>> TEST_CONFIG['parse']
+    'this!'
+    '''
+    config = config or TEST_CONFIG
+    if os.path.exists(str(source)):
+        try:
+            source = open(source, 'r')
+        except (TypeError, OSError, FileNotFoundError):
+            logging.error("Could not open config file '%s'.", filename)
+            logging.warning("Using default configuration")
+            return
 
     # ignore comments and blank lines
-    config_re = re.compile("^((?:(?=[^#]))[^\s]+)\s+(.*)$")
+    pattern = re.compile("^((?:(?=[^#]))[^\s]+)\s+(.*)$")
 
-    for l in map(lambda s:s.rstrip('\r\n'), cf.readlines()):
-        m = config_re.match(l)
-        if m:
-            sys.modules["gsconf"].__dict__[m.group(1)] = m.group(2)
-
+    for line in map(lambda s:s.rstrip('\r\n'), source):
+        match = pattern.match(line)
+        if match:
+            config.update((match.groups(),))
 
 def get_dailydb_name():
     return dailydir + time.strftime("%Y%m%d", time.localtime()) # mhw + ".db"
 
-parse_config()
+if __name__ == '__main__':
+    parse_config()
