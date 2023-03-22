@@ -34,17 +34,10 @@ def parse_config(file=configdir+"testing.cfg"):
         print("ERROR: Could not open config file '%s'." % (file,))
         return
 
-    config_re = re.compile("^([^\s]+)\s+(.*)$")
+    # ignore comments and blank lines
+    config_re = re.compile("^((?:(?=[^#]))[^\s]+)\s+(.*)$")
 
-    for l in cf.readlines():
-        # strip off EOL chars
-        while l and (l[-1] == '\r' or l[-1] == '\n'):
-            l = l[:-1]
-
-        # ignore comments and blank lines
-        if not l or l[0] == '#':
-            continue
-
+    for l in map(lambda s:s.rstrip('\r\n'), cf.readlines()):
         m = config_re.match(l)
         if m:
             sys.modules["gsconf"].__dict__[m.group(1)] = m.group(2)
