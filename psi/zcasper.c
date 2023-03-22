@@ -7,11 +7,15 @@
 #include "syslog.h"
 
 int zsleep(double seconds) {  /* implement `sleep` in casperscript */
-    int iseconds = (int)seconds;
+    struct timespec requested;
+    int iseconds = (int)seconds, code;
     double fractional = seconds - iseconds;
     long nanoseconds = roundl(fractional * 1000000000L);
     syslog(LOG_USER | LOG_DEBUG, "%d s, %ld ns", iseconds, nanoseconds);
-    return 0;
+    requested.tv_sec = iseconds;
+    requested.tv_nsec = nanoseconds;
+    code = nanosleep(&requested, NULL);
+    return abs(code);
 }
 
 #ifdef TEST_ZCASPER
