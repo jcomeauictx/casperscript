@@ -20,7 +20,7 @@
 # This script builds a revision of gs, including svn update, configure, make, install
 # 
 # If the revision is HEAD, make install is done; and the svn tree is put (HEAD) and installed
-# 	into gsconf.gsroot (usually /home/regression/gshead)
+#       into gsconf.gsroot (usually /home/regression/gshead)
 # 
 # If the revision is not HEAD, no install is done; and the tree is put into gs.<revision>
 # 
@@ -62,7 +62,7 @@ def get_revision(dir=None):
         if "Revision:" in line:
             revision=line.strip('Revision: ')
             revision=revision.strip('\n')
-	    break
+            break
     else:
         revision = None
     if dir:
@@ -216,7 +216,7 @@ def update_ghostscript(revision,release,
         message="product change complete:"+product_file
         logMessage(message,update_stdout_file,revision,printMessage=False)
         logMessage(message,cumulative_file,revision,)
-	
+        
         if revision == "HEAD":
             installpath=gsconf.installtree
             command="./autogen.sh --prefix=" + installpath
@@ -320,7 +320,7 @@ def update_ghostscript(revision,release,
 
 if __name__ == "__main__":
 
-    os.umask(0002)
+    os.umask(0o0002)
     
     optionsParser=optparse.OptionParser()
 

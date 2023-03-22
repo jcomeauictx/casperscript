@@ -18,42 +18,42 @@
 
 
 # overview
-# 	update revision (default is HEAD)
-# 	run all testfiles with all parameter sets using the gs executable - calculate each checksum
-# 	compare checksums with 1) previous results 2) baseline checksums
-# 	report baseline changes
-# 	email results
+#       update revision (default is HEAD)
+#       run all testfiles with all parameter sets using the gs executable - calculate each checksum
+#       compare checksums with 1) previous results 2) baseline checksums
+#       report baseline changes
+#       email results
 # 
 # temporary output:
-#	the output images from gs execution are not saved
+#       the output images from gs execution are not saved
 #
 # permanent output:
-# 	checksum database for the day (an "anydbm" database [testfile-device,checksum]
+#       checksum database for the day (an "anydbm" database [testfile-device,checksum]
 # 
 # input:
-# 	testing.cfg - configuration many significant variables (in /home/regression/regression, or .)
-# 	command line - control details of execution
-# 	files in compare file directory (ususally /home/regression/comparefiles)
-# 	The following are "anydbm" databases as described above
-#	 	database of checksums of the raster files in /home/regression/raster
-#	 	databases of past nightly runs in /home/regression/regression/daily (only the most recent is used)
-# 	baseline.log - log of updates to baseline raster files (in /home/regression/regression/baseline) [text file]
-# 	
+#       testing.cfg - configuration many significant variables (in /home/regression/regression, or .)
+#       command line - control details of execution
+#       files in compare file directory (ususally /home/regression/comparefiles)
+#       The following are "anydbm" databases as described above
+#               database of checksums of the raster files in /home/regression/raster
+#               databases of past nightly runs in /home/regression/regression/daily (only the most recent is used)
+#       baseline.log - log of updates to baseline raster files (in /home/regression/regression/baseline) [text file]
+#       
 # Note that the raster files themselves are not used in this process.
 # 
 # Hierarchy of python scripts
-# 	run_nightly.py
-#		gsconf.py - read testing.cfg and create an object defining the environment for all other scripts
-# 		run_regression.py - execute gs, calculate checksum, insert into database
-#			gs_checkall.py
-#				gs_checkraster.py
-#				gs_checkpdfwrite.py
-#					gsparamset.py - define the "parameter set" - the set of output devices to be tested for each file
-#					gstestgs.py, gstestutil.py - run gs (used the built-in Python unit test harness)
-#					gssum.py - checksum calculation and database addition
-#			
-# 		testdiff.py - compare three checksum databases
-# 		get_baseline_log.py - extract recent changes to the baseline.log 
+#       run_nightly.py
+#               gsconf.py - read testing.cfg and create an object defining the environment for all other scripts
+#               run_regression.py - execute gs, calculate checksum, insert into database
+#                       gs_checkall.py
+#                               gs_checkraster.py
+#                               gs_checkpdfwrite.py
+#                                       gsparamset.py - define the "parameter set" - the set of output devices to be tested for each file
+#                                       gstestgs.py, gstestutil.py - run gs (used the built-in Python unit test harness)
+#                                       gssum.py - checksum calculation and database addition
+#                       
+#               testdiff.py - compare three checksum databases
+#               get_baseline_log.py - extract recent changes to the baseline.log 
 #
 #
 #
@@ -125,7 +125,7 @@ def get_revision(dir=None):
         if "Revision:" in line:
             revision=line.strip('Revision: ')
             revision=revision.strip('\n')
-	    break
+            break
     else:
         revision = None
     if dir:
@@ -156,7 +156,7 @@ def change_gsproduct(file):
             if m:
                 state = 2
                 new.write("\t\"GPL Ghostscript\"\n")
-		print("rewriting '%s' to GPL Ghostscript" % line.strip())
+                print("rewriting '%s' to GPL Ghostscript" % line.strip())
             else:
                 new.write(line)
         elif state == 2:
@@ -305,26 +305,26 @@ def run_nightly(options,arguments):
     mail_message+=message+"\n"
 
     if not os.path.exists(gsconf.comparefiledir + "/.svn") or \
-	    os.system("svn update " + gsconf.comparefiledir) != 0:
-	message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir
-	logMessage(message,None,"n/a")
+            os.system("svn update " + gsconf.comparefiledir) != 0:
+        message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir
+        logMessage(message,None,"n/a")
 
     if not os.path.exists(gsconf.comparefiledir + "/../tests/eps" + "/.svn") or \
-	    os.system("svn update " + gsconf.comparefiledir + "/../tests/eps") != 0:
-	message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir + "/../tests/eps"
-	logMessage(message,None,"n/a")
+            os.system("svn update " + gsconf.comparefiledir + "/../tests/eps") != 0:
+        message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir + "/../tests/eps"
+        logMessage(message,None,"n/a")
     if os.path.exists(gsconf.comparefiledir + "/../tests/eps"):
         os.system("ln -f -s " + gsconf.comparefiledir + "/../tests/eps/* " + gsconf.comparefiledir)
     if not os.path.exists(gsconf.comparefiledir + "/../tests/ps" + "/.svn") or \
-	    os.system("svn update " + gsconf.comparefiledir + "/../tests/ps") != 0:
-	message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir + "/../tests/ps"
-	logMessage(message,None,"n/a")
+            os.system("svn update " + gsconf.comparefiledir + "/../tests/ps") != 0:
+        message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir + "/../tests/ps"
+        logMessage(message,None,"n/a")
     if os.path.exists(gsconf.comparefiledir + "/../tests/ps"):
         os.system("ln -f -s " + gsconf.comparefiledir + "/../tests/ps/* " + gsconf.comparefiledir)
     if not os.path.exists(gsconf.comparefiledir + "/../tests/pdf" + "/.svn") or \
-	    os.system("svn update " + gsconf.comparefiledir + "/../tests/pdf") != 0:
-	message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir + "/../tests/pdf"
-	logMessage(message,None,"n/a")
+            os.system("svn update " + gsconf.comparefiledir + "/../tests/pdf") != 0:
+        message = "run_nightly.py: cannot svn update " + gsconf.comparefiledir + "/../tests/pdf"
+        logMessage(message,None,"n/a")
     if os.path.exists(gsconf.comparefiledir + "/../tests/pdf"):
         os.system("ln -f -s " + gsconf.comparefiledir + "/../tests/pdf/* " + gsconf.comparefiledir)
     comparefiles = os.listdir(gsconf.comparefiledir)
@@ -685,7 +685,7 @@ def run_nightly(options,arguments):
 
 if __name__ == "__main__":
 
-    os.umask(0002)
+    os.umask(0o0002)
 
     optionsParser=optparse.OptionParser()
 
