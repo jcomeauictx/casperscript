@@ -1,4 +1,5 @@
 /* add support for casperscript extensions */
+#include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
 #include <math.h>
@@ -15,7 +16,13 @@ int zsleep(double seconds) {  /* implement `sleep` in casperscript */
 
 #ifdef TEST_ZCASPER
 int main(int argc, char **argv) {
-    return zsleep(atof(argv[1]));
+    int code;
+    if (argc < 2) {
+        fprintf(stderr, "Must specify sleep time\n");
+        code = 1;
+    }
+    else code = zsleep(atof(argv[1]));
+    return code;
 }
 #endif
 
