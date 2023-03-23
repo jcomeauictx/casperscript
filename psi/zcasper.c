@@ -1,11 +1,12 @@
 /* add support for casperscript extensions */
-#include <time.h>
-#include <math.h>
+#include <time.h>  /* for nanosleep(), ... */
+#include <math.h>  /* for roundl(), ... */
+#include <stdlib.h>  /* for abs(), atof(), ... */
+#include <stdarg.h>  /* for vsnprintf(), ... */
 #include "zcasper.h"
 #include "syslog.h"
 #ifdef TEST_ZCASPER
-#include <stdio.h>
-#include <stdlib.h>
+#include <stdio.h>   /* for fprintf(), ... */
 #else
 #include "syslog.h"
 #include "ghost.h"
@@ -27,6 +28,7 @@ int sleep(double seconds) {
     code = nanosleep(&requested, NULL);
     return abs(code);
 }
+
 #ifndef TEST_ZCASPER
 static int zsleep(i_ctx_t *i_ctx_p);  /* implement `sleep` in casperscript */
 static int zsleep(i_ctx_t *i_ctx_p) {
