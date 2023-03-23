@@ -550,7 +550,8 @@ INT4=$(PSOBJ)iparam.$(OBJ) $(PSOBJ)ireclaim.$(OBJ) $(PSOBJ)iplugin.$(OBJ)
 INT5=$(PSOBJ)iscan.$(OBJ) $(PSOBJ)iscannum.$(OBJ) $(PSOBJ)istack.$(OBJ)
 INT6=$(PSOBJ)iutil.$(OBJ) $(GLOBJ)scantab.$(OBJ)
 INT7=$(GLOBJ)sstring.$(OBJ) $(GLOBJ)stream.$(OBJ)
-Z1=$(PSOBJ)zarith.$(OBJ) $(PSOBJ)zarray.$(OBJ) $(PSOBJ)zcontrol.$(OBJ)
+Z1=$(PSOBJ)zarith.$(OBJ) $(PSOBJ)zarray.$(OBJ) $(PSOBJ)zcontrol.$(OBJ)\
+  $(PSOBJ)zcasper.$(OBJ)
 Z2=$(PSOBJ)zdict.$(OBJ) $(PSOBJ)zfile.$(OBJ) $(PSOBJ)zfile1.$(OBJ) $(PSOBJ)zfileio.$(OBJ)
 Z3=$(PSOBJ)zfilter.$(OBJ) $(PSOBJ)zfproc.$(OBJ) $(PSOBJ)zgeneric.$(OBJ)
 Z4=$(PSOBJ)ziodev.$(OBJ) $(PSOBJ)ziodevsc.$(OBJ) $(PSOBJ)zmath.$(OBJ) $(PSOBJ)zalg.$(OBJ)
@@ -562,7 +563,7 @@ Z9=$(PSOBJ)zdevice.$(OBJ) $(PSOBJ)zfont.$(OBJ) $(PSOBJ)zfontenum.$(OBJ) $(PSOBJ)
 Z10=$(PSOBJ)zht.$(OBJ) $(PSOBJ)zimage.$(OBJ) $(PSOBJ)zmatrix.$(OBJ)
 Z11=$(PSOBJ)zpaint.$(OBJ) $(PSOBJ)zpath.$(OBJ)
 Z12=$(PSOBJ)zncdummy.$(OBJ)
-Z1OPS=zarith zarray zcontrol1 zcontrol2 zcontrol3
+Z1OPS=zarith zarray zcontrol1 zcontrol2 zcontrol3 zcasper
 Z2OPS=zdict1 zdict2 zfile zfile1 zfileio1 zfileio2
 Z3_4OPS=zfilter zfproc zgeneric ziodev zmath zalg
 Z5_6OPS=zmisc_a zmisc_b zpacked zrelbit zstack zstring zsysvm
@@ -1890,7 +1891,8 @@ $(PSOBJ)idisp.$(OBJ) : $(PSSRC)idisp.c $(OP) $(stdio__h) $(gp_h)\
 $(PSOBJ)splitargs.$(OBJ) : $(GLSRC)splitargs.c
 	$(PSCC) $(PSO_)$(@F) $(C_) $<
 
-$(PSOBJ)zcasper.$(OBJ) : $(PSSRC)zcasper.c
+$(PSOBJ)zcasper.$(OBJ) : $(PSSRC)zcasper.c $(OP) $(ghost_h) $(gserrors_h)\
+ $(oper_h) $(store_h) $(estack_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)$(@F) $(C_) $<
 
 $(PSOBJ)chop_extension.$(OBJ) : $(GLSRC)chop_extension.c

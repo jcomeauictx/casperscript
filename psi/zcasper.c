@@ -28,8 +28,31 @@ int sleep(double seconds) {
     return abs(code);
 }
 #ifndef TEST_ZCASPER
-static int zsleep(i_ctx_t *i_ctx_p) {  /* implement `sleep` in casperscript */
+static int zsleep(i_ctx_t *i_ctx_p);  /* implement `sleep` in casperscript */
+static int zsleep(i_ctx_t *i_ctx_p) {
+    os_ptr op = osp;
+    double sleeptime = 0.0;
+    switch (r_type(op)) {
+        default:
+            return_op_typecheck(op);
+            break;
+        case t_real:
+            sleeptime = op->value.realval;
+            break;
+        case t_integer:
+            sleeptime = (double)op->value.intval;
+            break;
+    }
+    if (sleeptime > 0) sleep(sleeptime);
+    pop(1);
+    return 0;
 }
+/* ------ Initialization procedure ------ */
+const op_def zcasper_op_defs[] =
+{
+    {"1.sleep", zsleep},
+    op_def_end(0)
+};
 #endif
 
 #ifdef TEST_ZCASPER
