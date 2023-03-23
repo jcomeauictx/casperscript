@@ -36,24 +36,33 @@ except NameError:
 CALLER = os.path.splitext(os.path.basename(sys.argv[0]))[0]
 FILENAME = os.path.join(os.path.dirname(sys.argv[0]), 'testing.cfg')
 USER = pwd.getpwuid(os.geteuid()).pw_name
-TEST_CONFIG = {  # set some sane (?) defaults in case no testing.cfg exists
+DEFAULT_CONFIG = {  # set some sane (?) defaults in case no testing.cfg exists
     'report_from': CALLER + '@localhost',
     'report_to': USER + '@localhost',
 }
+# jc@unternet.net thinks this is a smelly hack, but since I'm not really sure
+# why Artifex chose to use the module itself to store the config, I don't
+# dare mess with it.
+
+GSCONF = sys.modules['gsconf']
+GSCONF.__dict__.update(DEFAULT_CONFIG)
 
 def parse_config(source=FILENAME, config=None):
     r'''
     read and update configuration from array or from file
 
-    >>> TEST_CONFIG['report_from']
+    >>> length = len(GSCONF.__dict__)
+    >>> GSCONF.report_from
     'doctest@localhost'
-    >>> parse_config(['#bleah gah\r\r\r', 'parse this!\n\r\n\r\r', '1 2\t '])
-    >>> TEST_CONFIG['1']
+    >>> parse_config(['#bleah gah\r\r\r', 'parse this!\n\r\n\r\r', 't 2\t '])
+    >>> GSCONF.t
     '2\t '
-    >>> TEST_CONFIG['parse']
+    >>> GSCONF.parse
     'this!'
+    >>> len(GSCONF.__dict__) - length  # make sure the comment wasn't included
+    2
     '''
-    config = config or TEST_CONFIG
+    config = config or GSCONF
     if os.path.exists(str(source)):
         try:
             source = open(source, 'r')
@@ -68,7 +77,7 @@ def parse_config(source=FILENAME, config=None):
     for line in map(lambda s:s.rstrip('\r\n'), source):
         match = pattern.match(line)
         if match:
-            config.update((match.groups(),))
+            config.__dict__.update((match.groups(),))
 
 def get_dailydb_name():
     return dailydir + time.strftime("%Y%m%d", time.localtime()) # mhw + ".db"
