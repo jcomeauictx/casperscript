@@ -1,12 +1,22 @@
 /* add support for casperscript extensions */
-#include <stdio.h>
-#include <stdlib.h>
 #include <time.h>
 #include <math.h>
 #include "zcasper.h"
 #include "syslog.h"
+#ifdef TEST_ZCASPER
+#include <stdio.h>
+#include <stdlib.h>
+#else
+#include "syslog.h"
+#include "ghost.h"
+#include "gserrors.h"
+#include "oper.h"
+#include "store.h"
+#include "estack.h"
+#include "std.h"
+#endif
 
-int zsleep(double seconds) {  /* implement `sleep` in casperscript */
+int sleep(double seconds) {
     struct timespec requested;
     int iseconds = (int)seconds, code;
     double fractional = seconds - iseconds;
@@ -17,6 +27,10 @@ int zsleep(double seconds) {  /* implement `sleep` in casperscript */
     code = nanosleep(&requested, NULL);
     return abs(code);
 }
+#ifndef TEST_ZCASPER
+static int zsleep(i_ctx_t *i_ctx_p) {  /* implement `sleep` in casperscript */
+}
+#endif
 
 #ifdef TEST_ZCASPER
 int main(int argc, char **argv) {
@@ -25,7 +39,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Must specify sleep time\n");
         code = 1;
     }
-    else code = zsleep(atof(argv[1]));
+    else code = sleep(atof(argv[1]));
     return code;
 }
 #endif
