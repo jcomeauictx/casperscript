@@ -35,7 +35,7 @@ casperdict begin
   } bind def
   /strlen {  % /anystring - strlen  % length to first null (\000)
     % if no nulls, entire length of string (same as `length`)
-    (\000) anchorsearch {exch pop length 1 sub} {length} ifelse
+    (\000) search {3 1 roll pop pop length} {length} ifelse
   } bind def
 end  % casperdict
 
