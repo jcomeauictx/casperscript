@@ -50,7 +50,7 @@ static int zsleep(i_ctx_t *i_ctx_p) {
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =
 {
-    {"1.sleep", zsleep},
+    {"1sleep", zsleep},
     op_def_end(0)
 };
 #endif
