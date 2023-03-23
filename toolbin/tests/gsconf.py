@@ -17,7 +17,9 @@
 
 # gsconf.py
 #
-# configuration file parser for regression tests
+'''
+configuration file parser for regression tests
+'''
 
 from __future__ import print_function
 import os
@@ -44,6 +46,8 @@ DEFAULT_CONFIG = {  # set some sane (?) defaults in case no testing.cfg exists
 # why Artifex chose to use the module itself to store the config, I don't
 # dare mess with it.
 
+if 'gsconf' not in sys.modules:  # the case if this file is run directly
+    import gsconf  # pylint: disable=import-self, unused-import
 GSCONF = sys.modules['gsconf']
 GSCONF.__dict__.update(DEFAULT_CONFIG)
 
@@ -52,8 +56,8 @@ def parse_config(source=FILENAME, config=None):
     read and update configuration from array or from file
 
     >>> length = len(GSCONF.__dict__)
-    >>> GSCONF.report_from
-    'doctest@localhost'
+    >>> GSCONF.report_from in ['doctest@localhost', 'gsconf@localhost']
+    True
     >>> parse_config(['#bleah gah\r\r\r', 'parse this!\n\r\n\r\r', 't 2\t '])
     >>> GSCONF.t
     '2\t '
@@ -67,20 +71,32 @@ def parse_config(source=FILENAME, config=None):
         try:
             source = open(source, 'r')
         except (TypeError, OSError, FileNotFoundError):
-            logging.error("Could not open config file '%s'.", filename)
+            logging.error("Could not open config file '%s'.", source)
             logging.warning("Using default configuration")
             return
 
     # ignore comments and blank lines
-    pattern = re.compile("^((?:(?=[^#]))[^\s]+)\s+(.*)$")
-
-    for line in map(lambda s:s.rstrip('\r\n'), source):
+    pattern = re.compile(r'^((?:(?=[^#]))[^\s]+)\s+(.*)$')
+    # pylint: disable=deprecated-lambda
+    for line in map(lambda s: s.rstrip('\r\n'), source):
         match = pattern.match(line)
         if match:
             config.__dict__.update((match.groups(),))
 
 def get_dailydb_name():
-    return dailydir + time.strftime("%Y%m%d", time.localtime()) # mhw + ".db"
+    '''
+    assumes dailydir has already been read from configuration file
+    '''
+    # pylint: disable=undefined-variable
+    timestamp = time.strftime("%Y%m%d", time.localtime()) # mhw + ".db"
+    try:
+        return dailydir + timestamp # mhw + ".db"
+    except NameError:
+        logging.fatal('gsconf.dailydir has not been defined')
+        raise
+
+parse_config()
 
 if __name__ == '__main__':
-    parse_config()
+    import doctest
+    doctest.testmod()
