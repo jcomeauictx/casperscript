@@ -31,6 +31,7 @@ int sleep(double seconds) {
 
 #ifndef TEST_ZCASPER
 static int zsleep(i_ctx_t *i_ctx_p);  /* implement `sleep` in casperscript */
+    /* <sleeptime> sleep */
 static int zsleep(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
     double sleeptime = 0.0;
