@@ -25,3 +25,6 @@ postscript code can still be run), but that's going to take a back seat.
 Too complicated.
 
 John Comeau jc@unternet.net 2023-03-21
+
+# links
+[Information for Ghostscript developers](https://ghostscript.com/docs/9.54.0/Develop.htm)
