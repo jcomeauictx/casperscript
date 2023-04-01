@@ -1,8 +1,8 @@
-/* Provide a version of sprintf that uses an array of longs/pointers rather
+/* Provide a version of sprintf that uses a GhostScript t_array rather
    than a va_list, and using a buffer of fixed size. Based on _doprnt.c,
    Copyright (C) 1998-2023 Free Software Foundation, Inc.
    Contributed by Kaveh Ghazi  (ghazi@caip.rutgers.edu)  3/29/98
-   _arraysnprintf.c edits by John Comeau <jc@unternet.net> 2023-03-25
+   gsprintf.c edits by John Comeau <jc@unternet.net> 2023-03-25
 
 This program is free software; you can redistribute it and/or modify it
 under the terms of the GNU General Public License as published by the
@@ -65,9 +65,8 @@ char * memdump(char *buffer, void *location, int count);
 	  } \
       } while (0)
 
-int
-_arraysnprintf (char *formatted, size_t maxlength, const char *format,
-	       	void **args)
+int gsprintf (char *formatted, size_t maxlength, const char *format,
+              void **args)
 {
   const char * ptr = format;
   char specifier[128];
@@ -216,7 +215,7 @@ checkit (const char* format, void **args)
 {
   int result;
   char formatted[1024] = "";
-  result = _arraysnprintf (formatted, 1024, format, args);
+  result = gsprintf (formatted, 1024, format, args);
   printf("%s", formatted);  /* avoid double newline */
   return result;
 }

@@ -4,6 +4,7 @@
 #include <stdlib.h>  /* for abs(), atof(), ... */
 #include <stdarg.h>  /* for vsnprintf(), ... */
 #include "zcasper.h"
+#include "gsprintf.h"  /* for gsprintf and thus zsprintf */
 #include "syslog.h"
 #ifdef TEST_ZCASPER
 #include <stdio.h>   /* for fprintf(), ... */
