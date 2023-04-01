@@ -3,7 +3,7 @@
 #include <math.h>  /* for roundl(), ... */
 #include <stdlib.h>  /* for abs(), atof(), ... */
 #include <stdarg.h>  /* for vsnprintf(), ... */
-#include "syslog.h"
+#include "gssyslog.h"
 #include "zcasper.h"
 #include "gsprintf.h"  /* for gsprintf and thus zsprintf */
 #ifdef TEST_ZCASPER
@@ -58,19 +58,38 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     size_t buffersize, written;
     char *format, *formatted;
     void **args;
+    bool arg_is_string = false;
     format = ref_to_string(op - 1, imemory, "zsprintf format");
     formatted = ref_to_string(op - 2, imemory, "zsprintf formatted");
+    switch (r_type(op)) {
+        default:
+            return_op_typecheck(op);
+            break;
+        case t_real:
+            args = (void * []){(void *)&op->value.realval};
+            break;
+        case t_integer:
+            args = (void * []){(void *)op->value.intval};
+            break;
+        case t_string:
+            args = (void * []){(void *)ref_to_string(
+                    op, imemory, "zsprintf arg")};
+            arg_is_string = true;
+    }
     syslog(LOG_USER | LOG_DEBUG,
-           "format: %s, formatted: %s", format, formatted);
+           "format: \"%s\", formatted: \"%s\"", format, formatted);
     buffersize = strlen(formatted) + 1;
     /* FIXME: retrieve the actual array values */
-    written = gsprintf(formatted, buffersize, format, (void * []) {"test"});
+    written = gsprintf(formatted, buffersize, format, args);
     if (formatted != NULL)
         gs_free_string(imemory, (byte *) formatted, buffersize,
                        "zsprintf formatted");
     if (format != NULL)
         gs_free_string(imemory, (byte *) format,
                        strlen(format) + 1, "zsprintf format");
+    if (arg_is_string && (char *)args[0] != NULL)
+        gs_free_string(imemory, (byte *) format,
+                       strlen(args[0]), "zsprintf arg");
     /* ideally we should only pop(2) and modify the value of stringbuffer */
     pop(3);
     push(2);
