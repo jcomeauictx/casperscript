@@ -30,7 +30,7 @@
 #  endif
 #endif
 
-#include "syslog.h"
+#include "gssyslog.h"
 
 /* Define an optional array of strings for testing. */
 /*#define RUN_STRINGS */

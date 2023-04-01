@@ -61,7 +61,7 @@
 
 #include "valgrind.h"
 
-#include "syslog.h"
+#include "gssyslog.h"
 
 /* ------ Exported data ------ */
 

@@ -20,7 +20,7 @@
 #include <limits.h>  /* for realpath() */
 #include <libgen.h>  /* for dirname() and basename() */
 #endif
-#include "syslog.h"  /* syslog is no-op when SYSLOG_DEBUGGING undefined */
+#include "gssyslog.h"  /* syslog is no-op when SYSLOG_DEBUGGING undefined */
 #include "ctype_.h"
 #include "memory_.h"
 #include "string_.h"
