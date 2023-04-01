@@ -1,7 +1,7 @@
 ARCH := $(shell uname -m)
 CONFIG_ARGS ?= --with-gs=cs --with-x --prefix=$(HOME)
 XCFLAGS += -DUSE_DEVELOPMENT_INITFILES=1
-#XCFLAGS += -DSYSLOG_DEBUGGING=1
+XCFLAGS += -DSYSLOG_DEBUGGING=1
 #XCFLAGS += -DTEST_ZCASPER=1
 export XCFLAGS
 ifeq ("$(wildcard $(ARCH).mak)","")

@@ -3,13 +3,12 @@
 #include <math.h>  /* for roundl(), ... */
 #include <stdlib.h>  /* for abs(), atof(), ... */
 #include <stdarg.h>  /* for vsnprintf(), ... */
+#include "syslog.h"
 #include "zcasper.h"
 #include "gsprintf.h"  /* for gsprintf and thus zsprintf */
-#include "syslog.h"
 #ifdef TEST_ZCASPER
 #include <stdio.h>   /* for fprintf(), ... */
 #else
-#include "syslog.h"
 #include "ghost.h"
 #include "gserrors.h"
 #include "oper.h"
@@ -61,6 +60,8 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     void **args;
     format = ref_to_string(op - 1, imemory, "zsprintf format");
     formatted = ref_to_string(op - 2, imemory, "zsprintf formatted");
+    syslog(LOG_USER | LOG_DEBUG,
+           "format: %s, formatted: %s", format, formatted);
     buffersize = strlen(formatted) + 1;
     /* FIXME: retrieve the actual array values */
     written = gsprintf(formatted, buffersize, format, (void * []) {"test"});
