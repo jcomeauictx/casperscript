@@ -18,9 +18,6 @@ You should have received a copy of the GNU General Public License
 along with this program; if not, write to the Free Software
 Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
-#include "ansidecl.h"
-#include "safe-ctype.h"
-
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -28,6 +25,8 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
 int errprintf(const char *format, ...);
 char * memdump(char *buffer, void *location, int count);
+
+#define ISDIGIT(c) (c <= '9' && c >= '0')
 
 #define COPY_INT \
   do { \
