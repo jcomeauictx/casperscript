@@ -53,23 +53,29 @@ static int zsleep(i_ctx_t *i_ctx_p) {
 }
 
 static int zsprintf(i_ctx_t *i_ctx_p);  /* `sprintf` for casperscript */
-    /* <stringbuffer> <formatstring> <args_array> sprintf <formatted> */
+    /* <stringbuffer> <formatstring> <args_array> sprintf <formatted> <fit>*/
 static int zsprintf(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
-    size_t buffersize;
+    size_t buffersize, written;
     char *format, *formatted;
     void **args;
     format = ref_to_string(op - 1, imemory, "zsprintf format");
     formatted = ref_to_string(op - 2, imemory, "zsprintf formatted");
     buffersize = strlen(formatted) + 1;
-    gsprintf(formatted, buffersize, format, args);
+    /* FIXME: retrieve the actual array values */
+    written = gsprintf(formatted, buffersize, format, (void * []) {"test"});
     if (formatted != NULL)
         gs_free_string(imemory, (byte *) formatted, buffersize,
                        "zsprintf formatted");
     if (format != NULL)
         gs_free_string(imemory, (byte *) format,
                        strlen(format) + 1, "zsprintf format");
-    pop(2);
+    /* ideally we should only pop(2) and modify the value of stringbuffer */
+    pop(3);
+    push(2);
+    make_string(op - 1, a_all | icurrent_space,
+                written >= buffersize ? buffersize - 1: written, formatted);
+    make_bool(op, written < buffersize);
     return 0;
 }
 
