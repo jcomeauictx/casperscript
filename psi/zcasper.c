@@ -50,10 +50,20 @@ static int zsleep(i_ctx_t *i_ctx_p) {
     pop(1);
     return 0;
 }
+
+static int zsprintf(i_ctx_t *i_ctx_p);  /* `sprintf` for casperscript */
+    /* <stringbuffer> <formatstring> <args_array> sprintf <formatted> */
+static int zsprintf(i_ctx_t *i_ctx_p) {
+    os_ptr op = osp;
+    pop(2);
+    return 0;
+}
+
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =
 {
     {"1sleep", zsleep},
+    {"3sprintf", zsprintf},
     op_def_end(0)
 };
 #endif
