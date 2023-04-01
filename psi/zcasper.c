@@ -56,6 +56,19 @@ static int zsprintf(i_ctx_t *i_ctx_p);  /* `sprintf` for casperscript */
     /* <stringbuffer> <formatstring> <args_array> sprintf <formatted> */
 static int zsprintf(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
+    size_t buffersize;
+    char *format, *formatted;
+    void **args;
+    format = ref_to_string(op - 1, imemory, "zsprintf format");
+    formatted = ref_to_string(op - 2, imemory, "zsprintf formatted");
+    buffersize = strlen(formatted) + 1;
+    gsprintf(formatted, buffersize, format, args);
+    if (formatted != NULL)
+        gs_free_string(imemory, (byte *) formatted, buffersize,
+                       "zsprintf formatted");
+    if (format != NULL)
+        gs_free_string(imemory, (byte *) format,
+                       strlen(format) + 1, "zsprintf format");
     pop(2);
     return 0;
 }
