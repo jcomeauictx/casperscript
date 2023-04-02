@@ -81,16 +81,16 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     syslog(LOG_USER | LOG_DEBUG,
            "format: \"%s\", buffersize: %d", format, buffersize);
     written = gsprintf(formatted, buffersize, format, args);
-    pop(2);
+    pop(3); op = osp;  /* pop macro only decrements osp */
     if (format != NULL)
         gs_free_string(imemory, (byte *) format,
                        strlen(format) + 1, "zsprintf format");
     if (arg_is_string && (char *)args[0] != NULL)
         gs_free_string(imemory, (byte *) format,
                        strlen(args[0]), "zsprintf arg");
-    /* ideally we should only pop(2) and modify the value of stringbuffer */
-    push(1);
+    push(2);
     make_bool(op, written < buffersize);
+    make_string(op - 1, a_all | icurrent_space, strlen(formatted), formatted);
     return 0;
 }
 
