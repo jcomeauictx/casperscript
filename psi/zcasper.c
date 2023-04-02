@@ -70,13 +70,15 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
             break;
         case t_real:
             args[0] = (void *)&(op->value.realval);
+            syslog(LOG_USER | LOG_DEBUG, "float value %f", *(double *)args[0]);
             break;
         case t_integer:
             args[0] = (void *)op->value.intval;
             break;
         case t_string:
-            args[0] = (void *)op;
+            args[0] = (void *)op->value.bytes;  /* must have trailing \0! */
         case t_array:
+            syslog(LOG_USER | LOG_DEBUG, "zsprintf starting array");
             for (int i = 0; i < arraysize; i++) {
                 code = array_get(imemory, op, i, temp);
                 if (code < 0) return code;  /* aborts safely */
@@ -91,7 +93,7 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
                         args[i] = (void *)temp->value.intval;
                         break;
                     case t_string:
-                        args[i] = (void *)temp;
+                        args[i] = (void *)temp->value.bytes;
                 }
             }
     }
