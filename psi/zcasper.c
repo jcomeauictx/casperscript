@@ -60,7 +60,8 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     void **args;
     bool arg_is_string = false;
     format = ref_to_string(op - 1, imemory, "zsprintf format");
-    formatted = ref_to_string(op - 2, imemory, "zsprintf formatted");
+    formatted = (op - 2)->value.bytes;
+    buffersize = r_size(op - 2);
     switch (r_type(op)) {
         default:
             return_op_typecheck(op);
@@ -78,12 +79,9 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     }
     /* FIXME: retrieve array values */
     syslog(LOG_USER | LOG_DEBUG,
-           "format: \"%s\", formatted: \"%s\"", format, formatted);
-    buffersize = strlen(formatted) + 1;
+           "format: \"%s\", buffersize: %d", format, buffersize);
     written = gsprintf(formatted, buffersize, format, args);
-    if (formatted != NULL)
-        gs_free_string(imemory, (byte *) formatted, buffersize,
-                       "zsprintf formatted");
+    pop(2);
     if (format != NULL)
         gs_free_string(imemory, (byte *) format,
                        strlen(format) + 1, "zsprintf format");
@@ -91,9 +89,7 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
         gs_free_string(imemory, (byte *) format,
                        strlen(args[0]), "zsprintf arg");
     /* ideally we should only pop(2) and modify the value of stringbuffer */
-    push(2);
-    make_string(op - 1, a_all | icurrent_space,
-                written >= buffersize ? buffersize - 1: written, formatted);
+    push(1);
     make_bool(op, written < buffersize);
     return 0;
 }
