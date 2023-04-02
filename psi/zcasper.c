@@ -55,10 +55,12 @@ static int zsprintf(i_ctx_t *i_ctx_p);  /* `sprintf` for casperscript */
     /* <stringbuffer> <formatstring> <args_array> sprintf <formatted> <fit>*/
 static int zsprintf(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
-    size_t buffersize, written;
+    unsigned int buffersize, written;
     char *format, *formatted;
-    void **args;
-    bool arg_is_string = false;
+    unsigned int arraysize = r_type(op) == t_array ? r_size(op) : 1;
+    void *args [arraysize];
+    int code;
+    ref *temp;
     format = ref_to_string(op - 1, imemory, "zsprintf format");
     formatted = (op - 2)->value.bytes;
     buffersize = r_size(op - 2);
@@ -67,15 +69,31 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
             return_op_typecheck(op);
             break;
         case t_real:
-            args = (void * []){(void *)&(op->value.realval)};
+            args[0] = (void *)&(op->value.realval);
             break;
         case t_integer:
-            args = (void * []){(void *)op->value.intval};
+            args[0] = (void *)op->value.intval;
             break;
         case t_string:
-            args = (void * []){(void *)ref_to_string(
-                    op, imemory, "zsprintf arg")};
-            arg_is_string = true;
+            args[0] = (void *)op;
+        case t_array:
+            for (int i = 0; i < arraysize; i++) {
+                code = array_get(imemory, op, i, temp);
+                if (code < 0) return code;  /* aborts safely */
+                switch (r_type(op)) {
+                    default:
+                        return_op_typecheck(temp);
+                        break;
+                    case t_real:
+                        args[i] = (void *)&(temp->value.realval);
+                        break;
+                    case t_integer:
+                        args[i] = (void *)temp->value.intval;
+                        break;
+                    case t_string:
+                        args[i] = (void *)temp;
+                }
+            }
     }
     /* FIXME: retrieve array values */
     syslog(LOG_USER | LOG_DEBUG,
@@ -85,9 +103,6 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     if (format != NULL)
         gs_free_string(imemory, (byte *) format,
                        strlen(format) + 1, "zsprintf format");
-    if (arg_is_string && (char *)args[0] != NULL)
-        gs_free_string(imemory, (byte *) format,
-                       strlen(args[0]), "zsprintf arg");
     push(2);
     make_bool(op, written < buffersize);
     make_string(op - 1, a_all | icurrent_space, strlen(formatted), formatted);

@@ -49,7 +49,6 @@ char * memdump(char *buffer, void *location, int count);
 #define PRINT_TYPE(TYPE) \
   do { \
 	int result; TYPE value; \
-        char buffer[1024]; \
         if (strstr(#TYPE, "double") != NULL) value = *(TYPE *)*args++; \
         else value = *(TYPE *)args++; \
 	*sptr++ = *ptr++; /* Copy the type specifier.  */ \
