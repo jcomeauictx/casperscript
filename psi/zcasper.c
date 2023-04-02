@@ -66,7 +66,7 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
             return_op_typecheck(op);
             break;
         case t_real:
-            args = (void * []){(void *)&op->value.realval};
+            args = (void * []){(void *)&(op->value.realval)};
             break;
         case t_integer:
             args = (void * []){(void *)op->value.intval};
@@ -76,10 +76,10 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
                     op, imemory, "zsprintf arg")};
             arg_is_string = true;
     }
+    /* FIXME: retrieve array values */
     syslog(LOG_USER | LOG_DEBUG,
            "format: \"%s\", formatted: \"%s\"", format, formatted);
     buffersize = strlen(formatted) + 1;
-    /* FIXME: retrieve the actual array values */
     written = gsprintf(formatted, buffersize, format, args);
     if (formatted != NULL)
         gs_free_string(imemory, (byte *) formatted, buffersize,
@@ -91,7 +91,6 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
         gs_free_string(imemory, (byte *) format,
                        strlen(args[0]), "zsprintf arg");
     /* ideally we should only pop(2) and modify the value of stringbuffer */
-    pop(3);
     push(2);
     make_string(op - 1, a_all | icurrent_space,
                 written >= buffersize ? buffersize - 1: written, formatted);
