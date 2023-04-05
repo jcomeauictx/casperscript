@@ -51,6 +51,7 @@ static int zsleep(i_ctx_t *i_ctx_p) {
     return 0;
 }
 
+#define MAX_ARRAY 128
 static int zsprintf(i_ctx_t *i_ctx_p);  /* `sprintf` for casperscript */
     /* <stringbuffer> <formatstring> <args_array> sprintf <formatted> <fit>*/
 static int zsprintf(i_ctx_t *i_ctx_p) {
@@ -58,9 +59,11 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     unsigned int buffersize, written;
     char *format, *formatted;
     unsigned int arraysize = r_type(op) == t_array ? r_size(op) : 1;
-    void *args [arraysize];
+    /* can't use arraysize, not known until runtime */
+    double args [MAX_ARRAY];
     int code;
     ref *temp;
+    if (arraysize > MAX_ARRAY) arraysize = MAX_ARRAY;
     format = ref_to_string(op - 1, imemory, "zsprintf format");
     formatted = (op - 2)->value.bytes;
     buffersize = r_size(op - 2);
@@ -69,14 +72,15 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
             return_op_typecheck(op);
             break;
         case t_real:
-            args[0] = (void *)&(op->value.realval);
-            syslog(LOG_USER | LOG_DEBUG, "float value %f", *(double *)args[0]);
+            args[0] = op->value.realval;
+            syslog(LOG_USER | LOG_DEBUG, "float value %f", args[0]);
             break;
         case t_integer:
-            args[0] = (void *)op->value.intval;
+            args[0] = (double)op->value.intval;
             break;
         case t_string:
-            args[0] = (void *)op->value.bytes;  /* must have trailing \0! */
+            /* must have trailing \0 until we find a better way */
+            args[0] = (double)(long)op->value.bytes;
         case t_array:
             syslog(LOG_USER | LOG_DEBUG, "zsprintf starting array");
             for (int i = 0; i < arraysize; i++) {
@@ -87,17 +91,16 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
                         return_op_typecheck(temp);
                         break;
                     case t_real:
-                        args[i] = (void *)&(temp->value.realval);
+                        args[i] = temp->value.realval;
                         break;
                     case t_integer:
-                        args[i] = (void *)temp->value.intval;
+                        args[i] = (double)temp->value.intval;
                         break;
                     case t_string:
-                        args[i] = (void *)temp->value.bytes;
+                        args[i] = (double)(long)temp->value.bytes;
                 }
             }
     }
-    /* FIXME: retrieve array values */
     syslog(LOG_USER | LOG_DEBUG,
            "format: \"%s\", buffersize: %d", format, buffersize);
     written = gsprintf(formatted, buffersize, format, args);
@@ -114,6 +117,7 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =
 {
+    /* FIXME: make these dotted, and `casper` aliases to undotted versions */
     {"1sleep", zsleep},
     {"3sprintf", zsprintf},
     op_def_end(0)
