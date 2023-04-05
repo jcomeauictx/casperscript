@@ -59,48 +59,14 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     unsigned int buffersize, written;
     char *format, *formatted;
     unsigned int arraysize = r_type(op) == t_array ? r_size(op) : 1;
-    /* can't use arraysize, not known until runtime */
+    /* can't use arraysize for dimension, not known until runtime */
     double args [MAX_ARRAY];
-    int code;
-    ref *temp;
-    if (arraysize > MAX_ARRAY) arraysize = MAX_ARRAY;
+    int offset = 0, code;
+    if (arraysize > MAX_ARRAY) return_error(gs_error_rangecheck);
+    else zsprintf_load_args(i_ctx_p, op, args, offset);
     format = ref_to_string(op - 1, imemory, "zsprintf format");
     formatted = (op - 2)->value.bytes;
     buffersize = r_size(op - 2);
-    switch (r_type(op)) {
-        default:
-            return_op_typecheck(op);
-            break;
-        case t_real:
-            args[0] = op->value.realval;
-            syslog(LOG_USER | LOG_DEBUG, "float value %f", args[0]);
-            break;
-        case t_integer:
-            args[0] = (double)op->value.intval;
-            break;
-        case t_string:
-            /* must have trailing \0 until we find a better way */
-            args[0] = (double)(long)op->value.bytes;
-        case t_array:
-            syslog(LOG_USER | LOG_DEBUG, "zsprintf starting array");
-            for (int i = 0; i < arraysize; i++) {
-                code = array_get(imemory, op, i, temp);
-                if (code < 0) return code;  /* aborts safely */
-                switch (r_type(op)) {
-                    default:
-                        return_op_typecheck(temp);
-                        break;
-                    case t_real:
-                        args[i] = temp->value.realval;
-                        break;
-                    case t_integer:
-                        args[i] = (double)temp->value.intval;
-                        break;
-                    case t_string:
-                        args[i] = (double)(long)temp->value.bytes;
-                }
-            }
-    }
     syslog(LOG_USER | LOG_DEBUG,
            "format: \"%s\", buffersize: %d", format, buffersize);
     written = gsprintf(formatted, buffersize, format, args);
@@ -113,6 +79,41 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     make_string(op - 1, a_all | icurrent_space, strlen(formatted), formatted);
     return 0;
 }
+
+int zsprintf_load_args(i_ctx_t *i_ctx_p, ref *op, double *args, int offset) {
+    int code = 0;
+    ref temp;
+    switch (r_type(op)) {
+        default:
+            syslog(LOG_USER | LOG_DEBUG, "unexpected type at zsprintf");
+            return_op_typecheck(op);
+            break;
+        case t_real:
+            args[offset] = op->value.realval;
+            syslog(LOG_USER | LOG_DEBUG, "zsprintf float value %f",
+                   args[offset]);
+            break;
+        case t_integer:
+            args[offset] = (double)op->value.intval;
+            syslog(LOG_USER | LOG_DEBUG, "zsprintf int value %f",
+                   args[offset]);
+            break;
+        case t_string:
+            /* must have trailing \0 until we find a better way */
+            args[offset] = (double)(long)op->value.bytes;
+            syslog(LOG_USER | LOG_DEBUG, "zsprintf string at %p",
+                   args[offset]);
+        case t_array:
+            syslog(LOG_USER | LOG_DEBUG, "zsprintf starting array");
+            for (int i = 0; i < r_size(op); i++) {
+                code = array_get(imemory, op, i, &temp);
+                if (code < 0) break;  /* aborts safely */
+                zsprintf_load_args(i_ctx_p, &temp, args, i);
+            }
+    }
+    return code;
+}
+
 
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =

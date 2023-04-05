@@ -30,6 +30,7 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
 #define ISDIGIT(c) (c <= '9' && c >= '0')
 /* assuming that any architecture that has long longs has long doubles */
+#define DISABLE_LONG_LONGS  /* not needed for gs (?) */
 #if !defined(DISABLE_LONG_LONGS)
 #if defined(__GNUC__) || defined (HAVE_LONG_LONG)
 #define USE_LONG_LONGS
