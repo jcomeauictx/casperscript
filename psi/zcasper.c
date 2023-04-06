@@ -5,7 +5,6 @@
 #include <stdarg.h>  /* for vsnprintf(), ... */
 #include "gssyslog.h"
 #include "zcasper.h"
-#include "gsprintf.h"  /* for gsprintf and thus zsprintf */
 #ifdef TEST_ZCASPER
 #include <stdio.h>   /* for fprintf(), ... */
 #else
@@ -16,6 +15,7 @@
 #include "estack.h"
 #include "std.h"
 #endif
+#include "gsprintf.h"  /* for gsprintf and thus zsprintf */
 
 int sleep(double seconds) {
     struct timespec requested;
@@ -51,72 +51,25 @@ static int zsleep(i_ctx_t *i_ctx_p) {
     return 0;
 }
 
-#define MAX_ARRAY 128
 static int zsprintf(i_ctx_t *i_ctx_p);  /* `sprintf` for casperscript */
     /* <stringbuffer> <formatstring> <args_array> sprintf <formatted> <fit>*/
 static int zsprintf(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
-    unsigned int buffersize, written;
-    char *format, *formatted;
-    unsigned int arraysize = r_type(op) == t_array ? r_size(op) : 1;
-    /* can't use arraysize for dimension, not known until runtime */
-    double args [MAX_ARRAY];
-    int offset = 0, code;
-    if (arraysize > MAX_ARRAY) return_error(gs_error_rangecheck);
-    else zsprintf_load_args(i_ctx_p, op, args, offset);
-    format = ref_to_string(op - 1, imemory, "zsprintf format");
-    formatted = (op - 2)->value.bytes;
-    buffersize = r_size(op - 2);
-    syslog(LOG_USER | LOG_DEBUG,
-           "format: \"%s\", buffersize: %d", format, buffersize);
-    written = gsprintf(formatted, buffersize, format, args);
-    pop(3); op = osp;  /* pop macro only decrements osp */
-    if (format != NULL)
-        gs_free_string(imemory, (byte *) format,
-                       strlen(format) + 1, "zsprintf format");
-    push(2);
-    make_bool(op, written < buffersize);
-    make_string(op - 1, a_all | icurrent_space, strlen(formatted), formatted);
+    unsigned int written;
+    if (r_type(op) != t_array) return_op_typecheck(op);
+    if (r_type(op - 1) != t_string) return_op_typecheck(op - 1);
+    if (r_type(op - 2) != t_string) return_op_typecheck(op - 2);
+    written = gsprintf(i_ctx_p);
+    /* we pop the args array...
+     * overwrite the format string with success flag...
+     * and resize the buffer to the resultant string if necessary */
+    pop(1); op = osp;  /* pop macro only decrements osp */
+    if (written <= r_size(op - 1)) {
+        make_true(op);
+        r_dec_size(op - 1, r_size(op - 1) - written);
+    } else make_false(op);
     return 0;
 }
-
-int zsprintf_load_args(i_ctx_t *i_ctx_p, ref *op, double *args, int offset) {
-    /* FIXME: disallow array inside of array. While it would work up to a
-     * point, it could overflow the array because the size check is only
-     * done once. */
-    int code = 0;
-    ref temp;
-    switch (r_type(op)) {
-        default:
-            syslog(LOG_USER | LOG_DEBUG, "unexpected type at zsprintf");
-            return_op_typecheck(op);
-            break;
-        case t_real:
-            args[offset] = op->value.realval;
-            syslog(LOG_USER | LOG_DEBUG, "zsprintf float value %f",
-                   args[offset]);
-            break;
-        case t_integer:
-            args[offset] = (double)op->value.intval;
-            syslog(LOG_USER | LOG_DEBUG, "zsprintf int value %f",
-                   args[offset]);
-            break;
-        case t_string:
-            /* must have trailing \0 until we find a better way */
-            args[offset] = (double)(long)op->value.bytes;
-            syslog(LOG_USER | LOG_DEBUG, "zsprintf string at %p",
-                   args[offset]);
-        case t_array:
-            syslog(LOG_USER | LOG_DEBUG, "zsprintf starting array");
-            for (int i = 0; i < r_size(op); i++) {
-                code = array_get(imemory, op, i, &temp);
-                if (code < 0) break;  /* aborts safely */
-                zsprintf_load_args(i_ctx_p, &temp, args, i);
-            }
-    }
-    return code;
-}
-
 
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =

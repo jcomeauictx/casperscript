@@ -22,73 +22,63 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
-#ifdef SYSLOG_DEBUGGING
-#include <syslog.h>  /* for debugging */
-#else
-#define syslog(...)
-#endif
+#include "gssyslog.h"  /* for syslog debugging */
+/* the following 6 imports are for ghostscript integration */
+#include "ghost.h"
+#include "gserrors.h"
+#include "oper.h"
+#include "store.h"
+#include "estack.h"
+#include "std.h"
 
 #define ISDIGIT(c) (c <= '9' && c >= '0')
-/* assuming that any architecture that has long longs has long doubles */
-#define DISABLE_LONG_LONGS  /* not needed for gs (?) */
-#if !defined(DISABLE_LONG_LONGS)
-#if defined(__GNUC__) || defined (HAVE_LONG_LONG)
-#define USE_LONG_LONGS
-#endif  /* HAVE_LONG_LONG */
-#endif /* DISABLE_LONG_LONG */
-
-#ifdef USE_LONG_LONGS
-#define DEFAULT_TYPE long double
-#define DEFAULT_INT_TYPE long long
-#else
-#define DEFAULT_TYPE double
+#define DEFAULT_TYPE ref
 #define DEFAULT_INT_TYPE long
-#endif
-#define FORCE_CAST (DEFAULT_TYPE)(DEFAULT_INT_TYPE)  /* for pointers */
-#define CAST_ARGS (DEFAULT_TYPE [])
-#define CAST_ARG (DEFAULT_TYPE)
-/* shorthand for building compound literals */
-#define F CAST_ARG
-#define I (DEFAULT_INT_TYPE)
-#define P FORCE_CAST
+#define DEFAULT_REAL_TYPE double
 
-int errprintf(const char *format, ...);
 char * memdump(char *buffer, void *location, int count);
-int precheckit(int buffersize, const char *format, DEFAULT_TYPE *args);
-int checkit(const char * format, DEFAULT_TYPE *args);
-int testsnprintf(int size, const char *format, ...);
+int get_int(ref object);
+double get_real(ref object);
 
 #define BUFFERSIZE 1024
 #define SHORTBUFFERSIZE 7
 
+#define NEXT_ARG \
+  do { \
+    code = array_get(imemory, &args, argindex++, &arg); \
+    if (code < 0) return code;  /* aborts safely */ \
+  } while (0)
+
 #define COPY_INT \
   do { \
-	 const int value = (int)(*args++); \
-	 char buf[32]; \
-	 /*errprintf("COPY_INT called with value %d\n", value);*/ \
-	 ptr++; /* Go past the asterisk.  */ \
-	 *sptr = '\0'; /* NULL terminate sptr.  */ \
-	 sprintf(buf, "%d", value); \
-	 strcat(sptr, buf); \
-         /*errprintf("COPY_INT result: %s\n", sptr);*/ \
-	 while (*sptr) sptr++; \
-     } while (0)
+    NEXT_ARG; \
+    const int value = arg.value.intval; \
+    char buf[32]; \
+    /*errprintf("COPY_INT called with value %d\n", value);*/ \
+    ptr++; /* Go past the asterisk.  */ \
+    *sptr = '\0'; /* NULL terminate sptr.  */ \
+    sprintf(buf, "%d", value); \
+    strcat(sptr, buf); \
+    /*errprintf("COPY_INT result: %s\n", sptr);*/ \
+    while (*sptr) sptr++; \
+  } while (0)
 
 #define PRINT_CHAR(CHAR) \
   do { \
    if (total_printed < maxlength) \
-     *(formatted + total_printed++) = *ptr++; \
+     *(buffer + total_printed++) = *ptr++; \
    else {total_printed++; ptr++;} \
   } while (0)
 
 #define PRINT_TYPE(TYPE, VALUE) \
   do { \
     int result; \
+    NEXT_ARG; \
     syslog(LOG_USER | LOG_DEBUG, \
         "value at PRINT_TYPE: 0x%x (%d), float: %f", VALUE, VALUE, VALUE); \
     *sptr++ = *ptr++; /* Copy the type specifier.  */ \
     *sptr = '\0'; /* NULL terminate sptr.  */ \
-    result = snprintf(formatted + total_printed, \
+    result = snprintf(buffer + total_printed, \
       maxlength - total_printed, specifier, (TYPE) VALUE); \
     if (result == -1) \
       return -1; \
@@ -99,25 +89,26 @@ int testsnprintf(int size, const char *format, ...);
       } \
   } while (0)
 
-int gsprintf (char *formatted, int maxlength, const char *format,
-              DEFAULT_TYPE *args);
-
-int gsprintf (char *formatted, int maxlength, const char *format,
-              DEFAULT_TYPE *args)
-  /* NOTE that `maxlength` should always be at least 1 less than the size
-   * of the `formatted` buffer */
+int gsprintf(i_ctx_t *i_ctx_p)
 {
-  const char * ptr = format;
+  char buffer[MAX_STR + 1];
+  char formatstring[MAX_STR + 1];
+  char argstring[MAX_STR + 1];
+  const char * ptr = formatstring;
   char specifier[128];
-  int total_printed = 0;
-#ifdef USE_LONG_LONGS
-  long long longvalue;
-  long double doublevalue;
-#else
+  int total_printed = 0, argindex;
   long longvalue;
   double doublevalue;
-#endif
+  ref formatted, format, args, arg;
   
+  os_ptr op = osp;
+  formatted = *(op - 2);
+  format = *(op - 1);
+  args = *op;
+  /* trust that no gs-supplied string will be longer than MAX_STR */
+  /* this, combined with strncpy spec, will ensure trailing \0 */
+  DISCARD(strncpy(buffer, formatted->value.bytes, r_size(formatted) + 1));
+  DISCARD(strncpy(formatstring, format->value.bytes, r_size(format) + 1));
   while (*ptr != '\0')
     {
       if (*ptr != '%') /* While we have regular characters, print them.  */
@@ -176,36 +167,14 @@ int gsprintf (char *formatted, int maxlength, const char *format,
 	    case 'X':
 	    case 'c':
 	      {
-                longvalue = (DEFAULT_INT_TYPE) *args++;
+		/* Short values are promoted to int, so just cast everything
+                   to a long and trust the C library sprintf with it */
+                NEXT_ARG;
+                longvalue = (DEFAULT_INT_TYPE) arg.value.intval;
                 syslog(LOG_USER | LOG_DEBUG,
                     "longvalue: 0x%x (%d)", longvalue, longvalue);
-		/* Short values are promoted to int, so just copy it
-                   as an int and trust the C library printf to cast it
-                   to the right width.  */
-		if (short_width)
-		  PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
-		else
-		  {
-		    switch (wide_width)
-		      {
-		      case 0:
-			PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
-			break;
-		      case 1:
-			PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
-			break;
-		      case 2:
-		      default:
-#ifdef USE_LONG_LONGS
-			PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
-#else
-                        /* Fake it, hope for the best.  */
-			PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
-#endif
-			break;
-		      } /* End of switch (wide_width) */
-		  } /* End of else statement */
-	      } /* End of integer case */
+		PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
+              }
 	      break;
 	    case 'f':
 	    case 'e':
@@ -213,28 +182,21 @@ int gsprintf (char *formatted, int maxlength, const char *format,
 	    case 'g':
 	    case 'G':
 	      {
-                doublevalue = (DEFAULT_TYPE) *args++;
+                NEXT_ARG;
+                doublevalue = (DEFAULT_TYPE) arg.value.realval;
                 syslog(LOG_USER | LOG_DEBUG,
-                  "doublevalue: %Lf (%f)", doublevalue, (double)doublevalue);
-		if (wide_width == 0)
-		  PRINT_TYPE(double, doublevalue);
-		else
-		  {
-#ifdef USE_LONG_LONGS
-		    PRINT_TYPE(DEFAULT_TYPE, doublevalue);
-#else
-                    /* Fake it, hope for the best.  */
-		    PRINT_TYPE(DEFAULT_TYPE, doublevalue);
-#endif
-		  }
+                  "doublevalue: %f", doublevalue);
+		PRINT_TYPE(double, doublevalue);
 	      }
 	      break;
 	    case 's':
-              longvalue = (DEFAULT_INT_TYPE) *args++;
+              NEXT_ARG;
+              longvalue = (DEFAULT_INT_TYPE) arg.value.intval;
 	      PRINT_TYPE(char *, longvalue);
 	      break;
 	    case 'p':
-              longvalue = (DEFAULT_INT_TYPE) *args++;
+              NEXT_ARG;
+              longvalue = (DEFAULT_INT_TYPE) arg.value.intval;
 	      PRINT_TYPE(void *, longvalue);
 	      break;
 	    case '%':
@@ -247,64 +209,6 @@ int gsprintf (char *formatted, int maxlength, const char *format,
     }
 
   return total_printed;
-}
-
-#ifdef TEST
-
-#include <math.h>
-#ifndef M_PI
-#define M_PI (3.1415926535897932385)
-#endif
-
-#define RESULTFORMAT "printed %d characters\n"
-#define RESULT(x) do \
-{ \
-    int i = (x); \
-    if (strstr(#x, "checkit") != NULL) \
-      checkit(RESULTFORMAT, CAST_ARGS{i}); \
-    else printf(RESULTFORMAT, i); \
-    fflush(stdin); \
-} while (0)
-
-int testsnprintf(int size, const char *format, ...)
-/* for checking for buffer overruns from macros */
-{
-  int result;
-  char buffer[BUFFERSIZE];
-  va_list args;
-  va_start(args, format);
-  result = snprintf(buffer, size, format, args);
-  va_end(args);
-  printf("%s", buffer);
-  if (buffer[strlen(buffer) - 1] != '\n') printf("\n");
-  return result;
-}
-
-int precheckit(int buffersize, const char *format, DEFAULT_TYPE *args)
-{
-  int result;
-  char formatted[BUFFERSIZE] = "";  /* can't use runtime-supplied size */
-  /* allocate a safety zone in case program error causes buffer overrun */
-  char safety[BUFFERSIZE];
-  result = gsprintf (formatted, buffersize - 1, format, args);
-  fprintf(stderr, "%s", formatted);  /* avoid double newline */
-  if (formatted[strlen(formatted) - 1] != '\n') fprintf(stderr, "\n");
-  return result;
-}
-
-int checkit(const char* format, DEFAULT_TYPE *args)
-{
-  return precheckit(BUFFERSIZE, format, args);
-}
-
-int errprintf(const char *format, ...)
-{
-  int result;
-  va_list args;
-  va_start(args, format);
-  result = vfprintf(stderr, format, args);
-  va_end(args);
-  return result;
 }
 
 char * memdump(char *buffer, void *location, int count) {
@@ -322,77 +226,5 @@ char * memdump(char *buffer, void *location, int count) {
   *buffer = '\0';
   return saved;
 }
-
-int
-main (void)
-{
-  /* constants needed for some tests below */
-
-  RESULT(checkit ("<%d>\n", CAST_ARGS {0x12345678}));
-  RESULT(printf ("<%d>\n", 0x12345678));
-
-  RESULT(checkit ("<%200d>\n", CAST_ARGS {5}));
-  RESULT(printf ("<%200d>\n", 5));
-
-  RESULT(checkit ("<%.300d>\n", CAST_ARGS {6}));
-  RESULT(printf ("<%.300d>\n", 6));
-
-  RESULT(checkit ("<%100.150d>\n", CAST_ARGS {7}));
-  RESULT(printf ("<%100.150d>\n", 7));
-
-  RESULT(checkit ("<%s>\n", CAST_ARGS {
-    FORCE_CAST"jjjjjjjjjiiiiiiiiiiiiiiioooooooooooooooooppppppppppppaa\n\
-    777777777777777777333333333333366666666666622222222222777777777777733333"
-  }));
-  RESULT(printf ("<%s>\n",
-    "jjjjjjjjjiiiiiiiiiiiiiiioooooooooooooooooppppppppppppaa\n\
-    777777777777777777333333333333366666666666622222222222777777777777733333"
-  ));
-
-  RESULT(checkit ("<%f><%0+#f>%s%d%s>\n", CAST_ARGS {
-		  1.0, 1.0, FORCE_CAST"foo", 77,
-		  FORCE_CAST"asdjffffffffffffffiiiiiiiiiiixxxxx"}));
-  RESULT(printf ("<%f><%0+#f>%s%d%s>\n",
-		 1.0, 1.0, "foo", 77, "asdjffffffffffffffiiiiiiiiiiixxxxx"));
-
-  RESULT(checkit ("<%4f><%.4f><%%><%4.4f>\n",
-		  CAST_ARGS {M_PI, M_PI, M_PI}));
-  RESULT(printf ("<%4f><%.4f><%%><%4.4f>\n", M_PI, M_PI, M_PI));
-
-  RESULT(checkit ("<%*f><%.*f><%%><%*.*f>\n",
-		  CAST_ARGS {3, M_PI, 3, M_PI, 3, 3, M_PI}));
-  RESULT(printf ("<%*f><%.*f><%%><%*.*f>\n", 3, M_PI, 3, M_PI, 3, 3, M_PI));
-
-  RESULT(checkit ("<%d><%i><%o><%u><%x><%X><%c>\n",
-		  CAST_ARGS {75, 75, 75, 75, 75, 75, 75}));
-  RESULT(printf ("<%d><%i><%o><%u><%x><%X><%c>\n",
-		 75, 75, 75, 75, 75, 75, 75));
-
-  RESULT(checkit ("Testing (hd) short: <%d><%ld><%hd><%hd><%d>\n",
-                  CAST_ARGS {123, (long)234, 345, 123456789, 456}));
-  RESULT(printf ("Testing (hd) short: <%d><%ld><%hd><%hd><%d>\n", 123, (long)234, 345, 123456789, 456));
-
-#ifdef USE_LONG_LONGS
-  RESULT(checkit ("Testing (lld) long long: <%d><%lld><%d>\n", CAST_ARGS 
-        {123, 234234234234234234LL, 345}));
-  RESULT(printf ("Testing (lld) long long: <%d><%lld><%d>\n", 123, 234234234234234234LL, 345));
-  RESULT(checkit ("Testing (Ld) long long: <%d><%Ld><%d>\n", CAST_ARGS
-        {123, 234234234234234234LL, 345}));
-  RESULT(printf ("Testing (Ld) long long: <%d><%Ld><%d>\n", 123, 234234234234234234LL, 345));
-
-  RESULT(checkit ("Testing (Lf) long double: <%.20f><%.20Lf><%0+#.20f>\n",
-		 CAST_ARGS {1.23456, 1.234567890123456789L, 1.23456}));
-  RESULT(printf ("Testing (Lf) long double: <%.20f><%.20Lf><%0+#.20f>\n",
-		 1.23456, 1.234567890123456789L, 1.23456));
-#endif  /* USE_LONG_LONGS */
-
-  /* now let's test buffer overruns for the various macros used */
-  /* first, PRINT_CHAR */
-  RESULT(precheckit(SHORTBUFFERSIZE, "abcdefghijklmn", NULL));
-  RESULT(testsnprintf(SHORTBUFFERSIZE, "abcdefghijklmn"));
-
-  return 0;
-}
-#endif /* TEST */
 /* vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
  */
