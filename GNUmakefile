@@ -1,9 +1,9 @@
 ARCH := $(shell uname -m)
 CONFIG_ARGS ?= --with-gs=cs --with-x --prefix=$(HOME)
+XCFLAGS += -Ibase -Ipsi -Iobj -I.
 XCFLAGS += -DUSE_DEVELOPMENT_INITFILES=1
 XCFLAGS += -DSYSLOG_DEBUGGING=1
 #XCFLAGS += -DTEST_ZCASPER=1
-export XCFLAGS
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -12,7 +12,7 @@ else
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
 default: $(CS_MAKEFILES)
-	make -f $<
+	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $<
 	# trick for cstestcmd.cs test on unix-y systems
 	if [ \! -e bin/cs.exe ]; then \
 		cd bin && ln -s cs cs.exe; \
@@ -25,7 +25,7 @@ env:
 	$@
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
-	make $(<:.c=)
+	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
 	mv $(<D)/$@ .
 %:	| $(CS_MAKEFILES)
-	make -f $(CS_DEFAULT) "$@"
+	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
