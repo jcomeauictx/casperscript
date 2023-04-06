@@ -22,6 +22,7 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 #include <stdarg.h>
 #include <string.h>
 #include <stdlib.h>
+#include "gsprintf.h"
 #include "gssyslog.h"  /* for syslog debugging */
 /* the following 6 imports are for ghostscript integration */
 #include "ghost.h"
@@ -42,6 +43,7 @@ double get_real(ref object);
 
 #define BUFFERSIZE 1024
 #define SHORTBUFFERSIZE 7
+#define INTBUFFER 32
 
 #define NEXT_ARG \
   do { \
@@ -51,13 +53,14 @@ double get_real(ref object);
 
 #define COPY_INT \
   do { \
+    int value; \
+    char buf[INTBUFFER]; \
     NEXT_ARG; \
-    const int value = arg.value.intval; \
-    char buf[32]; \
+    value = arg.value.intval; \
     /*errprintf("COPY_INT called with value %d\n", value);*/ \
     ptr++; /* Go past the asterisk.  */ \
     *sptr = '\0'; /* NULL terminate sptr.  */ \
-    sprintf(buf, "%d", value); \
+    snprintf(buf, INTBUFFER - 1, "%d", value); \
     strcat(sptr, buf); \
     /*errprintf("COPY_INT result: %s\n", sptr);*/ \
     while (*sptr) sptr++; \
@@ -96,7 +99,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
   char argstring[MAX_STR + 1];
   const char * ptr = formatstring;
   char specifier[128];
-  int total_printed = 0, argindex;
+  int total_printed = 0, argindex, maxlength, code = 0;
   long longvalue;
   double doublevalue;
   ref formatted, format, args, arg;
@@ -107,8 +110,9 @@ int gsprintf(i_ctx_t *i_ctx_p)
   args = *op;
   /* trust that no gs-supplied string will be longer than MAX_STR */
   /* this, combined with strncpy spec, will ensure trailing \0 */
-  DISCARD(strncpy(buffer, formatted->value.bytes, r_size(formatted) + 1));
-  DISCARD(strncpy(formatstring, format->value.bytes, r_size(format) + 1));
+  maxlength = r_size(&formatted);
+  DISCARD(strncpy(buffer, formatted.value.bytes, maxlength + 1));
+  DISCARD(strncpy(formatstring, format.value.bytes, r_size(&format) + 1));
   while (*ptr != '\0')
     {
       if (*ptr != '%') /* While we have regular characters, print them.  */
@@ -183,7 +187,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	    case 'G':
 	      {
                 NEXT_ARG;
-                doublevalue = (DEFAULT_TYPE) arg.value.realval;
+                doublevalue = arg.value.realval;
                 syslog(LOG_USER | LOG_DEBUG,
                   "doublevalue: %f", doublevalue);
 		PRINT_TYPE(double, doublevalue);
@@ -215,7 +219,7 @@ char * memdump(char *buffer, void *location, int count) {
   unsigned char uchar, *ptr;
   char *saved = buffer;
   int i;
-  buffer += sprintf(buffer, "%p: ", location);
+  buffer += snprintf(buffer, INTBUFFER - 1, "%p: ", location);
   buffer--; /* so we can increment at start of each hex digit */
   ptr = (unsigned char *)location;
   for (i = 0; i < count; i++) {
@@ -228,3 +232,14 @@ char * memdump(char *buffer, void *location, int count) {
 }
 /* vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
  */
+
+#ifdef GSPRINTF_MAIN
+int main() {
+  int foo = 0xfedcba98;
+  char *bar = "zyxwvuts";
+  char buffer[1024];
+  char memory[1024];
+  errprintf(memory, memdump(buffer, &foo, 64));
+  return 0;
+}
+#endif
