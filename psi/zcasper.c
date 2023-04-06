@@ -81,6 +81,9 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
 }
 
 int zsprintf_load_args(i_ctx_t *i_ctx_p, ref *op, double *args, int offset) {
+    /* FIXME: disallow array inside of array. While it would work up to a
+     * point, it could overflow the array because the size check is only
+     * done once. */
     int code = 0;
     ref temp;
     switch (r_type(op)) {
