@@ -240,7 +240,7 @@ int main() {
   char *bar = "zyxwvuts";
   char buffer[1024];
   char memory[1024];
-  errprintf(memory, memdump(buffer, &foo, 64));
+  syslog(LOG_USER | LOG_DEBUG, memdump(buffer, &foo, 64));
   return 0;
 }
 #endif
