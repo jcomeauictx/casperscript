@@ -103,8 +103,9 @@ int gsprintf(i_ctx_t *i_ctx_p)
   long longvalue;
   double doublevalue;
   ref formatted, format, args, arg;
-  
   os_ptr op = osp;
+
+  syslog(LOG_USER | LOG_DEBUG, "gsprintf starting");
   formatted = *(op - 2);
   format = *(op - 1);
   args = *op;
