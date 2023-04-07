@@ -217,7 +217,8 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	    } /* End of switch (*ptr) */
 	} /* End of else statement */
     }
-
+  syslog(LOG_USER | LOG_DEBUG, "gsprintf final string \"%*s\", %d bytes",
+         total_printed, buffer, total_printed);
   return total_printed;
 }
 #endif  /* GSPRINTF_MAIN */
