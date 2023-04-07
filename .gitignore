@@ -46,6 +46,7 @@ sodebugobj
 *.pyc
 __pycache__
 zcasper
+gsprintf
 
 gs/Makefile
 gs/Makefile.in
