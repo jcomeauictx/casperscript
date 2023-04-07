@@ -42,36 +42,28 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 
 char * memdump(char *buffer, void *location, int count);
 
-#define BUFFERSIZE 1024
+#define GSPRINTF_MAX 4096
+#define BUFFERSIZE GSPRINTF_MAX
 #define SHORTBUFFERSIZE 7
-#define INTBUFFER 32
+#define INTBUFFERSIZE 32
 
 #ifndef GSPRINTF_MAIN
 #define NEXT_ARG(TYPE) \
   do { \
     code = array_get(imemory, &args, argindex++, &arg); \
-    if (TYPE != r_type(&arg)) \
-      gs_throw(gs_error_typecheck, \
-        "sprintf: arg %d is not %s\n", argindex - 1, #TYPE); \
-        doublevalue = (double)arg.value.realval; \
-        count = snprintf(argstring, r_size(&arg), arg.value.bytes); \
-        argstring[count > 0 ? count : 0] = '\0'; \
-        ptrvalue = argstring; \
-        if (count < 0 && r_size(&arg) > 0) return_error(gs_error_rangecheck); \
-        break; \
-    } \
-    if (code < 0) return code;  /* aborts safely */ \
+    if (code < 0) return code; \
+    else if (TYPE != r_type(&arg)) return_error(gs_error_typecheck); \
   } while (0)
 
 #define COPY_INT \
   do { \
     int value; \
-    char buf[INTBUFFER]; \
-    NEXT_ARG(t_integer) \
+    char buf[INTBUFFERSIZE]; \
+    NEXT_ARG(t_integer); \
     longvalue = (long)arg.value.intval; \
     ptr++; /* Go past the asterisk.  */ \
     *sptr = '\0'; /* NULL terminate sptr.  */ \
-    snprintf(buf, INTBUFFER - 1, "%ld", longvalue); \
+    snprintf(buf, INTBUFFERSIZE - 1, "%ld", longvalue); \
     strcat(sptr, buf); \
     while (*sptr) sptr++; \
   } while (0)
@@ -99,11 +91,22 @@ char * memdump(char *buffer, void *location, int count);
       } \
   } while (0)
 
+#define GETSTR(DESTINATION, REF, MAXSIZE) \
+  do { \
+    int size = r_size(&REF); \
+    char *src = (char *)REF.value.bytes; \
+    if (size >= MAXSIZE)  /* needs to be at least one byte less */ \
+      return_error(gs_error_rangecheck); \
+    /* If the length of src is less than n, strncpy() writes additional null
+     * bytes to dest to ensure that a total of n bytes are written. */ \
+    else strncpy(DESTINATION, src, size + 1); \
+  } while (0)
+ 
 int gsprintf(i_ctx_t *i_ctx_p)
 {
-  char buffer[MAX_STR + 1];
-  char formatstring[MAX_STR + 1];
-  char argstring[MAX_STR + 1];
+  char buffer[BUFFERSIZE];
+  char formatstring[BUFFERSIZE];
+  char argstring[BUFFERSIZE];
   const char * ptr = formatstring;
   char specifier[128];
   int total_printed = 0, argindex = 0, maxlength, code = 0;
@@ -117,8 +120,8 @@ int gsprintf(i_ctx_t *i_ctx_p)
   format = *(op - 1);
   args = *op;
   maxlength = r_size(&formatted);
-  DISCARD(strncpy(buffer, formatted.value.bytes, maxlength + 1));
-  DISCARD(strncpy(formatstring, format.value.bytes, r_size(&format) + 1));
+  GETSTR(buffer, formatted, BUFFERSIZE);  /* just for sanity check */
+  GETSTR(formatstring, format, BUFFERSIZE);
   while (*ptr != '\0')
     {
       if (*ptr != '%') /* While we have regular characters, print them.  */
@@ -199,6 +202,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	      break;
 	    case 's':
               NEXT_ARG(t_string);
+              GETSTR(argstring, arg, BUFFERSIZE);
 	      PRINT_TYPE(char *, argstring);
 	      break;
 	    case 'p':
@@ -222,7 +226,7 @@ char * memdump(char *buffer, void *location, int count) {
   unsigned char uchar, *ptr;
   char *saved = buffer;
   int i;
-  buffer += snprintf(buffer, INTBUFFER - 1, "%p: ", location);
+  buffer += snprintf(buffer, INTBUFFERSIZE - 1, "%p: ", location);
   buffer--; /* so we can increment at start of each hex digit */
   ptr = (unsigned char *)location;
   for (i = 0; i < count; i++) {
