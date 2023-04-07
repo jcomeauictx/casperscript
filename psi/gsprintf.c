@@ -24,6 +24,8 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 #include <stdlib.h>
 #include "gsprintf.h"
 #include "gssyslog.h"  /* for syslog debugging */
+
+#ifndef GSPRINTF_MAIN
 /* the following 6 imports are for ghostscript integration */
 #include "ghost.h"
 #include "gserrors.h"
@@ -36,18 +38,28 @@ Foundation, 51 Franklin Street - Fifth Floor, Boston, MA 02110-1301, USA.  */
 #define DEFAULT_TYPE ref
 #define DEFAULT_INT_TYPE long
 #define DEFAULT_REAL_TYPE double
+#endif  /* GSPRINTF_MAIN */
 
 char * memdump(char *buffer, void *location, int count);
-int get_int(ref object);
-double get_real(ref object);
 
 #define BUFFERSIZE 1024
 #define SHORTBUFFERSIZE 7
 #define INTBUFFER 32
 
-#define NEXT_ARG \
+#ifndef GSPRINTF_MAIN
+#define NEXT_ARG(TYPE) \
   do { \
     code = array_get(imemory, &args, argindex++, &arg); \
+    if (TYPE != r_type(&arg)) \
+      gs_throw(gs_error_typecheck, \
+        "sprintf: arg %d is not %s\n", argindex - 1, #TYPE); \
+        doublevalue = (double)arg.value.realval; \
+        count = snprintf(argstring, r_size(&arg), arg.value.bytes); \
+        argstring[count > 0 ? count : 0] = '\0'; \
+        ptrvalue = argstring; \
+        if (count < 0 && r_size(&arg) > 0) return_error(gs_error_rangecheck); \
+        break; \
+    } \
     if (code < 0) return code;  /* aborts safely */ \
   } while (0)
 
@@ -55,14 +67,12 @@ double get_real(ref object);
   do { \
     int value; \
     char buf[INTBUFFER]; \
-    NEXT_ARG; \
-    value = arg.value.intval; \
-    /*errprintf("COPY_INT called with value %d\n", value);*/ \
+    NEXT_ARG(t_integer) \
+    longvalue = (long)arg.value.intval; \
     ptr++; /* Go past the asterisk.  */ \
     *sptr = '\0'; /* NULL terminate sptr.  */ \
-    snprintf(buf, INTBUFFER - 1, "%d", value); \
+    snprintf(buf, INTBUFFER - 1, "%ld", longvalue); \
     strcat(sptr, buf); \
-    /*errprintf("COPY_INT result: %s\n", sptr);*/ \
     while (*sptr) sptr++; \
   } while (0)
 
@@ -76,9 +86,6 @@ double get_real(ref object);
 #define PRINT_TYPE(TYPE, VALUE) \
   do { \
     int result; \
-    NEXT_ARG; \
-    syslog(LOG_USER | LOG_DEBUG, \
-        "value at PRINT_TYPE: 0x%x (%d), float: %f", VALUE, VALUE, VALUE); \
     *sptr++ = *ptr++; /* Copy the type specifier.  */ \
     *sptr = '\0'; /* NULL terminate sptr.  */ \
     result = snprintf(buffer + total_printed, \
@@ -99,7 +106,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
   char argstring[MAX_STR + 1];
   const char * ptr = formatstring;
   char specifier[128];
-  int total_printed = 0, argindex, maxlength, code = 0;
+  int total_printed = 0, argindex = 0, maxlength, code = 0;
   long longvalue;
   double doublevalue;
   ref formatted, format, args, arg;
@@ -109,8 +116,6 @@ int gsprintf(i_ctx_t *i_ctx_p)
   formatted = *(op - 2);
   format = *(op - 1);
   args = *op;
-  /* trust that no gs-supplied string will be longer than MAX_STR */
-  /* this, combined with strncpy spec, will ensure trailing \0 */
   maxlength = r_size(&formatted);
   DISCARD(strncpy(buffer, formatted.value.bytes, maxlength + 1));
   DISCARD(strncpy(formatstring, format.value.bytes, r_size(&format) + 1));
@@ -174,8 +179,8 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	      {
 		/* Short values are promoted to int, so just cast everything
                    to a long and trust the C library sprintf with it */
-                NEXT_ARG;
-                longvalue = (DEFAULT_INT_TYPE) arg.value.intval;
+                NEXT_ARG(t_integer);
+                longvalue = (long)arg.value.intval; \
                 syslog(LOG_USER | LOG_DEBUG,
                     "longvalue: 0x%x (%d)", longvalue, longvalue);
 		PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
@@ -187,22 +192,18 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	    case 'g':
 	    case 'G':
 	      {
-                NEXT_ARG;
-                doublevalue = arg.value.realval;
-                syslog(LOG_USER | LOG_DEBUG,
-                  "doublevalue: %f", doublevalue);
+                NEXT_ARG(t_real);
+                syslog(LOG_USER | LOG_DEBUG, "doublevalue: %f", doublevalue);
 		PRINT_TYPE(double, doublevalue);
 	      }
 	      break;
 	    case 's':
-              NEXT_ARG;
-              longvalue = (DEFAULT_INT_TYPE) arg.value.intval;
-	      PRINT_TYPE(char *, longvalue);
+              NEXT_ARG(t_string);
+	      PRINT_TYPE(char *, argstring);
 	      break;
 	    case 'p':
-              NEXT_ARG;
-              longvalue = (DEFAULT_INT_TYPE) arg.value.intval;
-	      PRINT_TYPE(void *, longvalue);
+              NEXT_ARG(t_string);  /* only allow this for strings */
+	      PRINT_TYPE(void *, argstring);
 	      break;
 	    case '%':
 	      PRINT_CHAR('%');
@@ -215,6 +216,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
 
   return total_printed;
 }
+#endif  /* GSPRINTF_MAIN */
 
 char * memdump(char *buffer, void *location, int count) {
   unsigned char uchar, *ptr;
@@ -231,8 +233,6 @@ char * memdump(char *buffer, void *location, int count) {
   *buffer = '\0';
   return saved;
 }
-/* vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
- */
 
 #ifdef GSPRINTF_MAIN
 int main() {
@@ -244,3 +244,5 @@ int main() {
   return 0;
 }
 #endif
+/* vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
+ */
