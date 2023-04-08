@@ -77,11 +77,12 @@ char * memdump(char *buffer, void *location, int count);
 
 #define PRINT_TYPE(TYPE, VALUE) \
   do { \
-    int result; \
+    int result = 0; \
     *sptr++ = *ptr++; /* Copy the type specifier.  */ \
     *sptr = '\0'; /* NULL terminate sptr.  */ \
-    result = snprintf(buffer + total_printed, \
-      maxlength - total_printed, specifier, (TYPE) VALUE); \
+    if (total_printed < maxlength) \
+      result = snprintf(buffer + total_printed, \
+        maxlength - total_printed, specifier, (TYPE) VALUE); \
     if (result == -1) \
       return -1; \
     else \
@@ -104,7 +105,7 @@ char * memdump(char *buffer, void *location, int count);
  
 int gsprintf(i_ctx_t *i_ctx_p)
 {
-  char buffer[BUFFERSIZE];
+  char *buffer;
   char formatstring[BUFFERSIZE];
   char argstring[BUFFERSIZE];
   const char * ptr = formatstring;
@@ -112,15 +113,15 @@ int gsprintf(i_ctx_t *i_ctx_p)
   int total_printed = 0, argindex = 0, maxlength, code = 0;
   long longvalue;
   double doublevalue;
-  ref formatted, format, args, arg;
+  ref format, args, arg;
   os_ptr op = osp;
 
   syslog(LOG_USER | LOG_DEBUG, "gsprintf starting");
-  formatted = *(op - 2);
+  buffer = (char *)((op - 2)->value.bytes);
   format = *(op - 1);
   args = *op;
-  maxlength = r_size(&formatted);
-  GETSTR(buffer, formatted, BUFFERSIZE);  /* just for sanity check */
+  maxlength = r_size(op - 2);
+  if (maxlength > BUFFERSIZE) return_error(gs_error_rangecheck);
   GETSTR(formatstring, format, BUFFERSIZE);
   while (*ptr != '\0')
     {
@@ -185,7 +186,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
                 NEXT_ARG(t_integer);
                 longvalue = (long)arg.value.intval; \
                 syslog(LOG_USER | LOG_DEBUG,
-                    "longvalue: 0x%x (%d)", longvalue, longvalue);
+                    "longvalue: 0x%lx (%ld)", longvalue, longvalue);
 		PRINT_TYPE(DEFAULT_INT_TYPE, longvalue);
               }
 	      break;
@@ -196,6 +197,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	    case 'G':
 	      {
                 NEXT_ARG(t_real);
+                doublevalue = (DEFAULT_REAL_TYPE) arg.value.realval;
                 syslog(LOG_USER | LOG_DEBUG, "doublevalue: %f", doublevalue);
 		PRINT_TYPE(double, doublevalue);
 	      }
@@ -206,8 +208,9 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	      PRINT_TYPE(char *, argstring);
 	      break;
 	    case 'p':
-              NEXT_ARG(t_string);  /* only allow this for strings */
-	      PRINT_TYPE(void *, argstring);
+              NEXT_ARG(t_integer);
+              longvalue = (DEFAULT_INT_TYPE) arg.value.intval;
+	      PRINT_TYPE(void *, longvalue);
 	      break;
 	    case '%':
 	      PRINT_CHAR('%');
