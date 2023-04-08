@@ -438,13 +438,13 @@ int
 zreadline_from(stream *s, gs_string *buf, gs_memory_t *bufmem,
                uint *pcount, bool *pin_eol)
 {
-    sreadline_proc((*readline));
+    sreadline_proc((*readline_proc));
 
     if (zis_stdin(s))
-        readline = gp_readline;
+        readline_proc = gp_readline;
     else
-        readline = sreadline;
-    return readline(s, NULL, NULL /*WRONG*/, NULL, buf, bufmem,
+        readline_proc = sreadline;
+    return readline_proc(s, NULL, NULL /*WRONG*/, NULL, buf, bufmem,
                     pcount, pin_eol, zis_stdin);
 }
 
