@@ -1,2 +1,2 @@
-#include "iref.h"  /* for i_ctx_t */
-int gsprintf(i_ctx_t *i_ctx_p);
+#include "iref.h"  /* for i_ctx_t, ref_s, t_string, ... */
+int gsprintf(ref *formatted, ref *format, ref *args);

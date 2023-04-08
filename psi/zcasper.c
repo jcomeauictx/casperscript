@@ -59,7 +59,7 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     if (r_type(op) != t_array) return_op_typecheck(op);
     if (r_type(op - 1) != t_string) return_op_typecheck(op - 1);
     if (r_type(op - 2) != t_string) return_op_typecheck(op - 2);
-    written = gsprintf(i_ctx_p);
+    written = gsprintf(op - 2, op - 1, op);
     /* we pop the args array...
      * overwrite the format string with success flag...
      * and resize the buffer to the resultant string if necessary */

@@ -50,9 +50,9 @@ char * memdump(char *buffer, void *location, int count);
 #ifndef GSPRINTF_MAIN
 #define NEXT_ARG(TYPE) \
   do { \
-    code = array_get(imemory, &args, argindex++, &arg); \
+    code = array_get(NULL, args, argindex++, argptr); \
     if (code < 0) return code; \
-    else if (TYPE != r_type(&arg)) return_error(gs_error_typecheck); \
+    else if (TYPE != r_type(argptr)) return_error(gs_error_typecheck); \
   } while (0)
 
 #define COPY_INT \
@@ -93,8 +93,8 @@ char * memdump(char *buffer, void *location, int count);
 
 #define GETSTR(DESTINATION, REF, MAXSIZE) \
   do { \
-    int size = r_size(&REF); \
-    char *src = (char *)REF.value.bytes; \
+    int size = r_size(REF); \
+    char *src = (char *)REF->value.bytes; \
     if (size >= MAXSIZE)  /* needs to be at least one byte less */ \
       return_error(gs_error_rangecheck); \
     /* From `man strncpy`:
@@ -105,7 +105,7 @@ char * memdump(char *buffer, void *location, int count);
     else {strncpy(DESTINATION, src, size); DESTINATION[size] = '\0';} \
   } while (0)
  
-int gsprintf(i_ctx_t *i_ctx_p)
+int gsprintf(ref *formatted, ref *format, ref *args)
 {
   char *buffer;
   char formatstring[BUFFERSIZE];
@@ -115,14 +115,12 @@ int gsprintf(i_ctx_t *i_ctx_p)
   int total_printed = 0, argindex = 0, maxlength, code = 0;
   long longvalue;
   double doublevalue;
-  ref format, args, arg;
-  os_ptr op = osp;
+  ref arg, *argptr;
+  argptr = &arg;
 
   syslog(LOG_USER | LOG_DEBUG, "gsprintf starting");
-  buffer = (char *)((op - 2)->value.bytes);
-  format = *(op - 1);
-  args = *op;
-  maxlength = r_size(op - 2);
+  buffer = (char *)(formatted->value.bytes);
+  maxlength = r_size(formatted);
   if (maxlength > BUFFERSIZE) return_error(gs_error_rangecheck);
   GETSTR(formatstring, format, BUFFERSIZE);
   while (*ptr != '\0')
@@ -186,7 +184,7 @@ int gsprintf(i_ctx_t *i_ctx_p)
 	      break;
 	    case 's':
               NEXT_ARG(t_string);
-              GETSTR(argstring, arg, BUFFERSIZE);
+              GETSTR(argstring, argptr, BUFFERSIZE);
 	      PRINT_TYPE(char *, argstring);
 	      break;
 	    case 'p':
