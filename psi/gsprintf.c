@@ -57,7 +57,6 @@ char * memdump(char *buffer, void *location, int count);
 
 #define COPY_INT \
   do { \
-    int value; \
     char buf[INTBUFFERSIZE]; \
     NEXT_ARG(t_integer); \
     longvalue = (long)arg.value.intval; \
@@ -98,9 +97,12 @@ char * memdump(char *buffer, void *location, int count);
     char *src = (char *)REF.value.bytes; \
     if (size >= MAXSIZE)  /* needs to be at least one byte less */ \
       return_error(gs_error_rangecheck); \
-    /* If the length of src is less than n, strncpy() writes additional null
-     * bytes to dest to ensure that a total of n bytes are written. */ \
-    else strncpy(DESTINATION, src, size + 1); \
+    /* From `man strncpy`:
+     * If the length of src is less than n, strncpy() writes additional null
+     * bytes to dest to ensure that a total of n bytes are written.
+     * HOWEVER: remember Ghostscript "strings" are *not* null terminated, so
+     * you cannot COUNT on the "length of src" being detectable by C! */ \
+    else {strncpy(DESTINATION, src, size); DESTINATION[size] = '\0';} \
   } while (0)
  
 int gsprintf(i_ctx_t *i_ctx_p)
@@ -130,19 +132,14 @@ int gsprintf(i_ctx_t *i_ctx_p)
       else /* We got a format specifier! */
 	{
 	  char * sptr = specifier;
-	  int wide_width = 0, short_width = 0;
-	  
 	  *sptr++ = *ptr++; /* Copy the % and move forward.  */
-
 	  while (strchr ("-+ #0", *ptr)) /* Move past flags.  */
 	    *sptr++ = *ptr++;
-
 	  if (*ptr == '*')
 	    COPY_INT;
 	  else
 	    while (ISDIGIT(*ptr)) /* Handle explicit numeric value.  */
 	      *sptr++ = *ptr++;
-	  
 	  if (*ptr == '.')
 	    {
 	      *sptr++ = *ptr++; /* Copy and go past the period.  */
@@ -153,23 +150,8 @@ int gsprintf(i_ctx_t *i_ctx_p)
 		  *sptr++ = *ptr++;
 	    }
 	  while (strchr ("hlL", *ptr))
-	    {
-	      switch (*ptr)
-		{
-		case 'h':
-		  short_width = 1;
-		  break;
-		case 'l':
-		  wide_width++;
-		  break;
-		case 'L':
-		  wide_width = 2;
-		  break;
-		default:
-		  abort();
-		}
-	      *sptr++ = *ptr++;
-	    }
+            /* we only have one width for ints and floats, so ignore these */
+            *sptr++ = *ptr++;
 
 	  switch (*ptr)
 	    {
