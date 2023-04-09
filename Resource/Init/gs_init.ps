@@ -630,9 +630,9 @@ currentdict /.execute .undef
 /languagelevel 1 def		% gs_lev2.ps may change this
 /makeimagedevice { //false makewordimagedevice } odef
 /matrix	{ 6 array identmatrix } odef
-
+/.promptname (GS) def
 /.promptmsg {
-        (GS) print
+        .promptname print
         count 0 ne { (<) print count =only } if
         (>) print flush
 } bind def

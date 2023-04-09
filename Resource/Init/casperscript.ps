@@ -45,10 +45,8 @@ casperdict begin
     3 1 roll dup  % need extra copy of combined string
     4 2 roll putinterval  % combined string remains at TOS
   } bind def
-  /add /*add alias  % save `add` in `*add`
   /add {  % redefine add to include stradd
-    1 index type /stringtype cvx eq  % if first arg is string, use stradd
-    {stradd} {*add} ifelse
+    {add} stopped {stradd} if
   } bind def
   /add /+ alias  % allow use of `+` for `add`
 end  % casperdict
