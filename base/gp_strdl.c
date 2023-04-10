@@ -44,16 +44,19 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXPROMPTSIZE 32
     /* //eli.thegreenplace.net/2016/basics-of-using-the-readline-library/ */
     char *buffer, promptstring[MAXPROMPTSIZE] = "";
-    int count, code = 0;
+    int count = *pcount, code = 0;
     uint nsize;
     byte *ndata;
 
-    rl_bind_key('\t', rl_insert);  /* disable auto-complete with filenames */
-    if (prompt->size > MAXPROMPTSIZE - 1) {
+    /* disable auto-complete with filenames */
+    DISCARD(rl_bind_key('\t', rl_insert));
+    if (prompt && prompt->size > (MAXPROMPTSIZE - 1)) {
         code = 1;
     } else {
-        strncpy(promptstring, (char *)prompt->data, prompt->size);
-        promptstring[prompt->size] = '\0';
+        if (count == 0 && s_out && prompt) {
+            strncpy(promptstring, (char *)prompt->data, prompt->size);
+            promptstring[prompt->size] = '\0';
+        }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
             if (count > 0) {
@@ -70,8 +73,10 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 strncpy((char *)buf->data, buffer, count);
                 break;
             }
-            free(buffer);
         }
+        /* OK to have free() after while() because it only runs once,
+         * and it's needed here because of the `break` statements above */
+        free(buffer);
     }
     return code;
 #endif
