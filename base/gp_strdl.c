@@ -44,36 +44,36 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXPROMPTSIZE 32
     /* //eli.thegreenplace.net/2016/basics-of-using-the-readline-library/ */
     char *buffer, promptstring[MAXPROMPTSIZE] = "";
-    int count;
+    int count, code = 0;
     uint nsize;
     byte *ndata;
 
+    rl_bind_key('\t', rl_insert);  /* disable auto-complete with filenames */
     if (prompt->size > MAXPROMPTSIZE - 1) {
-        return 1;
+        code = 1;
     } else {
         strncpy(promptstring, (char *)prompt->data, prompt->size);
         promptstring[prompt->size] = '\0';
-    }
-    while ((buffer = readline(promptstring)) != NULL) {
-        count = strlen(buffer);
-        if (count > 0) {
-            if (count >= buf->size) {	/* filled the string */
-                if (!bufmem) return 1;
-                nsize = count + max(count, 20);
-                ndata = gs_resize_string(bufmem, buf->data, buf->size,
-                                          nsize, "sreadline(buffer)");
-                if (ndata == 0)
-                    return ERRC; /* no better choice */
-                buf->data = ndata;
-                buf->size = nsize;
+        while ((buffer = readline(promptstring)) != NULL) {
+            count = strlen(buffer);
+            if (count > 0) {
+                if (count >= buf->size) {	/* filled the string */
+                    if (!bufmem) {code = 1; break;}
+                    nsize = count + max(count, 20);
+                    ndata = gs_resize_string(bufmem, buf->data, buf->size,
+                                             nsize, "sreadline(buffer)");
+                    if (ndata == 0) {code = ERRC; break;} /* no better choice */
+                    buf->data = ndata;
+                    buf->size = nsize;
+                }
+                add_history(buffer);
+                strncpy((char *)buf->data, buffer, count);
+                break;
             }
-            add_history(buffer);
-            strncpy((char *)buf->data, buffer, count);
             free(buffer);
-            break;
         }
     }
-    return 0;
+    return code;
 #endif
 }
 
