@@ -45,7 +45,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXPROMPTSIZE 32
     /* //eli.thegreenplace.net/2016/basics-of-using-the-readline-library/ */
     char *buffer, promptstring[MAXPROMPTSIZE] = "";
-    int count = *pcount, code = 0;
+    int count = *pcount, code = EOF;
     uint nsize;
     byte *ndata;
 
@@ -62,6 +62,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             count = strlen(buffer);
             if (count > 0) {
                 if (count >= buf->size) {	/* filled the string */
+                    /* copy what fits now, in case no more memory available */
                     DISCARD(strncpy((char *)(buf->data + *pcount), buffer,
                             buf->size - *pcount));
                     if (!bufmem) {code = 1; break;}
@@ -78,6 +79,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 DISCARD(strncpy((char *)(buf->data + *pcount), buffer,
                                 count - *pcount));
                 *pcount = count;
+                code = 0;
                 break;  /* for count > 0 */
             }
             break;  /* for count == 0 */
