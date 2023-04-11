@@ -78,8 +78,9 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 DISCARD(strncpy((char *)(buf->data + *pcount), buffer,
                                 count - *pcount));
                 *pcount = count;
-                break;
+                break;  /* for count > 0 */
             }
+            break;  /* for count == 0 */
         }
         /* OK to have free() after while() because it only runs once,
          * and it's needed here because of the `break` statements above */
