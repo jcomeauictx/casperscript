@@ -59,7 +59,6 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             promptstring[prompt->size] = '\0';
         } else {
             rl_already_prompted = (int)true;
-            syslog(LOG_USER | LOG_DEBUG, "rl_point: %d", rl_point);
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
