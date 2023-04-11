@@ -630,11 +630,28 @@ currentdict /.execute .undef
 /languagelevel 1 def		% gs_lev2.ps may change this
 /makeimagedevice { //false makewordimagedevice } odef
 /matrix	{ 6 array identmatrix } odef
-/.promptname (GS) def
 /.promptmsg {
-        .promptname print
-        count 0 ne { (<) print count =only } if
-        (>) print flush
+	/maxpromptlength 32 1 + def  % extra byte for null termination hack
+	/promptname (GS) def
+	% steal some defs from casperscript and hide them here
+	/strlen {  % anystring - strlen  % length to first null (\000)
+		% if no nulls, entire length of string (same as `length`)
+		(\000) search {3 1 roll pop pop length} {length} ifelse
+	} bind def
+	/stradd {  % string1 string2 - combined
+		% add (concatenate) two strings
+		2 copy strlen exch strlen add string  % make new empty string
+		dup 4 3 roll exch copy  % new string contains string1
+		strlen  % length of string1 again, for putinterval
+		3 1 roll dup  % need extra copy of combined string
+		4 2 roll putinterval  % combined string remains at TOS
+	} bind def
+	count  % get current stack count
+	maxpromptlength string  % create string for prompt text
+        dup promptname stradd  % copy promptname into it
+        exch dup 0 ne { exch (<) stradd cvs stradd } {pop} ifelse
+        (>) stradd /promptmessage exch def
+	promptmessage print flush
 } bind def
 /prompt	{ flush flushpage //systemdict /NOPROMPT get not { //.promptmsg exec} if } bind def
 currentdict /.promptmsg .undef
