@@ -23,6 +23,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <stdlib.h>
+#include "gssyslog.h"
 #endif
 
 int
@@ -54,15 +55,17 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
         code = 1;
     } else {
         if (count == 0 && s_out && prompt) {
-            strncpy(promptstring, (char *)prompt->data, prompt->size);
+            DISCARD(strncpy(promptstring, (char *)prompt->data, prompt->size));
             promptstring[prompt->size] = '\0';
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
             if (count > 0) {
                 if (count >= buf->size) {	/* filled the string */
+                    DISCARD(strncpy((char *)(buf->data + *pcount), buffer,
+                            buf->size - *pcount));
                     if (!bufmem) {code = 1; break;}
-                    nsize = count + max(count, 20);
+                    nsize = count + 1;
                     ndata = gs_resize_string(bufmem, buf->data, buf->size,
                                              nsize, "sreadline(buffer)");
                     if (ndata == 0) {code = ERRC; break;} /* no better choice */
@@ -70,7 +73,11 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     buf->size = nsize;
                 }
                 add_history(buffer);
-                strncpy((char *)buf->data, buffer, count);
+                syslog(LOG_USER | LOG_DEBUG,
+                       "count: %d, buffer: %*s", count, count, buffer);
+                DISCARD(strncpy((char *)(buf->data + *pcount), buffer,
+                                count - *pcount));
+                *pcount = count;
                 break;
             }
         }
