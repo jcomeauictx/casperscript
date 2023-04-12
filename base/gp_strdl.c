@@ -72,6 +72,11 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 syslog(LOG_USER | LOG_DEBUG, "hidden prompt found: %s",
                         promptstring);
             }
+            if (strlen(promptstring) == 0) {  /* meaning the above failed */
+                /* attempt to get cursor position using <ESC>[6n which replies
+                 * with <ESC>[{ROW};{COLUMN}R
+                 */
+            }
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
