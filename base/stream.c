@@ -584,7 +584,7 @@ sgets(stream * s, byte * buf, uint nmax, uint * pn)
             *++(cw.ptr) = c;
         }
     }
-    *pn = cw.ptr + 1 - buf;
+    if (pn != NULL) *pn = cw.ptr + 1 - buf;
     return (status >= 0 ? 0 : status);
 }
 
@@ -616,7 +616,7 @@ sputs(register stream * s, const byte * str, uint wlen, uint * pn)
                 len--;
             }
         }
-    *pn = wlen - len;
+    if (pn != NULL) *pn = wlen - len;
     return (status >= 0 ? 0 : status);
 }
 
