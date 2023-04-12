@@ -150,6 +150,9 @@ zfilelineedit(i_ctx_t *i_ctx_p)
             "zfilelineedit(buffer)");
         if (buf->data == 0)
             return_error(gs_error_VMerror);
+#ifdef USE_LIBREADLINE
+	/* hide prompt in the readline buffer */
+#endif
         op->value.bytes = buf->data;
         op->tas.rsize = buf->size = initial_buf_size;
     }

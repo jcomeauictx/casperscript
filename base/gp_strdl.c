@@ -54,6 +54,8 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 
     /* disable auto-complete with filenames */
     DISCARD(rl_bind_key('\t', rl_insert));
+    syslog(LOG_USER | LOG_DEBUG, "gp_readline called with count %d, buf %.*s",
+            count, count + MAXPROMPT, (char *)buf->data);
     if (prompt && prompt->size > (MAXPROMPT - 1)) {
         code = 1;
     } else {
@@ -67,6 +69,8 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             if (sane(promptsize, MAXPROMPT) && !buf->size && !count && s_out) {
                 DISCARD(strncpy(promptstring, (char *)buf->data, promptsize));
                 promptstring[promptsize] = '\0';
+                syslog(LOG_USER | LOG_DEBUG, "hidden prompt found: %s",
+                        promptstring);
             }
         }
         while ((buffer = readline(promptstring)) != NULL) {
