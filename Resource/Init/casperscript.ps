@@ -37,20 +37,33 @@ casperdict begin
     % if no nulls, entire length of string (same as `length`)
     (\000) search {3 1 roll pop pop length} {length} ifelse
   } bind def
-  /append { % stringbuffer string - combined
+  /append {  % stringbuffer string - combined
     % add (concatenate) string to buffer without shortening buffer
     % (a\000\000) (b) append -> (ab\000)
     1 index dup strlen  % offset to first empty place in buffer
     % stack now: buffer string buffer offset
     3 2 roll putinterval
   } bind def
+  /strtruncate {  % stringbuffer - string
+    % remove trailing nulls at end of stringbuffer
+    0 1 index strlen getinterval
+  } bind def
   /stradd {  % string1 string2 - combined
     % add (concatenate) two strings: (a) (b) stradd -> (ab)
     2 copy strlen exch strlen add string  % make new empty string
     3 2 roll append exch append
   } bind def
+  /strmul {  % string multiplier - string
+    % multiply a string as does Python: (a) 5 strmul -> (aaaaa)
+    1 index strlen 1 index mul string  % string multiplier buffer
+    exch {1 index append} repeat
+    exch pop
+  } bind def
   /add {  % redefine add to include stradd
     {add} stopped {stradd} if
+  } bind def
+  /truncate {  % redefine truncate to include strtruncate
+    {truncate} stopped {strtruncate} if
   } bind def
   /add /+ alias  % allow use of `+` for `add`
 end  % casperdict
