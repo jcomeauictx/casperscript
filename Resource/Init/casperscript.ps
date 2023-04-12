@@ -37,13 +37,17 @@ casperdict begin
     % if no nulls, entire length of string (same as `length`)
     (\000) search {3 1 roll pop pop length} {length} ifelse
   } bind def
+  /append { % stringbuffer string - combined
+    % add (concatenate) string to buffer without shortening buffer
+    % (a\000\000) (b) append -> (ab\000)
+    1 index dup strlen  % offset to first empty place in buffer
+    % stack now: buffer string buffer offset
+    3 2 roll putinterval
+  } bind def
   /stradd {  % string1 string2 - combined
-    % add (concatenate) two strings
+    % add (concatenate) two strings: (a) (b) stradd -> (ab)
     2 copy strlen exch strlen add string  % make new empty string
-    dup 4 3 roll exch copy  % new string contains string1
-    strlen  % length of string1 again, for putinterval
-    3 1 roll dup  % need extra copy of combined string
-    4 2 roll putinterval  % combined string remains at TOS
+    3 2 roll append exch append
   } bind def
   /add {  % redefine add to include stradd
     {add} stopped {stradd} if

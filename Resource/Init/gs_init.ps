@@ -631,25 +631,27 @@ currentdict /.execute .undef
 /makeimagedevice { //false makewordimagedevice } odef
 /matrix	{ 6 array identmatrix } odef
 /.promptmsg {
-	/maxpromptlength 32 1 + def  % extra byte for null termination hack
 	/promptname (GS) def
-	% steal some defs from casperscript and hide them here
+	% steal from casperscript things that may not be available yet
 	/strlen {  % anystring - strlen  % length to first null (\000)
 		% if no nulls, entire length of string (same as `length`)
 		(\000) search {3 1 roll pop pop length} {length} ifelse
 	} bind def
+	/append { % stringbuffer string - combined
+		% add (concatenate) string to buffer without shortening buffer
+		% (a\000\000) (b) append -> (ab\000)
+		1 index dup strlen  % offset to first empty place in buffer
+		% stack now: buffer string buffer offset
+		3 2 roll putinterval
+	} bind def
 	/stradd {  % string1 string2 - combined
-		% add (concatenate) two strings
+		% add (concatenate) two strings: (a) (b) stradd -> (ab)
 		2 copy strlen exch strlen add string  % make new empty string
-		dup 4 3 roll exch copy  % new string contains string1
-		strlen  % length of string1 again, for putinterval
-		3 1 roll dup  % need extra copy of combined string
-		4 2 roll putinterval  % combined string remains at TOS
+		3 2 roll append exch append
 	} bind def
 	count  % get current stack count
-	maxpromptlength string  % create string for prompt text
-        dup promptname stradd  % copy promptname into it
-        exch dup 0 ne { exch (<) stradd cvs stradd } {pop} ifelse
+        promptname
+        exch dup 0 ne {exch (<) stradd exch 6 string cvs stradd} {pop} ifelse
         (>) stradd /promptmessage exch def
 	promptmessage print flush
 } bind def
