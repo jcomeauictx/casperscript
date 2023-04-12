@@ -38,27 +38,36 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             gs_memory_t * bufmem, uint * pcount, bool *pin_eol,
             bool (*is_stdin)(const stream *))
 {
+    /* gp_readline is only called, via zreadline_from, when stream s_in is
+     * stdin. */
 #ifndef USE_LIBREADLINE
     return sreadline(s_in, s_out, readline_data, prompt, buf, bufmem, pcount,
                      pin_eol, is_stdin);
 #else
-#define MAXPROMPTSIZE 32
+#define MAXPROMPT 32
+#define sane(x, max) (x > 0 && x < max)
     /* //eli.thegreenplace.net/2016/basics-of-using-the-readline-library/ */
-    char *buffer, promptstring[MAXPROMPTSIZE] = "";
-    int count = *pcount, code = EOF;
+    char *buffer, promptstring[MAXPROMPT] = "";
+    int promptsize, count = *pcount, code = EOF;
     uint nsize;
     byte *ndata;
 
     /* disable auto-complete with filenames */
     DISCARD(rl_bind_key('\t', rl_insert));
-    if (prompt && prompt->size > (MAXPROMPTSIZE - 1)) {
+    if (prompt && prompt->size > (MAXPROMPT - 1)) {
         code = 1;
     } else {
-        if (count == 0 && s_out && prompt) {
+        if (!count && s_out && prompt) {
             DISCARD(strncpy(promptstring, (char *)prompt->data, prompt->size));
             promptstring[prompt->size] = '\0';
         } else {
             rl_already_prompted = (int)true;
+            /* ugly hack to get prompt hidden in supposedly-empty buffer */
+            promptsize = strlen((char *)buf->data);
+            if (sane(promptsize, MAXPROMPT) && !buf->size && !count && s_out) {
+                DISCARD(strncpy(promptstring, (char *)buf->data, promptsize));
+                promptstring[promptsize] = '\0';
+            }
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
