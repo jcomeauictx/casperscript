@@ -27,6 +27,8 @@
 #include "gssyslog.h"
 #endif
 
+extern int rl_tty_set_echoing PARAMS((int));
+
 int
 gp_readline_init(void **preadline_data, gs_memory_t * mem)
 {
@@ -46,10 +48,14 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                      pin_eol, is_stdin);
 #else
 #define MAXPROMPT 32
+#define MAXREPLY 12
+#define QUERY "\033[6n"
+#define PROMPT "..............................."
 #define sane(x, max) (x > 0 && x < max)
-    const byte *query = (byte *)"\033[6n";
-    unsigned int querysize = strlen((char *)query);
-    char reply[12] = "";  /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI */
+    const byte *query = (byte *)QUERY;
+    uint querysize = strlen((char *)query);
+    /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[ */
+    char reply[MAXREPLY] = "";
     uint replysize = 0;
     /* //eli.thegreenplace.net/2016/basics-of-using-the-readline-library/ */
     char *buffer, promptstring[MAXPROMPT] = "";
@@ -75,10 +81,14 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             if (s_out) sputs(s_out, query, querysize, NULL);
             else outprintf(bufmem, (const char *)query);
             sgets(s_in, (byte *)reply, 5, &replysize);
-            syslog(LOG_USER | LOG_DEBUG,
-                    "gp_readline query reply: <ESC>%.4s", reply + 1);
+            while (replysize < MAXREPLY && reply[replysize - 1] != 'R')
+                reply[replysize++] = sgetc(s_in);
+            syslog(LOG_USER | LOG_DEBUG, "gp_readline query reply: <ESC>%.*s",
+                    replysize - 1, reply + 1);
             promptsize = 3;  /*FIXME: determined by column number */
-            DISCARD(strncpy(promptstring, "...", promptsize + 1));
+            DISCARD(strncpy(promptstring, PROMPT, promptsize));
+            promptstring[promptsize] = '\0';
+            promptstring[promptsize - 1] = '>';
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
