@@ -80,7 +80,6 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
              */
             if (s_out) sputs(s_out, query, querysize, NULL);
             else outprintf(bufmem, (const char *)query);
-            sgets(s_in, (byte *)reply, 5, &replysize);
             while (replysize < MAXREPLY && reply[replysize - 1] != 'R')
                 reply[replysize++] = sgetc(s_in);
             syslog(LOG_USER | LOG_DEBUG, "gp_readline query reply: <ESC>%.*s",
