@@ -19,6 +19,7 @@
 #include "gstypes.h"
 #include "gsmemory.h"
 #include "gp.h"
+#include "stream.h"
 #ifdef USE_LIBREADLINE
 #include <readline/readline.h>
 #include <readline/history.h>
@@ -46,6 +47,10 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #else
 #define MAXPROMPT 32
 #define sane(x, max) (x > 0 && x < max)
+    const byte *query = (byte *)"\033[6n";
+    unsigned int querysize = strlen((char *)query);
+    char reply[12] = "";  /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI */
+    uint replysize = 0;
     /* //eli.thegreenplace.net/2016/basics-of-using-the-readline-library/ */
     char *buffer, promptstring[MAXPROMPT] = "";
     int promptsize, count = *pcount, code = EOF;
@@ -64,18 +69,16 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             promptstring[prompt->size] = '\0';
         } else {
             rl_already_prompted = (int)true;
-            /* ugly hack to get prompt hidden in supposedly-empty buffer */
-            promptsize = strlen((char *)buf->data);
-            if (sane(promptsize, MAXPROMPT) && !buf->size && !count && s_out) {
-                DISCARD(strncpy(promptstring, (char *)buf->data, promptsize));
-                promptstring[promptsize] = '\0';
-                syslog(LOG_USER | LOG_DEBUG, "hidden prompt found: %s",
-                        promptstring);
-            }
-            if (strlen(promptstring) == 0) {  /* meaning the above failed */
-                /* attempt to get cursor position using <ESC>[6n which replies
-                 * with <ESC>[{ROW};{COLUMN}R
-                 */
+            /* attempt to get cursor position using <ESC>[6n which replies
+             * with <ESC>[{ROW};{COLUMN}R
+             */
+            if (s_out) {
+                sputs(s_out, query, querysize, NULL);
+                sgets(s_in, (byte *)reply, 5, &replysize);
+                syslog(LOG_USER | LOG_DEBUG,
+                        "gp_readline query reply: <ESC>%.4s", reply + 1);
+                promptsize = 3;  /*FIXME: determined by column number */
+                DISCARD(strncpy(promptstring, "...", promptsize + 1));
             }
         }
         while ((buffer = readline(promptstring)) != NULL) {
@@ -96,9 +99,8 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 add_history(buffer);
                 syslog(LOG_USER | LOG_DEBUG,
                        "count: %d, buffer: %*s", count, count, buffer);
-                DISCARD(strncpy((char *)(buf->data + *pcount), buffer,
-                                count - *pcount));
-                *pcount = count;
+                DISCARD(strncpy((char *)(buf->data + *pcount), buffer, count));
+                *pcount += count;
                 code = 0;
                 break;  /* for count > 0 */
             }
