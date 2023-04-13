@@ -24,6 +24,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <stdlib.h>
+#include <termios.h>
 #include "gssyslog.h"
 #endif
 
@@ -62,6 +63,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
     int promptsize, count = *pcount, code = EOF;
     uint nsize;
     byte *ndata;
+    struct termios settings;
 
     /* disable auto-complete with filenames */
     DISCARD(rl_bind_key('\t', rl_insert));
@@ -78,16 +80,24 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             /* attempt to get cursor position using <ESC>[6n which replies
              * with <ESC>[{ROW};{COLUMN}R
              */
+            tcgetattr(0, &settings);
+            /* //stackoverflow.com/a/59923166/493161 */
+            settings.c_lflag &= ~ECHO;
+            tcsetattr(0, 0, &settings);
             if (s_out) sputs(s_out, query, querysize, NULL);
             else outprintf(bufmem, (const char *)query);
-            while (replysize < MAXREPLY && reply[replysize - 1] != 'R')
+            while (replysize < MAXREPLY - 1) {  /* leave a byte for \0 */
                 reply[replysize++] = sgetc(s_in);
+                if (reply[replysize - 1] == 'R') break;
+            }
             syslog(LOG_USER | LOG_DEBUG, "gp_readline query reply: <ESC>%.*s",
                     replysize - 1, reply + 1);
             promptsize = 3;  /*FIXME: determined by column number */
             DISCARD(strncpy(promptstring, PROMPT, promptsize));
-            promptstring[promptsize] = '\0';
             promptstring[promptsize - 1] = '>';
+            promptstring[promptsize] = '\0';
+            settings.c_lflag |= ECHO;
+            tcsetattr(0, 0, &settings);
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
