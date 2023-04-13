@@ -72,14 +72,13 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             /* attempt to get cursor position using <ESC>[6n which replies
              * with <ESC>[{ROW};{COLUMN}R
              */
-            if (s_out) {
-                sputs(s_out, query, querysize, NULL);
-                sgets(s_in, (byte *)reply, 5, &replysize);
-                syslog(LOG_USER | LOG_DEBUG,
-                        "gp_readline query reply: <ESC>%.4s", reply + 1);
-                promptsize = 3;  /*FIXME: determined by column number */
-                DISCARD(strncpy(promptstring, "...", promptsize + 1));
-            }
+            if (s_out) sputs(s_out, query, querysize, NULL);
+            else outprintf(bufmem, (const char *)query);
+            sgets(s_in, (byte *)reply, 5, &replysize);
+            syslog(LOG_USER | LOG_DEBUG,
+                    "gp_readline query reply: <ESC>%.4s", reply + 1);
+            promptsize = 3;  /*FIXME: determined by column number */
+            DISCARD(strncpy(promptstring, "...", promptsize + 1));
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
