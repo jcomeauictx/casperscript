@@ -90,29 +90,33 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
             /* attempt to get cursor position using <ESC>[6n which replies
              * with <ESC>[{ROW};{COLUMN}R
              */
-            /*FIXME: this needs to be wrapped in timeout and ^C trap */
-            tcgetattr(CS_STDIN, &settings[0]);  /* for reference */
-            settings[1] = settings[0];  /* let compiler generate the code */
-            settings[1].c_lflag &= ~ECHO;  /* don't echo reply to screen */
-            settings[1].c_lflag &= ~ICANON;  /* stop buffering */
-            tcsetattr(CS_STDIN, TCSANOW, &settings[1]);
-            outprintf(bufmem, (const char *)query);
-            syslog(LOG_USER | LOG_DEBUG, "sent query, waiting for reply");
-            replysize += read(CS_STDIN, reply, MINREPLY);  
-            while (replysize < MAXREPLY - 1) {  /* leave a byte for \0 */
-                if (reply[replysize - 1] == 'R') break;
-                replysize += read(CS_STDIN, &reply[replysize], 1);
-                syslog(LOG_USER | LOG_DEBUG, "got <ESC>%.*s so far",
+            if (isatty(CS_STDIN)) {
+                /*FIXME: this needs to be wrapped in timeout and ^C trap */
+                tcgetattr(CS_STDIN, &settings[0]);  /* for reference */
+                settings[1] = settings[0];  /* let gcc generate the code */
+                settings[1].c_lflag &= ~ECHO;  /* don't echo reply to screen */
+                settings[1].c_lflag &= ~ICANON;  /* stop buffering */
+                tcsetattr(CS_STDIN, TCSANOW, &settings[1]);
+                outprintf(bufmem, (const char *)query);
+                syslog(LOG_USER | LOG_DEBUG, "sent query, waiting for reply");
+                replysize += read(CS_STDIN, reply, MINREPLY);
+                while (replysize < MAXREPLY - 1) {  /* leave a byte for \0 */
+                    if (reply[replysize - 1] == 'R') break;
+                    replysize += read(CS_STDIN, &reply[replysize], 1);
+                    syslog(LOG_USER | LOG_DEBUG, "got <ESC>%.*s so far",
+                            replysize - 1, reply + 1);
+                }
+                syslog(LOG_USER | LOG_DEBUG, "gp_readline reply: <ESC>%.*s",
                         replysize - 1, reply + 1);
+                promptsize = reply[replysize - 2] - '0';  /* digit to int */
+                if (promptsize < 4) promptsize += 10;
+                DISCARD(strncpy(promptstring, PROMPT, promptsize));
+                promptstring[promptsize - 1] = '>';
+                promptstring[promptsize] = '\0';
+                syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
+                        promptstring);
+                tcsetattr(CS_STDIN, TCSANOW, &settings[0]);  /* restore term */
             }
-            syslog(LOG_USER | LOG_DEBUG, "gp_readline query reply: <ESC>%.*s",
-                    replysize - 1, reply + 1);
-            promptsize = reply[replysize - 2] - '0';  /* convert digit to int */
-            if (promptsize < 4) promptsize += 10;
-            DISCARD(strncpy(promptstring, PROMPT, promptsize));
-            promptstring[promptsize - 1] = '>';
-            promptstring[promptsize] = '\0';
-            tcsetattr(CS_STDIN, TCSANOW, &settings[0]);  /* restore termios */
         }
         while ((buffer = readline(promptstring)) != NULL) {
             count = strlen(buffer);
