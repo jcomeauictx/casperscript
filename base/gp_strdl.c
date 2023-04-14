@@ -80,7 +80,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
     syslog(LOG_USER | LOG_DEBUG, "gp_readline called with count %d, buf %.*s",
             count, count + MAXPROMPT, (char *)buf->data);
     if (prompt && prompt->size > (MAXPROMPT - 1)) {
-        code = 1;  /* FIXME: this code means buffer full, find a better one */
+        code = ERRC;
     } else {
         if (!count && s_out && prompt) {
             DISCARD(strncpy(promptstring, (char *)prompt->data, prompt->size));
@@ -92,7 +92,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
              */
             /*FIXME: this needs to be wrapped in timeout and ^C trap */
             tcgetattr(CS_STDIN, &settings[0]);  /* for reference */
-            tcgetattr(CS_STDIN, &settings[1]);  /* FIXME: use memmove ? */
+            settings[1] = settings[0];  /* let compiler generate the code */
             settings[1].c_lflag &= ~ECHO;  /* don't echo reply to screen */
             settings[1].c_lflag &= ~ICANON;  /* stop buffering */
             tcsetattr(CS_STDIN, TCSANOW, &settings[1]);
@@ -137,7 +137,9 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 code = 0;
                 break;  /* for count > 0 */
             }
-            break;  /* for count == 0 */
+            /* for count == 0 */
+            code = 0;
+            break;
         }
         /* OK to have free() after while() because it only runs once,
          * and it's needed here because of the `break` statements above */
