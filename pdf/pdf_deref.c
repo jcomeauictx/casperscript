@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* Functions to deal with dereferencing indirect objects
@@ -1026,12 +1026,20 @@ static int pdfi_dereference_main(pdf_context *ctx, uint64_t obj, uint64_t gen, p
                     }
                 }
             } else {
-                pdfi_pop(ctx, 1);
+                int code1 = 0;
+
+                if (pdfi_count_stack(ctx) > 0)
+                    pdfi_pop(ctx, 1);
+
                 if (entry->free) {
                     dmprintf1(ctx->memory, "Dereference of free object %"PRIu64", next object number as offset failed, returning NULL object.\n", entry->object_num);
                     *object = PDF_NULL_OBJ;
                     return 0;
                 }
+                code1 = pdfi_repair_file(ctx);
+                if (code1 == 0)
+                    return pdfi_dereference_main(ctx, obj, gen, object, cache);
+                /* Repair failed, just give up and return an error */
                 code = gs_note_error(gs_error_undefined);
                 goto error;
             }

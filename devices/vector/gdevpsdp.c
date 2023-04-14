@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 
@@ -244,6 +244,7 @@ static const gs_param_item_t psdf_param_items[] = {
     pi("SubsetFonts", gs_param_type_bool, SubsetFonts),
     pi("PassThroughJPEGImages", gs_param_type_bool, PassThroughJPEGImages),
     pi("PassThroughJPXImages", gs_param_type_bool, PassThroughJPXImages),
+    pi("PSPageOptionsWrap", gs_param_type_bool, PSPageOptionsWrap),
 
 #undef pi
     gs_param_item_end

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2021 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 
@@ -391,14 +391,20 @@ match_page_size(const gs_point * request, const gs_rect * medium, int policy,
                                 fabs((medium->p.x - ry) * (medium->q.x - ry)) +
                                     (pmat->xx == 0.0 || (rotate & 1) == 1 ? 0.01 : 0);	/* rotated */
         } else {
-            int rotate =
-                (orient >= 0 ? orient :
-                 (rx < ry) ^ (medium->q.x < medium->q.y));
-            bool larger = (policy == 13) ? 0 :
-                (rotate & 1 ? medium->q.y >= rx && medium->q.x >= ry :
-                 medium->q.x >= rx && medium->q.y >= ry);
+            int rotate = 0;
+            bool larger = 0;
             bool adjust = false;
             float mismatch = medium->q.x * medium->q.y - rx * ry;
+
+            rotate = orient >= 0 ? orient : (rx < ry) ^ (medium->q.x < medium->q.y);
+
+            /* If either the request or the media is square, there is no point in rotating */
+            if (rx == ry || medium->q.x == medium->q.y)
+                rotate = 0;
+
+            larger = (policy == 13) ? 0 :
+                    (rotate & 1 ? medium->q.y >= rx && medium->q.x >= ry :
+                    medium->q.x >= rx && medium->q.y >= ry);
 
             switch (policy) {
                 default:		/* exact match only */

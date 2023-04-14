@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* Top-level API implementation of PDF */
@@ -485,6 +485,7 @@ pdf_impl_set_param(pl_interp_implementation_t *impl,
     int code;
     int len;
     bool discard_isname;
+    bool Printed_set = false;
 
     param_init_enumerator(&enumerator);
     if ((code = param_get_next_key(plist, &enumerator, &key)) == 0) {
@@ -594,6 +595,7 @@ pdf_impl_set_param(pl_interp_implementation_t *impl,
             code = plist_value_get_bool(&pvalue, &ctx->args.printed);
             if (code < 0)
                 return code;
+            Printed_set = true;
         }
         if (argis(param, "DITHERPPI")) {
             code = plist_value_get_bool(&pvalue, &ctx->args.ditherppi);
@@ -718,6 +720,10 @@ pdf_impl_set_param(pl_interp_implementation_t *impl,
             code = plist_value_get_bool(&pvalue, &ctx->args.ignoretounicode);
             if (code < 0)
                 return code;
+        }
+        if (argis(param, "OutputFile")) {
+            if (!Printed_set)
+                ctx->args.printed = true;
         }
     }
 

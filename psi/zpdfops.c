@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 
@@ -1380,6 +1380,11 @@ static int zPDFInit(i_ctx_t *i_ctx_p)
                 goto error;
             pdfctx->ctx->args.pdffitpage = pvalueref->value.boolval;
         }
+
+        if (dict_find_string(pdictref, "OutputFile", &pvalueref) > 0)
+            pdfctx->ctx->args.printed = true;
+        else
+            pdfctx->ctx->args.printed = false;
 
         if (dict_find_string(pdictref, "Printed", &pvalueref) > 0) {
             if (!r_has_type(pvalueref, t_boolean))

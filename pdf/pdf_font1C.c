@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* code for CFF (type 1C) font handling */
@@ -2263,7 +2263,11 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 break;
             }
         }
-        if (toffs == 0 || tlen == 0 || toffs + tlen > fbuflen) {
+        /* Sanity check the offset and size of the CFF table and make sure the declared
+         * size and position fits inside the data we have. Promote the 32-bit variables to
+         * 64-bit to avoid overflow calculating the end of the table.
+         */
+        if (toffs == 0 || tlen == 0 || (uint64_t)toffs + (uint64_t)tlen > fbuflen) {
             gs_free_object(ctx->memory, pfbuf, "pdfi_read_cff_font(fbuf)");
             return_error(gs_error_invalidfont);
         }

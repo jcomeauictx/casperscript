@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* gdevdsp.c */
@@ -207,7 +207,10 @@ display_open(gx_device * dev)
     /* Allow device to be opened "disabled" without a callback. */
     /* The callback will be set later and the device re-opened. */
     if (ddev->callback == NULL)
+    {
+        fill_dev_proc(ddev, fill_rectangle, display_fill_rectangle);
         return 0;
+    }
     ccode = install_internal_subclass_devices((gx_device **)&ddev, NULL);
     if (ccode < 0)
         return ccode;
@@ -1590,9 +1593,9 @@ display_create_buf_device(gx_device **pbdev, gx_device *target, int y,
     } else {
         gs_make_mem_device(mdev, mdproto, mem, (color_usage == NULL ? 1 : 0),
                            target);
-        if (ddev->nFormat & DISPLAY_COLORS_SEPARATION)
-            mdev->procs.fill_rectangle_hl_color = display_fill_rectangle_hl_color;
     }
+    if (ddev->nFormat & DISPLAY_COLORS_SEPARATION)
+        mdev->procs.fill_rectangle_hl_color = display_fill_rectangle_hl_color;
     mdev->width = target->width;
     mdev->band_y = y;
     mdev->log2_align_mod = target->log2_align_mod;
@@ -1839,6 +1842,9 @@ display_set_separations(gx_device_display *dev)
         int sep_name_size;
         unsigned int c, m, y, k;
         gx_device_display *head = dev;
+
+        if (num_comp > GX_DEVICE_COLOR_MAX_COMPONENTS)
+            num_comp = GX_DEVICE_COLOR_MAX_COMPONENTS;
 
         while(head->parent)
             head = (gx_device_display *)head->parent;
@@ -2215,11 +2221,16 @@ display_set_color_format(gx_device_display *ddev, int nFormat)
                 return_error(gs_error_rangecheck);
             if (ddev->is_planar)
             {
-                int n = ddev->devn_params.num_std_colorant_names + ddev->devn_params.separations.num_separations;
-                if (n == 0)
+                int n;
+                if (ddev->devn_params.separations.num_separations == 0)
                     n = GS_CLIENT_COLOR_MAX_COMPONENTS;
-                if (n > GS_CLIENT_COLOR_MAX_COMPONENTS)
-                    n = GS_CLIENT_COLOR_MAX_COMPONENTS;
+                else {
+                    n = ddev->devn_params.num_std_colorant_names + ddev->devn_params.separations.num_separations;
+                    if (n == 0)
+                        n = GS_CLIENT_COLOR_MAX_COMPONENTS;
+                    if (n > GS_CLIENT_COLOR_MAX_COMPONENTS)
+                        n = GS_CLIENT_COLOR_MAX_COMPONENTS;
+                }
                 bpp = n * 8;
                 set_color_info(&dci, DISPLAY_MODEL_SEP, n, GS_CLIENT_COLOR_MAX_COMPONENTS, bpp,
                     maxvalue, maxvalue);

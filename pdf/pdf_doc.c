@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* Functions to deal with PDF structure, such as retrieving
@@ -1703,7 +1703,11 @@ int pdfi_doc_trailer(pdf_context *ctx)
         code = pdfi_doc_Info(ctx);
         if (code < 0) {
             pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_INFO, "pdfi_doc_trailer", NULL);
-            if (ctx->args.pdfstoponerror)
+            /* pdfwrite will set a Fatal error when processing the DOCINFO if it has been
+             * told to create a PDF/A. the PDFA compatibility is 2, and the file info
+             * cannot be handled. In that case, abort immediately.
+             */
+            if (ctx->args.pdfstoponerror || code == gs_error_Fatal)
                 goto exit;
         }
 

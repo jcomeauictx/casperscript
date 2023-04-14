@@ -1,14 +1,16 @@
-/* Copyright (C) 2009-2022 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
    implied.
 
-   This software is distributed under license and may not be copied, modified
-   or distributed except as expressly authorized under the terms of that
-   license. Refer to licensing information at http://www.artifex.com
-   or contact Artifex Software, Inc.,  1305 Grant Avenue - Suite 200,
-   Novato, CA 94945, U.S.A., +1(415)492-9861, for further information.
+   This software is distributed under license and may not be copied,
+   modified or distributed except as expressly authorized under the terms
+   of the license contained in the file LICENSE in this distribution.
+
+   Refer to licensing information at http://www.artifex.com or contact
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 #ifndef MEMENTO_CPP_EXTRAS_ONLY
@@ -383,33 +385,54 @@ struct Memento_BlkDetails
 
 typedef struct Memento_BlkHeader Memento_BlkHeader;
 
+#ifdef MEMENTO_DETAILS
+#define MEMENTO_DETAIL_FIELDS \
+    Memento_BlkDetails  *details;\
+    Memento_BlkDetails **details_tail;
+#else
+#define MEMENTO_DETAIL_FIELDS
+#endif
+
+#define MEMENTO_BLKHEADER_FIELDS \
+    size_t               rawsize;                       \
+    int                  sequence;                      \
+    int                  lastCheckedOK;                 \
+    int                  flags;                         \
+                                                        \
+    const char          *label;                         \
+                                                        \
+    /* Blocks are held in a linked list for LRU */      \
+    Memento_BlkHeader   *next;                          \
+    /* Reused as 'parent' when printing nested list */  \
+    Memento_BlkHeader   *prev;                          \
+                                                        \
+    /* Blocks are held in a splay tree for position. */ \
+    Memento_BlkHeader   *parent;                        \
+    Memento_BlkHeader   *left;                          \
+    Memento_BlkHeader   *right;                         \
+                                                        \
+    /* Entries for nesting display calculations. Set    \
+     * to magic values at all other time.  */           \
+    Memento_BlkHeader   *child;                         \
+    Memento_BlkHeader   *sibling;                       \
+                                                        \
+    MEMENTO_DETAIL_FIELDS
+
+typedef struct
+{
+    MEMENTO_BLKHEADER_FIELDS
+} Memento_BlkHeader_unpadded;
+
+#define MEMENTO_BLKHEADER_UNPADDED_SIZE (sizeof(Memento_BlkHeader_unpadded)+Memento_PreSize)
+
 struct Memento_BlkHeader
 {
-    size_t               rawsize;
-    int                  sequence;
-    int                  lastCheckedOK;
-    int                  flags;
+    MEMENTO_BLKHEADER_FIELDS
 
-    const char          *label;
-
-    /* Blocks are held in a linked list for LRU */
-    Memento_BlkHeader   *next;
-    Memento_BlkHeader   *prev; /* Reused as 'parent' when printing nested list */
-
-    /* Blocks are held in a splay tree for position. */
-    Memento_BlkHeader   *parent;
-    Memento_BlkHeader   *left;
-    Memento_BlkHeader   *right;
-
-    /* Entries for nesting display calculations. Set to magic
-     * values at all other time.  */
-    Memento_BlkHeader   *child;
-    Memento_BlkHeader   *sibling;
-
-#ifdef MEMENTO_DETAILS
-    Memento_BlkDetails  *details;
-    Memento_BlkDetails **details_tail;
-#endif
+    /* Ensure that Memento_BlkHeader is a multiple of 32. This is required
+     * for setjmp/longjmp etc on many platforms. We want to ensure that
+     * we preserve the relative 32byte alignment to the underlying malloc. */
+    char alignment_padding[32-(MEMENTO_BLKHEADER_UNPADDED_SIZE & 31)];
 
     char                 preblk[Memento_PreSize];
 };

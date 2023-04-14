@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2022 Artifex Software, Inc.
+/* Copyright (C) 2018-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* Graphics state operations for the PDF interpreter */
@@ -608,6 +608,11 @@ static int pdfi_set_blackgeneration(pdf_context *ctx, pdf_obj *obj, pdf_dict *pa
             code = pdfi_build_function(ctx, &pfn, NULL, 1, obj, page_dict);
             if (code < 0)
                 return code;
+
+            if (pfn->params.n != 1) {
+                pdfi_free_function(ctx, pfn);
+                return_error(gs_error_rangecheck);
+            }
 
             gs_setblackgeneration_remap(ctx->pgs, gs_mapped_transfer, false);
             for (i = 0; i < transfer_map_size; i++) {

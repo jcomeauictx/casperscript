@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* colour operations for the PDF interpreter */
@@ -2004,6 +2004,11 @@ static int pdfi_create_Separation(pdf_context *ctx, pdf_array *color_array, int 
     if (code < 0)
         goto pdfi_separation_error;
 
+    if (pfn->params.m != 1 || pfn->params.n != cs_num_components(pcs_alt)) {
+        code = gs_note_error(gs_error_rangecheck);
+        goto pdfi_separation_error;
+    }
+
     code = gs_cspace_new_Separation(&pcs, pcs_alt, ctx->memory);
     if (code < 0)
         goto pdfi_separation_error;
@@ -2183,6 +2188,11 @@ all_error:
     code = pdfi_build_function(ctx, &pfn, NULL, 1, transform, page_dict);
     if (code < 0)
         goto pdfi_devicen_error;
+
+    if (pfn->params.m != pdfi_array_size(inks) || pfn->params.n != cs_num_components(pcs_alt)) {
+        code = gs_note_error(gs_error_rangecheck);
+        goto pdfi_devicen_error;
+    }
 
     code = gs_cspace_new_DeviceN(&pcs, pdfi_array_size(inks), pcs_alt, ctx->memory);
     if (code < 0)

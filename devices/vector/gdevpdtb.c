@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 
@@ -430,7 +430,8 @@ pdf_base_font_drop_complete(pdf_base_font_t *pbfont)
      * free the members which are common to both, so this cast is
      * (at the time of writing) safe.
      */
-    gs_free_copied_font((gs_font *)pbfont->complete);
+    if (pbfont->complete != pbfont->copied)
+        gs_free_copied_font((gs_font *)pbfont->complete);
     pbfont->complete = NULL;
 }
 

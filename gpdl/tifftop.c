@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* tifftop.c */
@@ -78,7 +78,9 @@ typedef struct tiff_interp_instance_s {
     uint32_t           photometric;
     uint8_t           *palette;
 
-    uint32_t           num_comps;
+    uint32_t           raw_num_comps; /* As specified in the file */
+    uint32_t           num_comps;     /* After processing */
+    uint32_t           raw_byte_width;
     uint32_t           byte_width;
 
     gs_image_t         image;
@@ -247,6 +249,7 @@ tiff_impl_init_job(pl_interp_implementation_t *impl,
 
     tiff->dev = device;
     tiff->state = ii_state_identifying;
+    tiff->buffer_full = 0;
 
     return 0;
 }
@@ -488,21 +491,88 @@ guess_pal_depth(int n, uint16_t *rmap, uint16_t *gmap, uint16_t *bmap)
 }
 
 static void
-blend_alpha(tiff_interp_instance_t *tiff, size_t n)
+blend_alpha(tiff_interp_instance_t *tiff, size_t n, int nc, int planar)
 {
+    int i = tiff->raw_byte_width * nc;
     byte *p = tiff->samples;
-    const byte *q = (const byte *)tiff->samples;
-    int nc = tiff->num_comps;
-    int i;
+    const byte *q = tiff->samples + i;
 
-    while (n--) {
-        byte a = q[nc];
-        for (i = nc; i > 0; i--) {
-            int c = *q++ * a + 255*(255-a);
-            c += (c>>7);
-            *p++ = c>>8;
+    switch (tiff->bpc)
+    {
+    case 1:
+        p += i*8;
+        do
+        {
+            byte a = *--q;
+            *--p = ( a     & 1)*255;
+            *--p = ((a>>1) & 1)*255;
+            *--p = ((a>>2) & 1)*255;
+            *--p = ((a>>3) & 1)*255;
+            *--p = ((a>>4) & 1)*255;
+            *--p = ((a>>5) & 1)*255;
+            *--p = ((a>>6) & 1)*255;
+            *--p = ((a>>7) & 1)*255;
         }
-        q++;
+        while (--i);
+        break;
+    case 2:
+        p += i*4;
+        do
+        {
+            byte a = *--q;
+            *--p = ( a     & 3)*0x55;
+            *--p = ((a>>1) & 3)*0x55;
+            *--p = ((a>>2) & 3)*0x55;
+            *--p = ((a>>3) & 3)*0x55;
+        }
+        while (--i);
+        break;
+    case 4:
+        p += i*2;
+        do
+        {
+            byte a = *--q;
+            *--p = ( a     & 15)*0x11;
+            *--p = ((a>>1) & 15)*0x11;
+            *--p = ((a>>2) & 15)*0x11;
+            *--p = ((a>>3) & 15)*0x11;
+        }
+        while (--i);
+        break;
+    default:
+        break;
+    }
+
+    nc--;
+    p = tiff->samples;
+    if (planar == PLANARCONFIG_CONTIG)
+    {
+        q = (const byte *)tiff->samples;
+        while (n--) {
+            byte a = q[nc];
+            for (i = nc; i > 0; i--) {
+                int c = *q++ * a + 255*(255-a);
+                c += (c>>7);
+                *p++ = c>>8;
+            }
+            q++;
+        }
+    }
+    else
+    {
+        int next_comp = tiff->raw_byte_width;
+        int alpha_offset = nc * next_comp;
+        while (n--) {
+            byte a = p[alpha_offset];
+            for (i = nc; i > 0; i--) {
+                int c = *p * a + 255*(255-a);
+                c += (c>>7);
+                *p = c>>8;
+                p += next_comp;
+            }
+            p -= alpha_offset;
+            p++;
+        }
     }
 }
 
@@ -676,6 +746,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
             TIFFGetField(tiff->handle, TIFFTAG_TILELENGTH, &tiff->tile_height);
             TIFFGetField(tiff->handle, TIFFTAG_BITSPERSAMPLE, &tiff->bpc);
             TIFFGetField(tiff->handle, TIFFTAG_SAMPLESPERPIXEL, &tiff->num_comps);
+            tiff->raw_num_comps = tiff->num_comps;
             TIFFGetField(tiff->handle, TIFFTAG_PLANARCONFIG, &planar);
             f = 0;
             TIFFGetField(tiff->handle, TIFFTAG_XRESOLUTION, &f);
@@ -692,6 +763,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                 tiff->xresolution = tiff->yresolution = 72;
             if (tiff->width == 0 || tiff->height == 0 || tiff->bpc == 0 || tiff->num_comps == 0 ||
                 !(planar == PLANARCONFIG_CONTIG || planar == PLANARCONFIG_SEPARATE)) {
+                emprintf(tiff->memory, "Unsupported TIFF format\n");
                 tiff->state = ii_state_flush;
                 break;
             }
@@ -708,8 +780,28 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
             } else {
                 tiff->byte_width = safe_mla(tiff->memory, &code, tiff->bpc, 1, tiff->tile_width, 7)>>3;
             }
-            if (code < 0)
+            if (code < 0) {
+                emprintf(tiff->memory, "Unsupported: TIFF size overflow\n");
                 goto fail_decode;
+            }
+
+            tiff->raw_byte_width = tiff->byte_width;
+            if (tiff->photometric == PHOTOMETRIC_RGB && tiff->num_comps == 4)
+            {
+                /* RGBA, so alpha data */
+                alpha = 1;
+            }
+            if (alpha && tiff->bpp < 8)
+            {
+                /* We need to expand the data to 8bpp to blend for alpha. */
+                if (tiff->bpc != 1 && tiff->bpc != 2 && tiff->bpc != 4)
+                {
+                    emprintf1(tiff->memory, "Unsupported: TIFF with alpha and bpc=%d\n", tiff->bpc);
+                    code = gs_error_unknownerror;
+                    goto fail_decode;
+                }
+                tiff->byte_width *= 8/tiff->bpc;
+            }
 
             /* Allocate 'samples' to hold the raw samples values read from libtiff.
              * The exact size of this buffer depends on which of the multifarious
@@ -717,15 +809,19 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
             if (tiff->compression == COMPRESSION_OJPEG ||
                 tiff->photometric == PHOTOMETRIC_YCBCR) {
                 size_t z = size_mla(tiff->memory, &code, sizeof(uint32_t), tiff->width, tiff->height, 0);
-                if (code < 0)
+                if (code < 0) {
+                    emprintf(tiff->memory, "Unsupported: TIFF size overflow\n");
                     goto fail_decode;
+                }
                 tiff->is_rgba = 1;
                 tiff->samples = gs_alloc_bytes(tiff->memory, z, "tiff_image");
                 tiff->tile_width = tiff->width;
                 tiff->tile_height = tiff->height;
                 tiff->byte_width = safe_mla(tiff->memory, &code, tiff->bpc, tiff->num_comps, tiff->tile_width, 7)>>3;
-                if (code < 0)
+                if (code < 0) {
+                    emprintf(tiff->memory, "Unsupported: TIFF size overflow\n");
                     goto fail_decode;
+                }
             } else if (tiff->tiled) {
                 tiff->samples = gs_alloc_bytes(tiff->memory, TIFFTileSize(tiff->handle), "tiff_tile");
             } else if (planar == PLANARCONFIG_SEPARATE) {
@@ -734,8 +830,8 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                 tiff->samples = gs_alloc_bytes(tiff->memory, tiff->byte_width, "tiff_scan");
             }
             if (tiff->samples == NULL) {
-                tiff->state = ii_state_flush;
-                break;
+                code = gs_error_VMerror;
+                goto fail_decode;
             }
             tiff->proc_samples = tiff->samples;
 
@@ -746,6 +842,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                 /* Fall through */
             case PHOTOMETRIC_MINISBLACK:
                 if (tiff->num_comps != 1) {
+                    emprintf1(tiff->memory, "Unsupported: TIFF with MINISBLACK with nc=%d\n", tiff->num_comps);
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 }
@@ -757,6 +854,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                     tiff->bpp = tiff->bpp * 3/4;
                     tiff->byte_width = tiff->byte_width * 3/4;
                 } else if (tiff->num_comps != 3) {
+                    emprintf1(tiff->memory, "Unsupported: RGB TIFF nc=%d\n", tiff->num_comps);
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 }
@@ -766,20 +864,23 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                 uint16_t *rmap, *gmap, *bmap;
                 int i, n = 1<<tiff->bpc;
                 if (tiff->num_comps != 1) {
+                    emprintf1(tiff->memory, "Unsupported: Paletted TIFF with nc=%d\n", tiff->num_comps);
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 }
                 if (tiff->bpc > 8) {
+                    emprintf1(tiff->memory, "Unsupported: Paletted TIFF with bpc=%d\n", tiff->bpc);
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 }
                 if (!TIFFGetField(tiff->handle, TIFFTAG_COLORMAP, &rmap, &gmap, &bmap)) {
+                    emprintf(tiff->memory, "Unsupported: Paletted TIFF with bad palette\n");
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 }
                 tiff->palette = gs_alloc_bytes(tiff->memory, 3*256, "palette");
                 if (tiff->palette == NULL) {
-                    code = gs_error_unknownerror;
+                    code = gs_error_VMerror;
                     goto fail_decode;
                 }
                 memset(tiff->palette, 0, 3 * 256);
@@ -798,16 +899,20 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                 }
                 tiff->bpc = 8;
                 tiff->num_comps = 3;
+                tiff->raw_num_comps = 1;
                 tiff->bpp = 24;
                 tiff->byte_width = tiff->tile_width * 3;
+                tiff->raw_byte_width = tiff->byte_width;
                 /* Now we need to make a "proc_samples" area to store the
                  * processed samples in. */
                 if (tiff->is_rgba) {
+                    emprintf(tiff->memory, "Unsupported: Paletted TIFF with RGBA\n");
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 } else if (tiff->tiled) {
                     size_t z = size_mla(tiff->memory, &code, tiff->tile_width, tiff->tile_height, 3, 0);
                     if (code < 0) {
+                        emprintf(tiff->memory, "Unsupported: TIFF size overflow\n");
                         goto fail_decode;
                     }
                     tiff->proc_samples = gs_alloc_bytes(tiff->memory, z, "tiff_tile");
@@ -819,24 +924,30 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
             }
             case PHOTOMETRIC_MASK:
                 if (tiff->num_comps != 1) {
+                    emprintf1(tiff->memory, "Unsupported: Mask TIFF with nc=%d\n", tiff->num_comps);
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 }
                 break;
             case PHOTOMETRIC_SEPARATED:
                 if (tiff->num_comps == 3 || tiff->num_comps == 4)
+                {
+                    emprintf1(tiff->memory, "Unsupported: Separated TIFF with nc=%d\n", tiff->num_comps);
                     break;
+                }
             case PHOTOMETRIC_YCBCR:
             case PHOTOMETRIC_CIELAB:
             case PHOTOMETRIC_ICCLAB:
             case PHOTOMETRIC_ITULAB:
                 if (tiff->num_comps != 3) {
+                    emprintf1(tiff->memory, "Unsupported: YUV/LAB TIFF with nc=%d\n", tiff->num_comps);
                     code = gs_error_unknownerror;
                     goto fail_decode;
                 }
                 break;
             case PHOTOMETRIC_CFA:
             default:
+                emprintf(tiff->memory, "Unsupported TIFF\n");
                 tiff->state = ii_state_flush;
                 break;
             }
@@ -851,6 +962,21 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
             case 4:
                 cs = tiff->cmyk;
                 break;
+            }
+
+            switch (tiff->bpc)
+            {
+            case 1:
+            case 2:
+            case 4:
+            case 8:
+            case 16:
+                /* We can cope with all these. */
+                break;
+            default:
+                emprintf1(tiff->memory, "Unsupported: TIFF with bpc=%d\n", tiff->bpc);
+                code = gs_error_unknownerror;
+                goto fail_decode;
             }
 
             /* Scale to fit, if too large. */
@@ -915,6 +1041,8 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                     memset(&tiff->image, 0, sizeof(tiff->image));
                     gs_image_t_init(&tiff->image, cs);
                     tiff->image.BitsPerComponent = tiff->bpp/tiff->num_comps;
+                    if (alpha)
+                        tiff->image.BitsPerComponent = 8;
                     tiff->image.Width = tiff->tile_width;
                     tiff->image.Height = tiff->tile_height;
 
@@ -940,7 +1068,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                             code = gs_error_unknownerror;
                             goto fail_decode;
                         }
-                        blend_alpha(tiff, z);
+                        blend_alpha(tiff, z, 4, planar);
                     } else if (tiff->tiled) {
                         if (TIFFReadTile(tiff->handle, tiff->samples, tx, ty, 0, 0) == 0) {
                             code = gs_error_unknownerror;
@@ -966,7 +1094,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                             }
                         }
                         if (alpha) {
-                            blend_alpha(tiff, tiff->tile_width);
+                            blend_alpha(tiff, tiff->tile_width, tiff->num_comps, planar);
                         }
                     }
 
@@ -976,8 +1104,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                                          false,
                                          tiff->pgs);
                     if (code < 0) {
-                        tiff->state = ii_state_flush;
-                        return code;
+                        goto fail_decode;
                     }
 
                     tremx = tiff->width - tx;
@@ -1004,12 +1131,12 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                                 goto fail_decode;
                             }
                         } else {
-                            int span = tiff->byte_width;
+                            int span = tiff->raw_byte_width;
                             byte *in_row = tiff->samples;
                             if (planar != PLANARCONFIG_SEPARATE)
-                                span /= tiff->num_comps;
+                                span /= tiff->raw_num_comps;
                             row = tiff->proc_samples;
-                            for (s = 0; s < tiff->num_comps; s++) {
+                            for (s = 0; s < tiff->raw_num_comps; s++) {
                                 plane_data[s].data = row;
                                 plane_data[s].size = span;
                                 if (TIFFReadScanline(tiff->handle, in_row, ty+y, s) == 0) {
@@ -1018,6 +1145,20 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                                 }
                                 row += span;
                                 in_row += span;
+                            }
+                            row -= span * tiff->raw_num_comps;
+                        }
+
+                        if (tiff->bpc == 16)
+                        {
+                            byte *p = row;
+                            int n = tiff->tile_width * tiff->raw_num_comps;
+                            while (n--)
+                            {
+                                byte b = p[0];
+                                p[0] = p[1];
+                                p[1] = b;
+                                p += 2;
                             }
                         }
 
@@ -1035,7 +1176,7 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
                                 }
                             }
                             if (alpha) {
-                                blend_alpha(tiff, tiff->tile_width);
+                                blend_alpha(tiff, tiff->tile_width, tiff->raw_num_comps, planar);
                             }
                         }
 
@@ -1061,7 +1202,12 @@ do_impl_process(pl_interp_implementation_t * impl, stream_cursor_read * pr, int 
             (void)pl_finish_page(tiff->memory->gs_lib_ctx->top_of_system,
                                  tiff->pgs, 1, true);
             break;
-fail_decode:
+    fail_decode:
+            if (tiff->penum)
+            {
+                (void)gs_image_cleanup_and_free_enum(tiff->penum, tiff->pgs);
+                tiff->penum = NULL;
+            }
             tiff->state = ii_state_flush;
             break;
         }
@@ -1097,6 +1243,8 @@ fail_decode:
             if (tiff->tiff_buffer) {
                 gs_free_object(tiff->memory, tiff->tiff_buffer, "tiff_impl_process(tiff_buffer)");
                 tiff->tiff_buffer = NULL;
+                tiff->buffer_max = 0;
+                tiff->buffer_full = 0;
             }
             /* We want to bin any data we get up to, but not including
              * a UEL. */

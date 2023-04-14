@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* Font operations for the PDF interpreter */
@@ -1754,8 +1754,8 @@ int pdfi_tounicode_char_to_unicode(pdf_context *ctx, pdf_cmap *tounicode, gs_gly
                         if (counter.entry.value.size == 1) {
                             l = 2;
                             if (ucode != NULL && length >= l) {
-                                ucode[0] = counter.entry.value.data[0];
-                                ucode[1] = counter.entry.value.data[1];
+                                ucode[0] = 0x00;
+                                ucode[1] = counter.entry.value.data[0];
                             }
                         }
                         else if (counter.entry.value.size == 2) {
@@ -1768,10 +1768,10 @@ int pdfi_tounicode_char_to_unicode(pdf_context *ctx, pdf_cmap *tounicode, gs_gly
                         else if (counter.entry.value.size == 3) {
                             l = 4;
                             if (ucode != NULL && length >= l) {
-                                ucode[0] = counter.entry.value.data[0];
-                                ucode[1] = counter.entry.value.data[1];
-                                ucode[2] = counter.entry.value.data[2];
-                                ucode[3] = 0;
+                                ucode[0] = 0;
+                                ucode[1] = counter.entry.value.data[0];
+                                ucode[2] = counter.entry.value.data[1];
+                                ucode[3] = counter.entry.value.data[2];
                             }
                         }
                         else {
@@ -1779,7 +1779,7 @@ int pdfi_tounicode_char_to_unicode(pdf_context *ctx, pdf_cmap *tounicode, gs_gly
                             if (ucode != NULL && length >= l) {
                                 ucode[0] = counter.entry.value.data[0];
                                 ucode[1] = counter.entry.value.data[1];
-                                ucode[2] = counter.entry.value.data[1];
+                                ucode[2] = counter.entry.value.data[2];
                                 ucode[3] = counter.entry.value.data[3];
                             }
                         }

@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2022 Artifex Software, Inc.
+/* Copyright (C) 2018-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 /* Top level PDF access routines */
@@ -1821,7 +1821,7 @@ pdf_context *pdfi_create_context(gs_memory_t *mem)
     ctx->args.showannots = true;
     ctx->args.preserveannots = true;
     /* NOTE: For testing certain annotations on cluster, might want to set this to false */
-    ctx->args.printed = true; /* TODO: Should be true if OutputFile is set, false otherwise */
+    ctx->args.printed = false; /* True if OutputFile is set, false otherwise see pdftop.c, pdf_impl_set_param() */
 
     /* Initially, prefer the XrefStm in a hybrid file */
     ctx->prefer_xrefstm = true;

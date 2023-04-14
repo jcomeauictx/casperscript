@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2021 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 
@@ -47,7 +47,7 @@ gs_parse_file_name(gs_parsed_file_name_t * pfn, const char *pname, uint len,
     if (pdelim == NULL)		/* %device */
         dlen = len;
     /* gs strings aren't necessarily null terminated */
-    else if (pdelim[1] == 0 || pdelim - pname == len - 1) {	/* %device% */
+    else if (pdelim - pname == len - 1 || pdelim[1] == 0) {	/* %device% */
         pdelim = NULL;
         dlen = len;
     } else {

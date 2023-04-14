@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2022 Artifex Software, Inc.
+# Copyright (C) 2001-2023 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -9,8 +9,8 @@
 # of the license contained in the file LICENSE in this distribution.
 #
 # Refer to licensing information at http://www.artifex.com or contact
-# Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-# CA 94945, U.S.A., +1(415)492-9861, for further information.
+# Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+# CA 94129, USA, for further information.
 #
 # Partial makefile common to all Unix and Desqview/X configurations,
 # containing the `install' targets.
@@ -149,11 +149,10 @@ install-iccdata1 :
 DOC_PAGES=index.html News.htm COPYING Ghostscript.pdf \
           GS9_Color_Management.pdf
 
-DOC_PAGE_IMAGES=Artifex_logo.png  favicon.png  ghostscript_logo.png  hamburger-light.png  x-light.png
+DOC_PAGE_IMAGES=
 
 install-doc: $(PSDOCDIR)/News.htm
 	-mkdir -p $(DESTDIR)$(docdir)
-	-mkdir -p $(DESTDIR)$(docdir)/images
 	$(SH) -c 'for f in $(DOC_PAGES) ;\
 	do if ( test -f $(PSDOCDIR)/$$f ); then $(INSTALL_DATA) $(PSDOCDIR)/$$f $(DESTDIR)$(docdir); fi;\
 	done'
@@ -162,7 +161,7 @@ install-doc: $(PSDOCDIR)/News.htm
 	done'
 
 # install the man pages for each locale
-MAN_LCDIRS=. de
+MAN_LCDIRS=.
 MAN1_LINKS_PS2PS=eps2eps
 MAN1_LINKS_PS2PDF=ps2pdf12 ps2pdf13 ps2pdf14
 MAN1_LINKS_GSLP=gsbj gsdj gsdj500 gslj

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2022 Artifex Software, Inc.
+/* Copyright (C) 2001-2023 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -9,8 +9,8 @@
    of the license contained in the file LICENSE in this distribution.
 
    Refer to licensing information at http://www.artifex.com or contact
-   Artifex Software, Inc.,  1305 Grant Avenue - Suite 200, Novato,
-   CA 94945, U.S.A., +1(415)492-9861, for further information.
+   Artifex Software, Inc.,  39 Mesa Street, Suite 108A, San Francisco,
+   CA 94129, USA, for further information.
 */
 
 
@@ -685,20 +685,23 @@ static int
 pdf_put_clip_path_list_elem(gx_device_pdf * pdev, gx_cpath_path_list *e,
         gs_path_enum *cenum, gdev_vector_dopath_state_t *state,
         gs_fixed_point vs[3])
-{   /* This recursive function provides a reverse order of the list elements. */
+{
     int segments = 0;
 
-    if (e->next != NULL) {
-        int code = pdf_put_clip_path_list_elem(pdev, e->next, cenum, state, vs);
-
-        if (code != 0)
-            return code;
+    /* This function was previously recursive and reversed the order of subpaths. This
+     * could lead to a C exec stack overflow on sufficiently complex clipping paths
+     * (such as those produced by pdfwrite as a fallback for certain kinds of images).
+     * Writing the subpaths in the forward order avoids the problem, is probably
+     * slightly faster and uses less memory. Bug #706523.
+     */
+    while (e) {
+        segments = pdf_write_path(pdev, cenum, state, &e->path, 0, gx_path_type_clip | gx_path_type_optimize, NULL);
+        if (segments < 0)
+            return segments;
+        if (segments)
+            pprints1(pdev->strm, "%s n\n", (e->rule <= 0 ? "W" : "W*"));
+        e = e->next;
     }
-    segments = pdf_write_path(pdev, cenum, state, &e->path, 0, gx_path_type_clip | gx_path_type_optimize, NULL);
-    if (segments < 0)
-        return segments;
-    if (segments)
-        pprints1(pdev->strm, "%s n\n", (e->rule <= 0 ? "W" : "W*"));
     return 0;
 }
 
@@ -1397,7 +1400,12 @@ pdf_dump_converted_image(gx_device_pdf *pdev, pdf_lcvd_t *cvd, int for_pattern)
         stream_puts(pdev->strm, "q\n");
         code = write_image_with_clip(pdev, cvd, for_pattern);
         stream_puts(pdev->strm, "Q\n");
+    } else if (cvd->filled_trap){
+        stream_puts(pdev->strm, "q\n");
+        code = write_image_with_clip(pdev, cvd, for_pattern);
+        stream_puts(pdev->strm, "Q\n");
     }
+    cvd->filled_trap = false;
     cvd->mdev.width += cvd->mdev.mapped_x;
     cvd->mdev.height += cvd->mdev.mapped_y;
     if (code > 0)
@@ -1405,6 +1413,19 @@ pdf_dump_converted_image(gx_device_pdf *pdev, pdf_lcvd_t *cvd, int for_pattern)
                 0, 0, cvd->mdev.width, cvd->mdev.height, (gx_color_index)0);
     return code;
 }
+static int
+lcvd_fill_trapezoid(gx_device * dev, const gs_fixed_edge * left,
+    const gs_fixed_edge * right, fixed ybot, fixed ytop, bool swap_axes,
+    const gx_device_color * pdevc, gs_logical_operation_t lop)
+{
+    int code = 0;
+    pdf_lcvd_t *cvd = (pdf_lcvd_t *)dev;
+
+    if (cvd->mask != NULL)
+        cvd->filled_trap = true;
+    return gx_default_fill_trapezoid(dev, left, right, ybot, ytop, swap_axes, pdevc, lop);
+}
+
 static int
 lcvd_handle_fill_path_as_shading_coverage(gx_device *dev,
     const gs_gstate *pgs, gx_path *ppath,
@@ -1539,6 +1560,7 @@ pdf_setup_masked_image_converter(gx_device_pdf *pdev, gs_memory_t *mem, const gs
     cvd->path_is_empty = true;
     cvd->mask_is_empty = true;
     cvd->mask_is_clean = false;
+    cvd->filled_trap = false;
     cvd->has_background = false;
     cvd->mask = 0;
     cvd->write_matrix = true;
@@ -1588,6 +1610,7 @@ pdf_setup_masked_image_converter(gx_device_pdf *pdev, gs_memory_t *mem, const gs
     dev_proc(&cvd->mdev, dev_spec_op) = lcvd_dev_spec_op;
     dev_proc(&cvd->mdev, fill_path) = lcvd_handle_fill_path_as_shading_coverage;
     dev_proc(&cvd->mdev, transform_pixel_region) = lcvd_transform_pixel_region;
+    dev_proc(&cvd->mdev, fill_trapezoid) = lcvd_fill_trapezoid;
     cvd->m = *m;
     if (write_on_close) {
         cvd->mdev.is_open = true;
