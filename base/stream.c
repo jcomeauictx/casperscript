@@ -682,8 +682,7 @@ sreadline(stream *s_in, stream *s_out, void *readline_data,
 #endif
 
     if (count == 0 && s_out && prompt) {
-        uint ignore_n;
-        int ch = sputs(s_out, prompt->data, prompt->size, &ignore_n);
+        int ch = sputs(s_out, prompt->data, prompt->size, NULL);
 
         if (ch < 0)
             return ch;
