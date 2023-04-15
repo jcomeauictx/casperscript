@@ -16,8 +16,6 @@
 #include "std.h"
 #endif
 #include "gsprintf.h"  /* for gsprintf and thus zsprintf */
-extern char *argv0;
-extern char *programname;
 
 int sleep(double seconds) {
     struct timespec requested;
@@ -72,31 +70,13 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     } else make_false(op);
     return 0;
 }
-static int push_argv0(i_ctx_t *i_ctx_p);
-static int push_argv0(i_ctx_t *i_ctx_p) {
-    /* FIXME: surely there's a better way to place strings in systemdict */
-    os_ptr op = osp;
-    push(1);
-    make_string(op, a_all | icurrent_space, strlen(argv0), (byte *)argv0);
-    return 0;
-}
-static int push_programname(i_ctx_t *i_ctx_p);
-static int push_programname(i_ctx_t *i_ctx_p) {
-    os_ptr op = osp;
-    push(1);
-    make_string(op, a_all | icurrent_space, strlen(programname),
-            (byte *)programname);
-    return 0;
-}
 
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =
 {
-    /* FIXME: relocate these from systemdict to casperdict on startup */
+    /* FIXME: make these dotted, and `casper` aliases to undotted versions */
     {"1sleep", zsleep},
     {"3sprintf", zsprintf},
-    {"argv0", push_argv0},
-    {"programname", push_programname},
     op_def_end(0)
 };
 #endif
