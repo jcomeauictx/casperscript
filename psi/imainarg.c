@@ -709,11 +709,9 @@ run_stdin:
                 } else
                     path = arg;
 #ifdef USE_DEVELOPMENT_INITFILES
-                if (strcmp(path, "_DEV_") == 0) {
-                    path = developmentlibs;
-                    if (path == NULL) errprintf(minst->heap,
-                        "FATAL: could not determine development path from %s", argv0);
-                }
+                if (strcmp(path, "_DEV_") == 0) path = developmentlibs;
+                if (path == NULL) errprintf(minst->heap,
+                    "Development path cannot be determined from `%s`\n", argv0);
 #endif
                 if (path == NULL)
                     return gs_error_Fatal;
