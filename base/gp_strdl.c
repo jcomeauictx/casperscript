@@ -110,6 +110,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                         replysize - 1, reply + 1);
                 promptsize = reply[replysize - 2] - '0';  /* digit to int */
                 if (promptsize < 4) promptsize += 10;
+                promptsize -= 1;  /* column returned is one *past* prompt */
                 DISCARD(strncpy(promptstring, PROMPT, promptsize));
                 promptstring[promptsize - 1] = '>';
                 promptstring[promptsize] = '\0';
