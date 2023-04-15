@@ -291,10 +291,11 @@ gs_main_init_with_args2(gs_main_instance * minst)
 }
 
 #ifdef USE_DEVELOPMENT_INITFILES
-char canonicalized_path[3][PATH_MAX + 256] = {"", "", ""};
-char *programdirectory = canonicalized_path[0];
-char *programname = canonicalized_path[1];
-char *developmentlibs = canonicalized_path[2];
+char canonicalpath[4][PATH_MAX + 256] = {"", "", "", ""};
+char *argv0 = canonicalpath[0];
+char *programdirectory = canonicalpath[1];
+char *programname = canonicalpath[2];
+char *developmentlibs = canonicalpath[3];
 #endif
 
 int
@@ -309,24 +310,17 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 
 #ifdef USE_DEVELOPMENT_INITFILES
     /* get program name and directory for possible use later */
+    strncpy(argv0, argv[0], PATH_MAX);
     syslog(LOG_USER | LOG_DEBUG, "getting program name from %s", argv[0]);
-    temp = realpath(argv[0], canonicalized_path[0]);
-    if (temp == NULL) {
-        outprintf(minst->heap, "Warning: cannot determine path from %s\n",
-                argv[0]);
-        temp = strncpy(canonicalized_path[0], argv[0], PATH_MAX);
-    }
-    strcpy(canonicalized_path[1], temp);
-    syslog(LOG_USER | LOG_DEBUG, "copied path into canonicalized_path[1]");
-    programdirectory = dirname(canonicalized_path[0]);
-    syslog(LOG_USER | LOG_DEBUG, "`programdirectory` now has path");
-    programname = chop_extension(basename(canonicalized_path[1]));
-    syslog(LOG_USER | LOG_DEBUG, "`programname` now has name");
+    temp = realpath(argv[0], canonicalpath[1]);
+    if (temp == NULL) temp = strncpy(canonicalpath[1], argv[0], PATH_MAX);
+    DISCARD(strcpy(canonicalpath[2], temp));
+    programdirectory = dirname(canonicalpath[1]);
+    programname = chop_extension(basename(canonicalpath[2]));
     strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
-    syslog(LOG_USER | LOG_DEBUG, "resources located relative to binary");
-    realpath(buffer, canonicalized_path[2]);
-    syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s",
-            programname, programdirectory);
+    developmentlibs = realpath(buffer, canonicalpath[3]);
+    syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s, dev %s",
+            programname, programdirectory, developmentlibs);
 #endif
     /* split shebang args if preceded by '-S ' */
     syslog(LOG_USER | LOG_DEBUG, "starting gs main init");
@@ -714,11 +708,15 @@ run_stdin:
                         return code;
                 } else
                     path = arg;
+#ifdef USE_DEVELOPMENT_INITFILES
+                if (strcmp(path, "_DEV_") == 0) {
+                    path = developmentlibs;
+                    if (path == NULL) errprintf(minst->heap,
+                        "FATAL: could not determine development path from %s", argv0);
+                }
+#endif
                 if (path == NULL)
                     return gs_error_Fatal;
-#ifdef USE_DEVELOPMENT_INITFILES
-                if (strcmp(path, "_DEV_") == 0) path = developmentlibs;
-#endif
                 gs_main_add_lib_path(minst, path);
             }
             break;
