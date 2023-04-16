@@ -54,11 +54,10 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 /* //stackoverflow.com/a/59923166/493161 */
 #define CS_STDIN 0
 #define CS_STDOUT 1
-#define MAXPROMPT 32
+#define MAXPROMPT 8192  /* largest conceivable character terminal width */
 #define MAXREPLY 12
 #define MINREPLY 5  /* 5 is absolute minimum reply: <CSI>1;1R */
 #define QUERY "\033[6n"
-#define PROMPT "..............................."
     const byte *query = (byte *)QUERY;
     /* uint querysize = strlen((char *)query); */ /* no need using outprintf */
     /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[
@@ -115,7 +114,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     multiplier *= 10;
                 }
                 promptsize -= 1;  /* column returned is one *past* prompt */
-                DISCARD(strncpy(promptstring, PROMPT, promptsize));
+                memset(promptstring, '.', promptsize);
                 promptstring[promptsize] = '\0';
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
                         promptstring);
