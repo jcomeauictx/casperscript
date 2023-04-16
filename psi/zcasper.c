@@ -5,6 +5,7 @@
 #include <stdarg.h>  /* for vsnprintf(), ... */
 #include "gssyslog.h"
 #include "zcasper.h"
+#include "interp.h"  /* for i_initial_enter_name() */
 #ifdef TEST_ZCASPER
 #include <stdio.h>   /* for fprintf(), ... */
 #else
@@ -16,6 +17,8 @@
 #include "std.h"
 #endif
 #include "gsprintf.h"  /* for gsprintf and thus zsprintf */
+extern char *argv0;
+extern char *programname;
 
 int sleep(double seconds) {
     struct timespec requested;
@@ -71,12 +74,27 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     return 0;
 }
 
+static int zcasperinit(i_ctx_t *i_ctx_p);
+    /* define constants for casperscript */
+static int zcasperinit(i_ctx_t *i_ctx_p) {
+    int code = 0;
+    ref argv0_string, programname_string;
+    make_string(&argv0_string, a_all | icurrent_space,
+            strlen(argv0), (byte *)argv0);
+    make_string(&programname_string, a_all | icurrent_space,
+            strlen(programname), (byte *)programname);
+    code |= i_initial_enter_name(i_ctx_p, "argv0", &argv0_string);
+    code |= i_initial_enter_name(i_ctx_p, "programname", &programname_string);
+    return code;
+};
+
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =
 {
-    /* FIXME: make these dotted, and `casper` aliases to undotted versions */
+    /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
     {"3sprintf", zsprintf},
+    /*{"csinit", zcasperinit},*/
     op_def_end(0)
 };
 #endif
