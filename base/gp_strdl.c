@@ -62,15 +62,17 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
     const byte *query = (byte *)QUERY;
     /* uint querysize = strlen((char *)query); */ /* no need using outprintf */
     /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[
-     * we're going to assume that 4 will be the minimum (1-based) column,
-     * and that a stack size of >999 is highly unlikely. this will mean
-     * only having to check one digit of the reply, that before the 'R'.
-     * a value less than 4 can be taken to mean: 0=10, ... 3=13.
-     * NOTE: use low-level calls here, bypassing any stream buffering */
+     * NOTE: use low-level calls here, bypassing any stream buffering
+     *
+     * NOTE also: have to assume possibility that cruft exists on the command
+     * line, output without \n, that moves the prompt well into the line. so
+     * we need to read the entire column number, not just the final digit
+     * assumed on earlier attempt. */
     char reply[MAXREPLY] = "";
     uint replysize = 0;
     char *buffer, promptstring[MAXPROMPT] = "";
-    int promptsize, count = *pcount, code = EOF;
+    int promptsize = 0, count = *pcount, code = EOF;
+    int digit = 'R', offset = 2, multiplier = 1;
     uint nsize;
     byte *ndata;
     struct termios settings[2];
@@ -103,13 +105,15 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 while (replysize < MAXREPLY - 1) {  /* leave a byte for \0 */
                     if (reply[replysize - 1] == 'R') break;
                     replysize += read(CS_STDIN, &reply[replysize], 1);
-                    syslog(LOG_USER | LOG_DEBUG, "got <ESC>%.*s so far",
-                            replysize - 1, reply + 1);
                 }
                 syslog(LOG_USER | LOG_DEBUG, "gp_readline reply: <ESC>%.*s",
                         replysize - 1, reply + 1);
-                promptsize = reply[replysize - 2] - '0';  /* digit to int */
-                if (promptsize < 4) promptsize += 10;
+                while (replysize + offset > 0) {
+                    digit = reply[replysize - offset++];
+                    if (digit < '0' || digit > '9') break;
+                    promptsize += ((digit - '0') * multiplier);
+                    multiplier *= 10;
+                }
                 promptsize -= 1;  /* column returned is one *past* prompt */
                 DISCARD(strncpy(promptstring, PROMPT, promptsize));
                 promptstring[promptsize] = '\0';
