@@ -78,9 +78,9 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
 int zcasperinit(i_ctx_t *i_ctx_p) {
     int code = 0;
     ref argv0_string, programname_string;
-    make_string(&argv0_string, a_all | icurrent_space,
+    make_const_string(&argv0_string, a_readonly | avm_foreign,
             strlen(argv0), (byte *)argv0);
-    make_string(&programname_string, a_all | icurrent_space,
+    make_const_string(&programname_string, a_readonly | avm_foreign,
             strlen(programname), (byte *)programname);
     code |= i_initial_enter_name(i_ctx_p, "argv0", &argv0_string);
     code |= i_initial_enter_name(i_ctx_p, "programname", &programname_string);
