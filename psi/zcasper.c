@@ -75,7 +75,7 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
 }
 
 /* define constants for casperscript */
-static int zcasperinit(i_ctx_t *i_ctx_p) {
+int zcasperinit(i_ctx_t *i_ctx_p) {
     int code = 0;
     ref argv0_string, programname_string;
     make_string(&argv0_string, a_all | icurrent_space,
