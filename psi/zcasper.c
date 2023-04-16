@@ -83,10 +83,8 @@ static int zcasperinit(i_ctx_t *i_ctx_p) {
             strlen(argv0), (byte *)argv0);
     make_string(&programname_string, a_all | icurrent_space,
             strlen(programname), (byte *)programname);
-    /*
     code |= i_initial_enter_name(i_ctx_p, "argv0", &argv0_string);
     code |= i_initial_enter_name(i_ctx_p, "programname", &programname_string);
-    */
     return code;
 };
 
@@ -96,7 +94,7 @@ const op_def zcasper_op_defs[] =
     /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
     {"3sprintf", zsprintf},
-    {"csinit", zcasperinit},
+    {"0csinit", zcasperinit},
     op_def_end(0)
 };
 #endif
