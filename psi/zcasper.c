@@ -78,12 +78,19 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
 int zcasperinit(i_ctx_t *i_ctx_p) {
     int code = 0;
     ref argv0_string, programname_string;
+    const char *strings[16] = {"argv0", "programname"};
     make_const_string(&argv0_string, a_readonly | avm_foreign,
             strlen(argv0), (byte *)argv0);
+    syslog(LOG_USER | LOG_DEBUG,
+            "argv0: \"%.*s\"", argv0_string.tas.rsize,
+            argv0_string.value.bytes);
     make_const_string(&programname_string, a_readonly | avm_foreign,
             strlen(programname), (byte *)programname);
-    code |= i_initial_enter_name(i_ctx_p, "argv0", &argv0_string);
-    code |= i_initial_enter_name(i_ctx_p, "programname", &programname_string);
+    syslog(LOG_USER | LOG_DEBUG,
+            "programname: \"%.*s\"", programname_string.tas.rsize,
+            programname_string.value.bytes);
+    code |= i_initial_enter_name(i_ctx_p, strings[0], &argv0_string);
+    code |= i_initial_enter_name(i_ctx_p, strings[1], &programname_string);
     return code;
 };
 
