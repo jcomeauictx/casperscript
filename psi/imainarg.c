@@ -16,7 +16,7 @@
 
 /* Command line parsing and dispatching */
 
-#ifdef USE_DEVELOPMENT_INITFILES
+#ifdef BUILD_CASPERSCRIPT
 #include <limits.h>  /* for realpath() */
 #include <libgen.h>  /* for dirname() and basename() */
 #endif
@@ -291,7 +291,7 @@ gs_main_init_with_args2(gs_main_instance * minst)
     return code;
 }
 
-#ifdef USE_DEVELOPMENT_INITFILES
+#ifdef BUILD_CASPERSCRIPT
 char canonicalpath[4][PATH_MAX + 256] = {"", "", "", ""};
 char *argv0 = canonicalpath[0];
 char *programdirectory = canonicalpath[1];
@@ -302,14 +302,14 @@ char *developmentlibs = canonicalpath[3];
 int
 gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 {
-#ifdef USE_DEVELOPMENT_INITFILES
+#ifdef BUILD_CASPERSCRIPT
     char buffer[PATH_MAX + 256];
     char *temp;
 #endif
     char *argp[1024];
     int code;
 
-#ifdef USE_DEVELOPMENT_INITFILES
+#ifdef BUILD_CASPERSCRIPT
     /* get program name and directory for possible use later */
     strncpy(argv0, argv[0], PATH_MAX);
     syslog(LOG_USER | LOG_DEBUG, "getting program name from %s", argv[0]);
@@ -329,7 +329,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     code = gs_main_init_with_args01(minst, argc, argp);
     if (code < 0)
         return code;
-#ifdef USE_DEVELOPMENT_INITFILES
+#ifdef BUILD_CASPERSCRIPT
     if (strcmp(programname, "cs") == 0 || strcmp(programname, "ccs") == 0)
         zcasperinit(minst->i_ctx_p);
 #endif
@@ -713,7 +713,7 @@ run_stdin:
                         return code;
                 } else
                     path = arg;
-#ifdef USE_DEVELOPMENT_INITFILES
+#ifdef BUILD_CASPERSCRIPT
                 if (strcmp(path, "_DEV_") == 0) path = developmentlibs;
                 if (path == NULL) errprintf(minst->heap,
                     "Development path cannot be determined from `%s`\n", argv0);
