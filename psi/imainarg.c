@@ -322,8 +322,6 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     developmentlibs = realpath(buffer, canonicalpath[3]);
     syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s, dev %s",
             programname, programdirectory, developmentlibs);
-    if (strcmp(programname, "cs") == 0 || strcmp(programname, "ccs") == 0)
-        zcasperinit(minst->i_ctx_p);
 #endif
     /* split shebang args if preceded by '-S ' */
     syslog(LOG_USER | LOG_DEBUG, "starting gs main init");
@@ -331,6 +329,10 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     code = gs_main_init_with_args01(minst, argc, argp);
     if (code < 0)
         return code;
+#ifdef USE_DEVELOPMENT_INITFILES
+    if (strcmp(programname, "cs") == 0 || strcmp(programname, "ccs") == 0)
+        zcasperinit(minst->i_ctx_p);
+#endif
     return gs_main_init_with_args2(minst);
 }
 
