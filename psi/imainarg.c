@@ -327,14 +327,13 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     syslog(LOG_USER | LOG_DEBUG, "starting gs main init");
     argc = splitargs(argc, argv, argp);
     code = gs_main_init_with_args01(minst, argc, argp);
-    if (code < 0) return code;
-    code = gs_main_init_with_args2(minst);
-    if (code < 0) return code;
+    if (code < 0)
+        return code;
 #ifdef BUILD_CASPERSCRIPT
     if (strcmp(programname, "cs") == 0 || strcmp(programname, "ccs") == 0)
-        code = zcasperinit(minst->i_ctx_p);
+        zcasperinit(minst->i_ctx_p);
 #endif
-    return code;
+    return gs_main_init_with_args2(minst);
 }
 
 /*
