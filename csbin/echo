@@ -1,0 +1,2 @@
+#! bin/cs -S -q -dNODISPLAY -dBATCH --
+argv {==} forall
