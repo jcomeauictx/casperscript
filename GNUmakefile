@@ -16,7 +16,7 @@ else
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
 default: $(CS_MAKEFILES)
-	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $<
+	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
 	if [ \! -e bin/cs.exe ]; then \
 		cd bin && ln -s cs cs.exe; \
