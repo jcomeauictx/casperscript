@@ -66,6 +66,9 @@ casperdict begin
     {truncate} stopped {strtruncate} if
   } bind def
   /add /+ alias  % allow use of `+` for `add`
+  (userdict /ARGUMENTS known {ARGUMENTS length} {0} ifelse 1 add
+    /argc exch def argc array dup 0 argv0 put dup
+    argc 1 gt {1 ARGUMENTS putinterval} if /argv exch def)
 end  % casperdict
 
 /casper {  % -
