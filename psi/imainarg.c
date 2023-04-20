@@ -140,6 +140,7 @@ set_debug_flags(const char *arg, char *flags)
 
 int
 gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
+/* splitargs() has already been run at this point, and `programname` is set */
 {
     const char *arg;
     arg_list args;
@@ -332,6 +333,9 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     if (code < 0)
         return code;
 #ifdef BUILD_CASPERSCRIPT
+    /* make sure gs_main_init1() has been run to set up systemdict */
+    if ((code = gs_main_init1(minst)) < 0)
+        return code;
     zcasperinit(minst->i_ctx_p);
 #endif
     return gs_main_init_with_args2(minst);
