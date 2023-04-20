@@ -122,7 +122,8 @@ main(int argc, char *argv[])
     if (code == 0) {
         syslog(LOG_USER | LOG_DEBUG, "gs.c running /start");
         code = gsapi_run_string(minst, start_string, 0, &exit_status);
-    }
+    } else
+	syslog(LOG_USER | LOG_DEBUG, "gs.c code %d, not running /start", code);
 
     exit_status = gsapi_exit(minst);
     if( code >= 0 && exit_status < 0)
