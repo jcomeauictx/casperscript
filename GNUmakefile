@@ -21,6 +21,9 @@ default: $(CS_MAKEFILES)
 	if [ \! -e bin/cs.exe ]; then \
 		cd bin && ln -s cs cs.exe; \
 	fi
+	# make other aliases
+	cd bin && ln -sf cs gs
+	cd bin && ln -sf cs ccs  # "console cs" for -dNODISPLAY
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh

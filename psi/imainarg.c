@@ -317,7 +317,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     syslog(LOG_USER | LOG_DEBUG, "getting program name from %s", argv[0]);
     temp = realpath(argv[0], canonicalpath[1]);
     if (temp == NULL) temp = strncpy(canonicalpath[1], argv[0], PATH_MAX);
-    DISCARD(strcpy(canonicalpath[2], temp));
+    DISCARD(strcpy(canonicalpath[2], argv0));
     programdirectory = dirname(canonicalpath[1]);
     programname = chop_extension(basename(canonicalpath[2]));
     strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
@@ -332,8 +332,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     if (code < 0)
         return code;
 #ifdef BUILD_CASPERSCRIPT
-    if (strcmp(programname, "cs") == 0 || strcmp(programname, "ccs") == 0)
-        zcasperinit(minst->i_ctx_p);
+    zcasperinit(minst->i_ctx_p);
 #endif
     return gs_main_init_with_args2(minst);
 }
