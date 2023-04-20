@@ -631,7 +631,9 @@ currentdict /.execute .undef
 /makeimagedevice { //false makewordimagedevice } odef
 /matrix	{ 6 array identmatrix } odef
 /.promptmsg {
-	/promptname (GS) def
+	% use lowercase for cs and ccs so user quickly knows it's casper
+	/promptname /programname where {pop programname} {(gs)} ifelse
+	dup (gs) eq {pop (GS)} if def
 	% steal from casperscript things that may not be available yet
 	/strlen {  % anystring - strlen  % length to first null (\000)
 		% if no nulls, entire length of string (same as `length`)
