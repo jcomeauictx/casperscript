@@ -37,6 +37,7 @@
 #include "ierrors.h"
 #include "iapi.h"
 #include "gdevdsp.h"
+#include "gssyslog.h"
 
 const char start_string[] = "systemdict /start get exec\n";
 
@@ -1193,6 +1194,7 @@ int main(int argc, char *argv[])
     char *our_default_devs = NULL;
     int len;
 
+    syslog(LOG_USER | LOG_DEBUG, "dxmain.c main() starting");
     /* Gtk initialisation */
     setlocale(LC_ALL, "");
     use_gui = gtk_init_check(&argc, &argv);
@@ -1237,6 +1239,7 @@ int main(int argc, char *argv[])
             code = gsapi_init_with_args(instance, nargc, nargv);
 
         if (code == 0)
+            syslog(LOG_USER | LOG_DEBUG, "dxmain.c running /start");
             code = gsapi_run_string(instance, start_string, 0, &exit_code);
         code1 = gsapi_exit(instance);
         if (code == 0 || code == gs_error_Quit)

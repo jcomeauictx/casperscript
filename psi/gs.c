@@ -71,7 +71,7 @@ main(int argc, char *argv[])
 {
     int exit_status, code;
     void *minst = NULL;
-    syslog(LOG_USER | LOG_DEBUG, "starting main()");
+    syslog(LOG_USER | LOG_DEBUG, "gs.c main() starting");
 
 #ifdef NEED_COMMIT_STACK   /* hack for bug in gcc 2.96 */
     commit_stack_pages();
@@ -119,8 +119,10 @@ main(int argc, char *argv[])
     }
 #endif
 
-    if (code == 0)
+    if (code == 0) {
+        syslog(LOG_USER | LOG_DEBUG, "gs.c running /start");
         code = gsapi_run_string(minst, start_string, 0, &exit_status);
+    }
 
     exit_status = gsapi_exit(minst);
     if( code >= 0 && exit_status < 0)
