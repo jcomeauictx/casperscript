@@ -38,6 +38,7 @@
 #include "iname.h"
 #include "interp.h"
 #include "gxgstate.h"
+#include "gssyslog.h"
 
 /* This is the fallback for the number of threads to allow per process; i.e. just one.
  * This is only ever used if the gp_get_globals function returns 0 (i.e. only for
@@ -79,27 +80,35 @@ psapi_new_instance(gs_lib_ctx_t **pinstance,
     gs_memory_t *mem = NULL;
     gs_main_instance *minst = NULL;
 
-    if (pinstance == NULL)
+    if (pinstance == NULL) {
+        syslog(LOG_USER | LOG_DEBUG,
+               "psapi_new_instance() failed, pinstance == NULL");
         return gs_error_Fatal;
-
+    } else syslog(LOG_USER | LOG_DEBUG,
+                  "psapi_new_instance() has valid pinstance");
     if (gp_get_globals() == NULL) {
         /* This platform does not support the thread safe instance
          * handling. We'll drop back to the old mechanism we've used
          * to handle limiting ourselves to 1 instance in the past,
          * despite this being thread-unsafe itself. */
-        if ( gsapi_instance_counter >= gsapi_instance_max )
+        if ( gsapi_instance_counter >= gsapi_instance_max ) {
+            syslog(LOG_USER | LOG_DEBUG, "psapi_new_instance() exceeded max");
             return gs_error_Fatal;
+        } else syslog(LOG_USER | LOG_DEBUG, "psapi_new_instance() created");
         ++gsapi_instance_counter;
     }
 
     mem = gs_malloc_init_with_context(*pinstance);
-    if (mem == NULL)
+    if (mem == NULL) {
+        syslog(LOG_USER | LOG_DEBUG, "psapi_new_instance() malloc failed");
         return gs_error_Fatal;
+    } else syslog(LOG_USER | LOG_DEBUG, "psapi_new_instance() mem allocated");
     minst = gs_main_alloc_instance(mem);
     if (minst == NULL) {
         gs_malloc_release(mem);
+	syslog(LOG_USER | LOG_DEBUG, "psapi_new_instance() null minst");
         return gs_error_Fatal;
-    }
+    } else syslog(LOG_USER | LOG_DEBUG, "psapi_new_instance() valid minst");
     mem->gs_lib_ctx->top_of_system = (void*) minst;
     mem->gs_lib_ctx->core->default_caller_handle = caller_handle;
     mem->gs_lib_ctx->core->custom_color_callback = NULL;

@@ -94,8 +94,12 @@ main(int argc, char *argv[])
     (void)setlocale(LC_CTYPE, "");
     code = gsapi_new_instance(&minst, NULL);
 
-    if (code >= 0)
+    if (code >= 0) {
+        syslog(LOG_USER | LOG_DEBUG,
+               "gs.c main(): running gsapi_init_with_args()");
         code = gsapi_init_with_args(minst, argc, argv);
+    } else syslog(LOG_USER | LOG_DEBUG,
+                  "gs.c main(): gsapi_new_instance() returned");
 
 #ifdef RUN_STRINGS
     {				/* Run a list of strings (for testing). */
