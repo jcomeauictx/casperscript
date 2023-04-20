@@ -98,8 +98,10 @@ main(int argc, char *argv[])
         syslog(LOG_USER | LOG_DEBUG,
                "gs.c main(): running gsapi_init_with_args()");
         code = gsapi_init_with_args(minst, argc, argv);
+	syslog(LOG_USER | LOG_DEBUG,
+               "gs.c main() gsapi_init_with_args() returned %d", code);
     } else syslog(LOG_USER | LOG_DEBUG,
-                  "gs.c main(): gsapi_new_instance() returned");
+                  "gs.c main(): gsapi_new_instance() returned code %d", code);
 
 #ifdef RUN_STRINGS
     {				/* Run a list of strings (for testing). */
@@ -124,10 +126,10 @@ main(int argc, char *argv[])
 #endif
 
     if (code == 0) {
-        syslog(LOG_USER | LOG_DEBUG, "gs.c running /start");
+        syslog(LOG_USER | LOG_DEBUG, "gs.c main() running /start");
         code = gsapi_run_string(minst, start_string, 0, &exit_status);
     } else
-	syslog(LOG_USER | LOG_DEBUG, "gs.c code %d, not running /start", code);
+	syslog(LOG_USER | LOG_DEBUG, "gs.c main() not running /start");
 
     exit_status = gsapi_exit(minst);
     if( code >= 0 && exit_status < 0)

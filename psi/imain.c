@@ -241,7 +241,8 @@ fail_early:
     if (gs_debug_c(gs_debug_flag_init_details))
         dmprintf2(minst->heap, "%% Init phase 1 %s, instance "PRI_INTPTR"\n",
                   code < 0 ? "failed" : "done", (intptr_t)minst);
-
+    syslog(LOG_USER | LOG_DEBUG,
+           "gs_main_init1() returning with code %d", code);
     return code;
 }
 
