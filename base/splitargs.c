@@ -31,6 +31,20 @@ int splitargs(int argc, char **argv, char **argp) {
     syslog(LOG_USER | LOG_DEBUG, "ending splitargs()");
     return j;
 }
+
+int prependargs(int argc, char **argv, char **argp, char **prepend, int new) {
+    int i;
+    for (i = 0; i < new; i++) argp[i] = prepend[i];
+    for (i = new; i < argc + new; i++) argp[i] = argv[i - new];
+    return argc + new;
+}
+
+int appendargs(int argc, char **argv, char **argp, char **append, int new) {
+    int i;
+    for (i = 0; i < argc; i++) argp[i] = argv[i];
+    for (i = argc; i < argc + new; i++) argp[i] = append[i - argc];
+    return argc + new;
+}
 #ifdef TEST_SPLITARGS
 int main(int argc, char **argv) {
     char *argp[1024];  /* likely overkill but still well under 1 MB */

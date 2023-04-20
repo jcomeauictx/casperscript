@@ -119,6 +119,14 @@ static void print_emulators(const gs_main_instance *);
 static void print_paths(gs_main_instance *);
 static void print_help_trailer(const gs_main_instance *);
 
+#ifdef BUILD_CASPERSCRIPT
+char canonicalpath[4][PATH_MAX + 256] = {"", "", "", ""};
+char *argv0 = canonicalpath[0];
+char *programdirectory = canonicalpath[1];
+char *programname = canonicalpath[2];
+char *developmentlibs = canonicalpath[3];
+#endif
+
 /* ------ Main program ------ */
 
 /* Process the command line with a given instance. */
@@ -143,12 +151,24 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
 /* splitargs() has already been run at this point, and `programname` is set */
 {
     const char *arg;
+#ifdef BUILD_CASPERSCRIPT
+    char *argp[1024];
+    char *prepend[] = {(char *)"-dNODISPLAY"};
+    int prepended = sizeof(prepend) / sizeof(char *);
+#endif
     arg_list args;
     int code;
     int have_dumped_args = 0;
 
     /* Now we actually process them */
     syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args01() starting");
+#ifdef BUILD_CASPERSCRIPT
+    if (strcmp(programname, "ccs") == 0) {
+        /* "console" casperscript doesn't use an X window */
+        argc = prependargs(argc, argv, argp, prepend, prepended);
+        argv = argp;
+    }
+#endif
     code = arg_init(&args, (const char **)argv, argc,
                     gs_main_arg_sopen, (void *)minst,
                     minst->get_codepoint,
@@ -293,14 +313,6 @@ gs_main_init_with_args2(gs_main_instance * minst)
         return gs_error_Quit;
     return code;
 }
-
-#ifdef BUILD_CASPERSCRIPT
-char canonicalpath[4][PATH_MAX + 256] = {"", "", "", ""};
-char *argv0 = canonicalpath[0];
-char *programdirectory = canonicalpath[1];
-char *programname = canonicalpath[2];
-char *developmentlibs = canonicalpath[3];
-#endif
 
 int
 gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
