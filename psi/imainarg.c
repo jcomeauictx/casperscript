@@ -1113,20 +1113,29 @@ argproc(gs_main_instance * minst, const char *arg)
 {
     int code1, code = gs_main_init1(minst);            /* need i_ctx_p to proceed */
 
-    if (code < 0)
+    if (code < 0) {
+        syslog(LOG_USER | LOG_DEBUG,
+                "argproc(): gs_main_init1() failed, code %d", code);
         return code;
-
+    }
     code = gs_add_control_path(minst->heap, gs_permit_file_reading, arg);
-    if (code < 0) return code;
+    if (code < 0) {
+        syslog(LOG_USER | LOG_DEBUG,
+                "argproc(): gs_add_control_path() failed, code %d", code);
+        return code;
+    }
     if (minst->run_buffer_size) {
         /* Run file with run_string. */
+        syslog(LOG_USER | LOG_DEBUG, "argproc() running %s buffered", arg);
         code = run_buffered(minst, arg);
     } else {
         /* Run file directly in the normal way. */
+        syslog(LOG_USER | LOG_DEBUG, "argproc() running %s normally", arg);
         code = runarg(minst, "", arg, ".runfile", runInit | runFlush, minst->user_errors, NULL, NULL);
     }
 
     code1 = gs_remove_control_path(minst->heap, gs_permit_file_reading, arg);
+    syslog(LOG_USER | LOG_DEBUG, "argproc(): code=%d, code1=%d", code, code1);
     if (code >= 0 && code1 < 0) code = code1;
 
     return code;
