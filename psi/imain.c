@@ -188,6 +188,7 @@ gs_main_init1(gs_main_instance * minst)
     name_table *nt = NULL;
     int code;
 
+    syslog(LOG_USER | LOG_DEBUG, "gs_main_init1() starting");
     if (minst->init_done >= 1)
         return 0;
 

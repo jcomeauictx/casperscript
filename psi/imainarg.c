@@ -147,6 +147,7 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     int have_dumped_args = 0;
 
     /* Now we actually process them */
+    syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args01() starting");
     code = arg_init(&args, (const char **)argv, argc,
                     gs_main_arg_sopen, (void *)minst,
                     minst->get_codepoint,
@@ -282,6 +283,7 @@ gs_main_init_with_args2(gs_main_instance * minst)
 {
     int code;
 
+    syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args2() starting");
     code = gs_main_init2(minst);
     if (code < 0)
         return code;
@@ -356,6 +358,7 @@ gs_arg_get_codepoint *gs_main_inst_get_arg_decode(gs_main_instance * minst)
 int
 gs_main_run_start(gs_main_instance * minst)
 {
+    syslog(LOG_USER | LOG_DEBUG, "gs_main_run_start() starting");
     return run_string(minst, "systemdict /start get exec", runFlush, minst->user_errors, NULL, NULL);
 }
 

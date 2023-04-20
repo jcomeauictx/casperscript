@@ -79,7 +79,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
     /* disable auto-complete with filenames */
     DISCARD(rl_bind_key('\t', rl_insert));
     syslog(LOG_USER | LOG_DEBUG, "gp_readline called with count %d, buf %.*s",
-            count, count + MAXPROMPT, (char *)buf->data);
+            count, min(count, 64), (char *)buf->data);
     if (prompt && prompt->size > (MAXPROMPT - 1)) {
         code = ERRC;
     } else {
