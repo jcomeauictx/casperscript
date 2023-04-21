@@ -326,7 +326,7 @@ gs_main_init_with_args2(gs_main_instance * minst)
     code = gs_main_init2(minst);
     if (code < 0)
         return code;
-    if (endswith(programname, "cs")) {  /* crashes interpreter */
+    if (endswith(programname, "cs")) {
         code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
         if (code < 0)
         return code;
