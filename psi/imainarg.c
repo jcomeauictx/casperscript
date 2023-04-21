@@ -163,7 +163,7 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     /* Now we actually process them */
     syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args01() starting");
 #ifdef BUILD_CASPERSCRIPT
-    if (strcmp(programname, "ccs") == 0) {
+    if (endswith(programname, "ccs")) {
         /* "console" casperscript doesn't use an X window */
         argc = prependargs(argc, argv, argp, prepend, prepended);
         argv = argp;
@@ -367,6 +367,11 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     if ((code = gs_main_init1(minst)) < 0)
         return code;
     zcasperinit(minst->i_ctx_p);
+    if (false && endswith(programname, "cs")) {
+        code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
+        if (code < 0)
+        return code;
+    }
 #endif
     return gs_main_init_with_args2(minst);
 }
