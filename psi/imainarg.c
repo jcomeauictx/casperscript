@@ -629,11 +629,11 @@ run_stdin:
             break;
 #ifdef BUILD_CASPERSCRIPT
         case 'C':               /* casperscript mode */
+                if ((code = gs_main_init1(minst)) < 0) return code;
                 zcasperinit(minst->i_ctx_p);
-                code = gs_main_init2(minst);
-                if (code < 0) return code;
-                code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
-                if (code < 0) return code;
+                if ((code = gs_main_init2(minst)) < 0) return code;
+                if ((code = run_string(minst, "casper", runFlush,
+                    minst->user_errors, NULL, NULL)) < 0) return code;
 #endif
         case 'c':               /* code follows */
             {
@@ -735,8 +735,7 @@ run_stdin:
             {
                 long dimensions[2];
 
-                if ((code = gs_main_init1(minst)) < 0)
-                    return code;
+                if ((code = gs_main_init1(minst)) < 0) return code;
                 if (sscanf((const char *)arg, "%ldx%ld", &dimensions[0], &dimensions[1]) != 2) {
                     puts(minst->heap, "-g must be followed by <width>x<height>");
                     return gs_error_Fatal;
