@@ -153,12 +153,14 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     const char *arg;
 #ifdef BUILD_CASPERSCRIPT
     char *argp[1024];
+    char *bccsprepend[] = {(char *)"--"};
+    int bccsprepended = sizeof(bccsprepend) / sizeof (char *);
     char *ccsprepend[] = {(char *)"-dNODISPLAY"};
     int ccsprepended = sizeof(ccsprepend) / sizeof(char *);
     char *csprepend[] = {(char *)"-C"};
     int csprepended = sizeof(csprepend) / sizeof(char *);
-    char *bccsprepend[] = {(char *)"-q", (char *)"-dBATCH", (char *)"--"};
-    int bccsprepended = sizeof(bccsprepend) / sizeof(char *);
+    char *bccsprepend2[] = {(char *)"-q", (char *)"-dBATCH"};
+    int bccsprepended2 = sizeof(bccsprepend2) / sizeof(char *);
 #endif
     arg_list args;
     int code;
@@ -181,6 +183,10 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     if (endswith(programname, "ccs")) {
         /* "console" casperscript doesn't use an X window */
         argc = prependargs(argc, argv, argp, ccsprepend, ccsprepended);
+        argv = argp;
+    }
+    if (strcmp(programname, "bccs") == 0) {  /* go back and put -q first */
+        argc = prependargs(argc, argv, argp, bccsprepend2, bccsprepended2);
         argv = argp;
     }
     syslog(LOG_USER | LOG_DEBUG, "modified argv follows");
