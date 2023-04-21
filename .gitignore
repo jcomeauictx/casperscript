@@ -146,4 +146,4 @@ doc/.buildinfo
 showargs
 gs.xxd
 gs.dsm
-base/splitargs
+splitargs
