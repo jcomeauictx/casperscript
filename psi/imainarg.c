@@ -606,9 +606,11 @@ run_stdin:
                     code = argproc(minst, psarg);
                 }
                 arg_free((char *)psarg, minst->heap);
-                if (code >= 0)
+                if (code >= 0) {
+                    syslog(LOG_USER | LOG_DEBUG,
+                           "code after argproc() and arg_free(): %d", code);
                     code = gs_error_Quit;
-
+                }
                 return code;
             }
         case 'B':               /* set run_string buffer size */
