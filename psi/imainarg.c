@@ -153,8 +153,12 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     const char *arg;
 #ifdef BUILD_CASPERSCRIPT
     char *argp[1024];
-    char *prepend[] = {(char *)"-dNODISPLAY"};
-    int prepended = sizeof(prepend) / sizeof(char *);
+    char *ccsprepend[] = {(char *)"-dNODISPLAY"};
+    int ccsprepended = sizeof(ccsprepend) / sizeof(char *);
+    char *csprepend[] = {(char *)"-C"};
+    int csprepended = sizeof(csprepend) / sizeof(char *);
+    char *bccsappend[] = {(char *)"-q", (char *)"-dBATCH", (char *)"--"};
+    int bccsappended = sizeof(bccsappend) / sizeof(char *);
 #endif
     arg_list args;
     int code;
@@ -163,11 +167,22 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     /* Now we actually process them */
     syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args01() starting");
 #ifdef BUILD_CASPERSCRIPT
-    if (endswith(programname, "ccs")) {
-        /* "console" casperscript doesn't use an X window */
-        argc = prependargs(argc, argv, argp, prepend, prepended);
+    if (endswith(programname, "cs")) {
+        argc = prependargs(argc, argv, argp, csprepend, csprepended);
         argv = argp;
     }
+    if (endswith(programname, "ccs")) {
+        /* "console" casperscript doesn't use an X window */
+        argc = prependargs(argc, argv, argp, ccsprepend, ccsprepended);
+        argv = argp;
+    }
+    if (strcmp(programname, "bccs") == 0) {
+        argc = appendargs(argc, argv, argp, bccsappend, bccsappended);
+        argv = argp;
+    }
+    syslog(LOG_USER | LOG_DEBUG, "modified argv follows");
+    for (int i = 0; i < argc; i++) syslog(LOG_USER | LOG_DEBUG,
+            "%d: %s", i, argv[i]);
 #endif
     code = arg_init(&args, (const char **)argv, argc,
                     gs_main_arg_sopen, (void *)minst,
@@ -325,10 +340,6 @@ gs_main_init_with_args2(gs_main_instance * minst)
     syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args2() starting");
     code = gs_main_init2(minst);
     if (code < 0) return code;
-    if (endswith(programname, "cs")) {
-        code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
-        if (code < 0) return code;
-    }
 
     if (!minst->run_start)
         return gs_error_Quit;
@@ -363,14 +374,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     syslog(LOG_USER | LOG_DEBUG, "starting gs main init");
     argc = splitargs(argc, argv, argp);
     code = gs_main_init_with_args01(minst, argc, argp);
-    if (code < 0)
-        return code;
-#ifdef BUILD_CASPERSCRIPT
-    /* make sure gs_main_init1() has been run to set up systemdict */
-    if ((code = gs_main_init1(minst)) < 0)
-        return code;
-    zcasperinit(minst->i_ctx_p);
-#endif
+    if (code < 0) return code;
     return gs_main_init_with_args2(minst);
 }
 
@@ -623,12 +627,14 @@ run_stdin:
                 minst->run_buffer_size = bsize;
             }
             break;
+#ifdef BUILD_CASPERSCRIPT
         case 'C':               /* casperscript mode */
                 zcasperinit(minst->i_ctx_p);
                 code = gs_main_init2(minst);
                 if (code < 0) return code;
                 code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
                 if (code < 0) return code;
+#endif
         case 'c':               /* code follows */
             {
                 bool ats = pal->expand_ats;
