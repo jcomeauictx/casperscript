@@ -422,6 +422,7 @@ swproc(gs_main_instance * minst, const char *arg, arg_list * pal)
     ref vtrue;
     int code = 0;
 
+    syslog(LOG_USER | LOG_DEBUG, "swproc \"%s\"", arg);
     make_true(&vtrue);
     arg += 2;                   /* skip - and letter */
     switch (sw) {
