@@ -34,13 +34,14 @@ int splitargs(int argc, char **argv, char **argp) {
 
 int prependargs(int argc, char **argv, char **argp, char **prepend, int new) {
     /* unlike appendargs, "prepend" has to treat argv[0] specially, and not
-     * move it up to another position */
+     * move it up to another position. also, since argv and argp may be
+     * the *same pointer*, things must be done so as to avoid overwriting */
     int i, j;
     /* simplest case: argc is 1, argv is [(bin/ccs)], new is [(-dARG)] */
     argp[0] = argv[0];
     /* argp is now [(bin/ccs)] */
     /* any existing args must first be moved to their previous position + new */
-    for (i = new + 1, j = 1; j < argc; i++, j++) argp[i] = argv[j];
+    for (i = argc + new, j = argc; j > 1;) argp[--i] = argv[--j];
     syslog(LOG_USER | LOG_DEBUG, "prepending %d new args", new);
     for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
     /* argp is now [(bin/ccs) (-dARG)] */
@@ -62,16 +63,16 @@ int main(int argc, char **argv) {
     char *append[] = {(char *)"app0", (char *)"app1"};
     int appended = sizeof(append) / sizeof(char *);
     int i;
-    fprintf(stderr, "dumping original argv\n");
+    fprintf(stderr, "dumping original argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     argc = splitargs(argc, argv, argp); argv = argp;
-    fprintf(stderr, "dumping new argv\n");
+    fprintf(stderr, "dumping new argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     argc = prependargs(argc, argv, argp, prepend, prepended); argv = argp;
-    fprintf(stderr, "dumping new argv\n");
+    fprintf(stderr, "dumping new argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     argc = appendargs(argc, argv, argp, append, appended); argv = argp;
-    fprintf(stderr, "dumping new argv\n");
+    fprintf(stderr, "dumping new argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     return 0;
 }
