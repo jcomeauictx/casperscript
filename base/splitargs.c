@@ -39,16 +39,17 @@ int prependargs(int argc, char **argv, char **argp, char **prepend, int new) {
     /* simplest case: argc is 1, argv is [(bin/ccs)], new is [(-dARG)] */
     argp[0] = argv[0];
     /* argp is now [(bin/ccs)] */
+    /* any existing args must first be moved to their previous position + new */
+    for (i = new + 1, j = 1; j < argc; i++, j++) argp[i] = argv[j];
+    syslog(LOG_USER | LOG_DEBUG, "prepending %d new args", new);
     for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
     /* argp is now [(bin/ccs) (-dARG)] */
-    /* now for a case where there were already args in argv,
-     * they will all be appended to argp at their previous position + `new` */
-    for (i = new + 1, j = 1; j < argc; i++, j++) argp[i] = argv[j];
     return argc + new;
 }
 
 int appendargs(int argc, char **argv, char **argp, char **append, int new) {
     int i;
+    syslog(LOG_USER | LOG_DEBUG, "appending %d new args", new);
     for (i = 0; i < argc; i++) argp[i] = argv[i];
     for (i = argc; i < argc + new; i++) argp[i] = append[i - argc];
     return argc + new;
