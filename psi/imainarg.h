@@ -39,11 +39,6 @@ int gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[]);
 int gs_main_init_with_args2(gs_main_instance * minst);
 
 /*
- * Run the 'start' procedure (after processing the command line).
- */
-int gs_main_run_start(gs_main_instance * minst);
-
-/*
  * By default gs assumes that all args are in utf8 format. If not, the caller
  * should call this function to specify a decoding function in advance.
  * Allocation should be done with the standard gs allocation functions, as

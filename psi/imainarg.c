@@ -385,16 +385,6 @@ gs_arg_get_codepoint *gs_main_inst_get_arg_decode(gs_main_instance * minst)
     return minst->get_codepoint;
 }
 
-/*
- * Run the 'start' procedure (after processing the command line).
- */
-int
-gs_main_run_start(gs_main_instance * minst)
-{
-    syslog(LOG_USER | LOG_DEBUG, "gs_main_run_start() starting");
-    return run_string(minst, "systemdict /start get exec", runFlush, minst->user_errors, NULL, NULL);
-}
-
 static int
 do_arg_match(const char **arg, const char *match, size_t match_len)
 {

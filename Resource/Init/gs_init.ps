@@ -798,8 +798,7 @@ odef
 % Code output by Adobe Illustrator relies on the fact that
 % `stack' is a procedure, not an operator!!!
 /stack	{ 0 1 count 3 sub { index = } for } bind def
-/start	{ programname (cs) eq programname (ccs) eq or {casper} if
-	//systemdict /BATCH get { //null 0 .quit } { executive } ifelse } def
+/start	{ //systemdict /BATCH get { //null 0 .quit } { executive } ifelse } def
 /store {	% Don't alter operands before completing.
         1 .argindex where { 2 index 2 index put pop pop } { def } ifelse
 } odef
