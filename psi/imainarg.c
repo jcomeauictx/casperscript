@@ -157,8 +157,8 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     int ccsprepended = sizeof(ccsprepend) / sizeof(char *);
     char *csprepend[] = {(char *)"-C"};
     int csprepended = sizeof(csprepend) / sizeof(char *);
-    char *bccsappend[] = {(char *)"-q", (char *)"-dBATCH", (char *)"--"};
-    int bccsappended = sizeof(bccsappend) / sizeof(char *);
+    char *bccsprepend[] = {(char *)"-q", (char *)"-dBATCH", (char *)"--"};
+    int bccsprepended = sizeof(bccsprepend) / sizeof(char *);
 #endif
     arg_list args;
     int code;
@@ -167,6 +167,13 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     /* Now we actually process them */
     syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args01() starting");
 #ifdef BUILD_CASPERSCRIPT
+    /* assuming the use of bccs from the shebang line, which means that
+     * the Linux kernel will already have appended the filename and any
+     * supplied args. */
+    if (strcmp(programname, "bccs") == 0) {
+        argc = prependargs(argc, argv, argp, bccsprepend, bccsprepended);
+        argv = argp;
+    }
     if (endswith(programname, "cs")) {
         argc = prependargs(argc, argv, argp, csprepend, csprepended);
         argv = argp;
@@ -174,10 +181,6 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     if (endswith(programname, "ccs")) {
         /* "console" casperscript doesn't use an X window */
         argc = prependargs(argc, argv, argp, ccsprepend, ccsprepended);
-        argv = argp;
-    }
-    if (strcmp(programname, "bccs") == 0) {
-        argc = appendargs(argc, argv, argp, bccsappend, bccsappended);
         argv = argp;
     }
     syslog(LOG_USER | LOG_DEBUG, "modified argv follows");
