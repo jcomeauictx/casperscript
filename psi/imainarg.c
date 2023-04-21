@@ -254,12 +254,15 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
         code = gs_lib_ctx_stash_sanitized_arg(minst->heap->gs_lib_ctx, arg);
         if (code < 0)
             return code;
+        syslog(LOG_USER | LOG_DEBUG,
+               "switching on first character %c of arg %s", *arg, arg);
         switch (*arg) {
-            case '-':
+            case '-': {
+                syslog(LOG_USER | LOG_DEBUG, "case '-' processing arg %s", arg);
                 code = swproc(minst, arg, &args);
                 if (code < 0) {
                     syslog(LOG_USER | LOG_DEBUG,
-                           "processing arg %s failed", arg);
+                           "processing arg \"%s\" with swproc failed", arg);
                     return code;
                 }
                 if (code > 0)
@@ -275,12 +278,14 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
                     have_dumped_args = 1;
                 }
                 break;
-            default:
+            }
+            default: {
                 /* default is to treat this as a file name to be run */
+                syslog(LOG_USER | LOG_DEBUG, "default case for arg %s", arg);
                 code = argproc(minst, arg);
                 if (code < 0) {
                     syslog(LOG_USER | LOG_DEBUG,
-                           "processing arg %s failed", arg);
+                           "processing arg \"%s\" with argproc failed", arg);
                     return code;
                 }
                 if (minst->saved_pages_test_mode) {
@@ -304,6 +309,7 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
                         if ((code = gs_erasepage(minst->i_ctx_p->pgs)) < 0)
                             return code;
                 }
+            }
         }
     }
 
@@ -591,8 +597,12 @@ run_stdin:
                     }
                 if (code >= 0)
                     code = run_string(minst, "]put", 0, minst->user_errors, NULL, NULL);
-                if (code >= 0)
+                if (code >= 0) {
+                    syslog(LOG_USER | LOG_DEBUG,
+                           "code: %d; --, -+, or -@ arg being run: %s",
+                           code, psarg);
                     code = argproc(minst, psarg);
+                }
                 arg_free((char *)psarg, minst->heap);
                 if (code >= 0)
                     code = gs_error_Quit;
