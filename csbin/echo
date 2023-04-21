@@ -1,3 +1,2 @@
-#! bin/cs -S -q -dNODISPLAY -dBATCH --
-# casper # not run on startup except for interactive mode as of 2023-04-19
-ARGUMENTS {print ( ) print} forall (\n) print
+#! bin/cs -S -q -dNODISPLAY -dBATCH -C --
+argv {print ( ) print} forall (\n) print

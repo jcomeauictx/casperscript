@@ -66,12 +66,18 @@ casperdict begin
     {truncate} stopped {strtruncate} if
   } bind def
   /add /+ alias  % allow use of `+` for `add`
-  % set up `argv` as in C and Python.
+  % set up `argc` and `argv` in userdict, as in C and Python.
   % as of 2023-04-19 argv0 is not visible to csbin/* programs, so we
   % need to check for it.
-  /ARGUMENTS where {pop ARGUMENTS length} {0} ifelse 1 add
-    /argc exch def argc array dup 0 /argv0 where {pop argv0} {()} ifelse put
-    argc 1 gt {dup 1 ARGUMENTS putinterval} if /argv exch def
+  % NOTE: problem is that ARGUMENTS isn't set up until after processing --,
+  % so `argc` and `argv` need to be procedures
+  /.argcargv {
+    userdict dup /ARGUMENTS where {pop ARGUMENTS length} {0} ifelse 1 add
+      /.argc exch put .argc array dup 0 argv0 put
+      .argc 1 gt {dup 1 ARGUMENTS putinterval} if /.argv exch put
+    } bind def
+  /argc {userdict /.argc known {.argc} {.argcargv .argc} ifelse} bind def
+  /argv {userdict /.argv known {.argv} {.argcargv .argv} ifelse} bind def
 end  % casperdict
 
 /casper {  % -

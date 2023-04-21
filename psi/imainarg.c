@@ -324,12 +324,10 @@ gs_main_init_with_args2(gs_main_instance * minst)
 
     syslog(LOG_USER | LOG_DEBUG, "gs_main_init_with_args2() starting");
     code = gs_main_init2(minst);
-    if (code < 0)
-        return code;
+    if (code < 0) return code;
     if (endswith(programname, "cs")) {
         code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
-        if (code < 0)
-        return code;
+        if (code < 0) return code;
     }
 
     if (!minst->run_start)
@@ -625,6 +623,12 @@ run_stdin:
                 minst->run_buffer_size = bsize;
             }
             break;
+        case 'C':               /* casperscript mode */
+                zcasperinit(minst->i_ctx_p);
+                code = gs_main_init2(minst);
+                if (code < 0) return code;
+                code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
+                if (code < 0) return code;
         case 'c':               /* code follows */
             {
                 bool ats = pal->expand_ats;
