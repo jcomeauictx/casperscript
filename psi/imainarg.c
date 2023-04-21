@@ -326,6 +326,11 @@ gs_main_init_with_args2(gs_main_instance * minst)
     code = gs_main_init2(minst);
     if (code < 0)
         return code;
+    if (endswith(programname, "cs")) {  /* crashes interpreter */
+        code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
+        if (code < 0)
+        return code;
+    }
 
     if (!minst->run_start)
         return gs_error_Quit;
@@ -367,11 +372,6 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     if ((code = gs_main_init1(minst)) < 0)
         return code;
     zcasperinit(minst->i_ctx_p);
-    if (false && endswith(programname, "cs")) {
-        code = run_string(minst, "casper", runFlush, minst->user_errors, NULL, NULL);
-        if (code < 0)
-        return code;
-    }
 #endif
     return gs_main_init_with_args2(minst);
 }
