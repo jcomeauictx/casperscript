@@ -56,12 +56,21 @@ int appendargs(int argc, char **argv, char **argp, char **append, int new) {
 #ifdef TEST_SPLITARGS
 int main(int argc, char **argv) {
     char *argp[1024];  /* likely overkill but still well under 1 MB */
-    size_t size;
+    char *prepend[] = {(char *)"pre0", (char *)"pre1"};
+    int prepended = sizeof(prepend) / sizeof(char *);
+    char *append[] = {(char *)"app0", (char *)"app1"};
+    int appended = sizeof(append) / sizeof(char *);
     int i;
-    size = splitargs(argc, argv, argp);
-    fprintf(stderr, "dumping argp\n");
-    for (i = 0; i < size; i++) fprintf(stderr, "argp[%d]: %s\n", i, argp[i]);
-    return size;
+    argc = splitargs(argc, argv, argp); argv = argp;
+    fprintf(stderr, "dumping new argv\n");
+    for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
+    argc = prependargs(argc, argv, argp, prepend, prepended); argv = argp;
+    fprintf(stderr, "dumping new argv\n");
+    for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
+    argc = appendargs(argc, argv, argp, append, appended); argv = argp;
+    fprintf(stderr, "dumping new argv\n");
+    for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
+    return 0;
 }
 #endif
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
