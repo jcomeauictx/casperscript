@@ -1,2 +1,2 @@
 #! bin/cs -S -q -dNODISPLAY -dBATCH --
-{ARGUMENTS 0 get sleep} stopped {(sleep: missing operand) =} if
+{ARGUMENTS 0 get} stopped {(sleep: missing argument) =} {cvr sleep} ifelse
