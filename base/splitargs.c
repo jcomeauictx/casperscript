@@ -62,6 +62,8 @@ int main(int argc, char **argv) {
     char *append[] = {(char *)"app0", (char *)"app1"};
     int appended = sizeof(append) / sizeof(char *);
     int i;
+    fprintf(stderr, "dumping original argv\n");
+    for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     argc = splitargs(argc, argv, argp); argv = argp;
     fprintf(stderr, "dumping new argv\n");
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
