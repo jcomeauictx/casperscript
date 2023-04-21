@@ -33,9 +33,17 @@ int splitargs(int argc, char **argv, char **argp) {
 }
 
 int prependargs(int argc, char **argv, char **argp, char **prepend, int new) {
-    int i;
-    for (i = 0; i < new; i++) argp[i] = prepend[i];
-    for (i = new; i < argc + new; i++) argp[i] = argv[i - new];
+    /* unlike appendargs, "prepend" has to treat argv[0] specially, and not
+     * move it up to another position */
+    int i, j;
+    /* simplest case: argc is 1, argv is [(bin/ccs)], new is [(-dARG)] */
+    argp[0] = argv[0];
+    /* argp is now [(bin/ccs)] */
+    for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
+    /* argp is now [(bin/ccs) (-dARG)] */
+    /* now for a case where there were already args in argv,
+     * they will all be appended to argp at their previous position + `new` */
+    for (i = new + 1, j = 1; j < argc; i++, j++) argp[i] = argv[j];
     return argc + new;
 }
 
