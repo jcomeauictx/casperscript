@@ -35,6 +35,13 @@ install-exec: $(GS_XE) install-exec-bindir $(UNIXINST_MAK) $(MAKEDIRS)
 	-mkdir -p $(DESTDIR)$(gsdir)
 	-mkdir -p $(DESTDIR)$(gsdatadir)
 	$(INSTALL_PROGRAM) $(GS_XE) $(DESTDIR)$(bindir)/$(GS)$(XE)
+	(cd $(DESTDIR)$(bindir) && \
+		for aliased in gs cs ccs bccs; do \
+			if [ "$$aliased" != "$(GS)$(XE)" ]; then \
+				ln -sf $(GS)$(XE) $$aliased; \
+			fi; \
+		done; \
+	)
 
 install-gs: install-exec install-scripts install-data $(INSTALL_SHARED) $(INSTALL_CONTRIB)
 	$(NO_OP)
