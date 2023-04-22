@@ -58,4 +58,4 @@ xeyes  # make sure you have a working X connection, ^C out of it
 cs examples/tiger.eps  # should show a beautiful color cartoon tiger
 ```
 
-Don't forget to go back to digitalocean.com and delete your droplet!
+Don't forget to go back to digitalocean.com and delete (Destroy) your droplet!
