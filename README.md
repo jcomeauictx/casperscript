@@ -40,7 +40,7 @@ instance by digitalocean.
 
 ```bash
 apt update
-apt install git make autoconf gcc libreadline-dev libx11-dev x11-apps xauth
+apt install git make autoconf gcc libreadline-dev libx11-dev x11-apps xauth libxext-dev
 echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc
 ^D  # logout, we'll log right back in with an X windows connection
 ssh -Y root@droplet
@@ -52,4 +52,9 @@ csbin/echo just a test  # should echo 'just a test' on the following line
 ccs  # should give you a `ccs>` prompt
 ccs> (hello world!) =
 hello world!
+^D  # log out of ccs
+xeyes  # make sure you have a working X connection
+cs examples/tiger.eps  # should show a beautiful color cartoon tiger
 ```
+
+Don't forget to go back to digitalocean.com and delete your droplet!
