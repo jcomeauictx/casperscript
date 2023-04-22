@@ -157,7 +157,7 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     int bccsprepended = sizeof(bccsprepend) / sizeof (char *);
     char *ccsprepend[] = {(char *)"-dNODISPLAY"};
     int ccsprepended = sizeof(ccsprepend) / sizeof(char *);
-    char *csprepend[] = {(char *)"-C"};
+    char *csprepend[] = {(char *)"-dNOSAFER", (char *)"-C"};
     int csprepended = sizeof(csprepend) / sizeof(char *);
     char *bccsprepend2[] = {(char *)"-q", (char *)"-dBATCH"};
     int bccsprepended2 = sizeof(bccsprepend2) / sizeof(char *);
