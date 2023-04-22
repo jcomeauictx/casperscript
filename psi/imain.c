@@ -479,6 +479,7 @@ gs_main_init2(gs_main_instance * minst)
     i_ctx_t *i_ctx_p;
     int code = gs_main_init1(minst);
 
+    syslog(LOG_USER | LOG_DEBUG, "gs_main_init2() starting");
     if (code < 0)
         return code;
 
