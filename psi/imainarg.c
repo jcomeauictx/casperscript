@@ -284,9 +284,13 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
             case '-': {
                 syslog(LOG_USER | LOG_DEBUG, "case '-' processing arg %s", arg);
                 code = swproc(minst, arg, &args);
-                syslog(LOG_USER | LOG_DEBUG, "code from swproc: %d", code);
+                /* after processing `--`, `arg` will have been overwritten
+                 * by argproc, and the "error" could simply be a "quit".
+                 * so let's ignore them */
+                if (*arg == '-') syslog(LOG_USER | LOG_DEBUG,
+                       "code from swproc: %d", code);
                 if (code < 0) {
-                    syslog(LOG_USER | LOG_DEBUG,
+                    if (*arg == '-') syslog(LOG_USER | LOG_DEBUG,
                            "processing arg \"%s\" with swproc failed", arg);
                     return code;
                 }
