@@ -642,11 +642,12 @@ run_stdin:
             break;
 #ifdef BUILD_CASPERSCRIPT
         case 'C':               /* casperscript mode */
-                if ((code = gs_main_init1(minst)) < 0) return code;
-                zcasperinit(minst->i_ctx_p);
-                if ((code = gs_main_init2(minst)) < 0) return code;
-                if ((code = run_string(minst, "casper", runFlush,
-                    minst->user_errors, NULL, NULL)) < 0) return code;
+            if ((code = gs_main_init1(minst)) < 0) return code;
+            zcasperinit(minst->i_ctx_p);
+            if ((code = gs_main_init2(minst)) < 0) return code;
+            if ((code = run_string(minst, "casper", runFlush,
+                minst->user_errors, NULL, NULL)) < 0) return code;
+            break;
 #endif
         case 'c':               /* code follows */
             {
