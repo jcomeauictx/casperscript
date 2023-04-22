@@ -47,6 +47,7 @@ ssh -Y root@droplet
 cd /usr/src
 git clone https://github.com/jcomeauictx/casperscript
 cd casperscript
+make
 make install
 csbin/echo just a test  # should echo 'just a test' on the following line
 ccs  # should give you a `ccs>` prompt
