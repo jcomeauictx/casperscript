@@ -24,6 +24,7 @@ default: $(CS_MAKEFILES)
 	# make other aliases
 	cd bin && ln -sf cs gs
 	cd bin && ln -sf cs ccs  # "console cs" for -dNODISPLAY
+	cd bin && ln -sf cs bccs  # "batch console cs" for csbin/*
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
