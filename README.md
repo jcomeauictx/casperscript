@@ -28,3 +28,28 @@ John Comeau jc@unternet.net 2023-03-21
 
 # links
 [Information for Ghostscript developers](https://ghostscript.com/docs/9.54.0/Develop.htm)
+
+# quickstart
+
+Go to digitalocean.com, set up an account if you don't have one already, and
+spin up a $6/month Debian 11 droplet, the most basic configuration. It's less
+than a penny an hour, and you only pay for the time you use.
+
+`ssh root@droplet`, where `droplet` is the IP number assigned to your Debian
+instance by digitalocean.
+
+```bash
+apt update
+apt install git make autoconf gcc libreadline-dev libx11-dev x11-apps xauth
+echo 'export PATH=$HOME/bin:$PATH' >> ~/.bashrc
+^D  # logout, we'll log right back in with an X windows connection
+ssh -Y root@droplet
+cd /usr/src
+git clone https://github.com/jcomeauictx/casperscript
+cd casperscript
+make install
+csbin/echo just a test  # should echo 'just a test' on the following line
+ccs  # should give you a `ccs>` prompt
+ccs> (hello world!) =
+hello world!
+```
