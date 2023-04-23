@@ -20,7 +20,7 @@ testing/%.1.pnm: examples/%
 		-sOutputFile=$(@D)/$*.%00d.pnm $<
 testing/%.diff: reference/%
 	-for file in $(<:.1.pnm=*); do \
-		echo comparing $* >> $(LOG); \
+		echo comparing $$file >> $(LOG); \
 		diff $$file $(@D) 2>&1 | tee -a $(LOG); \
 	done
 check:
