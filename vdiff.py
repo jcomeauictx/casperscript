@@ -29,8 +29,8 @@ def vdiff(filename1, filename2):
         raise ValueError('Different dimensions %s and %s' % dimensions)
     dimensions = tuple(map(lambda s: tuple(map(int, s.split())), dimensions))
     logging.debug('dimensions: %s', dimensions)
-    expected_length = dimensions[0][1] * MULTIPLIER[pnmtypes[0]]
-    logging.debug('expected line length: %d', expected_length)
+    expected_length = int.__mul__(*dimensions[0]) * MULTIPLIER[pnmtypes[0]]
+    logging.debug('expected file length: %d', expected_length)
     if pnmtypes[0] == 'P1':
         maxvalues = ('1', '1')
     else:
@@ -39,22 +39,22 @@ def vdiff(filename1, filename2):
     if maxvalues[0] != maxvalues[1]:
         raise ValueError('incompatible max values %s', maxvalues)
     maxvalues = tuple(map(int, maxvalues))
-    lines = [[], []]
+    data = [[], []]
     while True:
         try:
             raw1, raw2 = get(file1).strip(), get(file2).strip()
             if ' ' in raw1:
                 raw1, raw2 = raw1.split(), raw2.split()
-            lines[0] += list(map(int, raw1))
-            lines[1] += list(map(int, raw2))
-            lengths = tuple(map(len, lines))
-            if lengths[0] != lengths[1]:
-                raise ValueError('Different lengths: %s' % lines)
-            if lengths[0] == expected_length:
-                logging.debug('lines are equal: %s', lines[0] == lines[1])
-                lines = [[], []]
+            data[0] += list(map(int, raw1))
+            data[1] += list(map(int, raw2))
         except StopIteration:
             break
+    lengths = tuple(map(len, data))
+    if lengths[0] != lengths[1]:
+        raise ValueError('Different lengths: %s' % lines)
+    if lengths[0] != expected_length:
+        raise ValueError('Unexpected length: %d != %d' %
+                         (lengths[0], expected_length))
 
 def get(iterable):
     '''
