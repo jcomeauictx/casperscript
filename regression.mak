@@ -5,8 +5,11 @@ FILES := $(wildcard examples/*.* examples/*/*.*)
 OUT := $(addsuffix .1.pnm, $(patsubst examples/%,reference/%,$(FILES)))
 TEST_OUT := $(addsuffix .1.pnm, $(patsubst examples/%,testing/%,$(FILES)))
 COMPARE := $(addsuffix .diff, $(TEST_OUT))
-all: $(OUT) $(TEST_OUT) $(COMPARE)
+LOG := tests.log
+all: init $(OUT) $(TEST_OUT) $(COMPARE)
 	@echo Complete >&2
+init:
+	@echo gs regression tests output $$(date '+%Y%m%d:%H%M%S') > $(LOG)
 reference/%.1.pnm: examples/%
 	mkdir -p $(@D)
 	-$(DIST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm \
@@ -16,7 +19,10 @@ testing/%.1.pnm: examples/%
 	-$(TEST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm
 		-sOutputFile=$(@D)/$*.%00d.pnm $<
 testing/%.diff: reference/%
-	-diff $(<:.1.pnm=*) $(@D) | tee -a tests.log
+	-for file in $(<:.1.pnm=*); do \
+		echo comparing $* >> $(LOG); \
+		diff $$file $(@D) 2>&1 | tee -a $(LOG); \
+	done
 check:
 	@echo reference: $(OUT)
 	@echo regression test: $(TEST_OUT)
