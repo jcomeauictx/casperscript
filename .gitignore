@@ -147,3 +147,5 @@ showargs
 gs.xxd
 gs.dsm
 splitargs
+# ignore generated files
+reference
