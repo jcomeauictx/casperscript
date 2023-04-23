@@ -1,6 +1,5 @@
 SHELL := /bin/bash
-EXAMPLES := examples
-REFERENCE := reference
-FILES := examples/*.{ps,eps,pdf} examples/*.{ps,eps,pdf}
+FILES := $(wildcard examples/*.* examples/*/*.*)
+OUT := $(patsubst examples/%,reference/%,$(FILES))
 all:
-	echo $(FILES)
+	echo $(OUT)
