@@ -71,6 +71,7 @@ import build_revision
 import gsconf, gsparamsets
 import anydbm
 from popen2 import Popen4
+from subprocess import check_output, CalledProcessError
 
 # configuration variables
 
@@ -112,6 +113,12 @@ def get_revision(dir=None):
     if dir:
         cwd=os.getcwd()
         os.chdir(dir)
+
+    try:
+        revision = check_output(['git', 'describe', '--dirty'])
+        return revision.rstrip() or 'unknown'
+    except CalledProcessError:
+        pass  # fall through to old `svn` code
 
     command="svn update --non-recursive"
     if os.system(command) != 0:

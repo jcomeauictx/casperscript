@@ -28,6 +28,7 @@ import re
 import sys
 import time
 import logging
+import tempfile
 
 # python3 compatibility
 try:
@@ -36,11 +37,42 @@ except NameError:
     FileNotFoundError = OSError
 
 CALLER = os.path.splitext(os.path.basename(sys.argv[0]))[0]
-FILENAME = os.path.join(os.path.dirname(sys.argv[0]), 'testing.cfg')
+TESTDIR = os.path.dirname(os.path.realpath(sys.argv[0]))
+TOOLBIN = os.path.dirname(TESTDIR)
+GSROOT = os.path.dirname(TOOLBIN)
+if 'toolbin' not in os.listdir(GSROOT):
+    raise FileNotFoundError('Unexpected directory structure, cannot continue')
+CONFIGFILE = os.path.join(TESTDIR, 'testing.cfg')
 USER = pwd.getpwuid(os.geteuid()).pw_name
+TEMPDIR = tempfile.mkdtemp()
+INSTALLTREE = os.path.join(TEMPDIR, 'install')
+LOGDIR = os.path.join(TEMPDIR, 'log')
+UPDATE_STDOUT = os.path.join(LOGDIR, 'update.log')
+UPDATE_STDERR = os.path.join(LOGDIR, 'update.err')
+MAKE_STDOUT = os.path.join(LOGDIR, 'make.log')
+MAKE_STDERR = os.path.join(LOGDIR, 'make.err')
+CONFIG_STDOUT = os.path.join(LOGDIR, 'config.log')
+CONFIG_STDERR = os.path.join(LOGDIR, 'config.err')
+INSTALL_STDOUT = os.path.join(LOGDIR, 'install.log')
+INSTALL_STDERR = os.path.join(LOGDIR, 'install.err')
+CUMULATIVE = 'cumulative.log'
+HISTORY = 'history.log'
 DEFAULT_CONFIG = {  # set some sane (?) defaults in case no testing.cfg exists
     'report_from': CALLER + '@localhost',
     'report_to': USER + '@localhost',
+    'gsroot': GSROOT,
+    'installtree': INSTALLTREE,
+    'logdir': LOGDIR,
+    'update_stdout': UPDATE_STDOUT,
+    'update_stderr': UPDATE_STDERR,
+    'make_stdout': MAKE_STDOUT,
+    'make_stderr': MAKE_STDERR,
+    'config_stdout': CONFIG_STDOUT,
+    'config_stderr': CONFIG_STDERR,
+    'install_stdout': INSTALL_STDOUT,
+    'install_stderr': INSTALL_STDERR,
+    'cumulative': CUMULATIVE,
+    'history': HISTORY,
 }
 # jc@unternet.net thinks this is a smelly hack, but since I'm not really sure
 # why Artifex chose to use the module itself to store the config, I don't
@@ -51,7 +83,7 @@ if 'gsconf' not in sys.modules:  # the case if this file is run directly
 GSCONF = sys.modules['gsconf']
 GSCONF.__dict__.update(DEFAULT_CONFIG)
 
-def parse_config(source=FILENAME, config=None):
+def parse_config(source=CONFIGFILE, config=None):
     r'''
     read and update configuration from array or from file
 
@@ -100,3 +132,5 @@ parse_config()
 if __name__ == '__main__':
     import doctest
     doctest.testmod()
+    for key, value in DEFAULT_CONFIG.iteritems():
+        print(key + ':', value)
