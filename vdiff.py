@@ -20,7 +20,7 @@ MODES = {
     'P3': 'RGB',
 }
 
-def vdiff(filename1, filename2):
+def vdiff(filename1, filename2, sidebyside=False):
     '''
     generate pnm of differences between two pnm files
     '''
@@ -64,8 +64,11 @@ def vdiff(filename1, filename2):
     imagebytes = (bytes(data[0]), bytes(data[1]))
     image1 = Image.frombytes(MODES[pnmtypes[0]], dimensions[0], imagebytes[0])
     image2 = Image.frombytes(MODES[pnmtypes[1]], dimensions[1], imagebytes[1])
-    image1.show()
-    image2.show()
+    if sidebyside:
+        image1.show()
+        image2.show()
+    else:
+        Image.blend(image1, image2, 0.5).show()
 
 def get(iterable):
     '''
