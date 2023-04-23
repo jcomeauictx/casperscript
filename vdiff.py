@@ -14,6 +14,12 @@ MULTIPLIER = {
     'P3': 3,
 }
 
+MODES = {
+    'P1': '1',
+    'P2': 'L',
+    'P3': 'RGB',
+}
+
 def vdiff(filename1, filename2):
     '''
     generate pnm of differences between two pnm files
@@ -55,6 +61,11 @@ def vdiff(filename1, filename2):
     if lengths[0] != expected_length:
         raise ValueError('Unexpected length: %d != %d' %
                          (lengths[0], expected_length))
+    imagebytes = (bytes(data[0]), bytes(data[1]))
+    image1 = Image.frombytes(MODES[pnmtypes[0]], dimensions[0], imagebytes[0])
+    image2 = Image.frombytes(MODES[pnmtypes[1]], dimensions[1], imagebytes[1])
+    image1.show()
+    image2.show()
 
 def get(iterable):
     '''
