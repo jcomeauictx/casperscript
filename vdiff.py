@@ -64,11 +64,18 @@ def vdiff(filename1, filename2, sidebyside=False):
     imagebytes = (bytes(data[0]), bytes(data[1]))
     image1 = Image.frombytes(MODES[pnmtypes[0]], dimensions[0], imagebytes[0])
     image2 = Image.frombytes(MODES[pnmtypes[1]], dimensions[1], imagebytes[1])
+    merged = Image.frombytes(MODES[pnmtypes[0]], dimensions[0], merge(*data))
     if sidebyside:
         image1.show()
         image2.show()
     else:
-        Image.blend(image1, image2, 0.5).show()
+        merged.show()
+
+def merge(data0, data1):
+    '''
+    return difference, as bytes, between two arrays of numbers
+    '''
+    return bytes([abs(data1[n] - data0[n]) for n in range(len(data0))])
 
 def get(iterable):
     '''
