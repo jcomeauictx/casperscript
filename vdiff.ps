@@ -27,19 +27,28 @@
   % read PNM file into dict
   % we confine ourselves to gs-created pnm files, which only have a single
   % whole-line comment on 2nd line. this won't work with end-of-line comments.
+  (readpnm called, stack:) = pstack
   pnm dup length dict copy /instance exch def  % new instance of pnm dictionary
   (r) file /infile exch def
-  /buffer 1024 string exch def  % hopefully enough for any PNM line length
-  infile buffer readline (**) copy instance /type put
+  /buffer 1024 string def  % hopefully enough for any PNM line length
+  infile buffer readline pop (**) copy instance /type 3 -1 roll put
+  % read and discard the expected comment. might as well be specific about it.
+  infile buffer readline pop 0 get comment ne {
+    (Not gs-created pnm file) = /valueerror signalerror
+  } if
+  instance /height infile token pop cvi put
+  instance /width infile token pop cvi put
+  instance /type (P1) ne {instance /maxvalue infile token pop cvi put} if
   instance
 } bind def
 
 /vdiff {  % filename1 filename2 sidebyside -
   % generate pnm of differences between two pnm files
+  (vdiff called, stack:) = pstack
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 readpnm ==
+  filename1 readpnm ===
 } bind def
 (    file1 = open(filename1, 'r')
     file2 = open(filename2, 'r')
@@ -95,23 +104,6 @@ def merge(data0, data1, maxvalue):
     '''
     merged = [maxvalue - abs(data1[n] - data0[n]) for n in range(len(data0))]
     return bytes(merged)
-
-def get(iterable):
-    '''
-    return next non-comment from iterable
-
-    >>> get(iter(['#bleah', 'test#']))
-    'test'
-    '''
-    value = next(iterable)
-    if value.startswith('#'):
-        return get(iterable)  # too many comments in a row will stackoverflow
-    if '#' in value:
-        value = value[0:value.index('#')]
-    return value
-
-if __name__ == '__main__':
-    vdiff(*sys.argv[1:])
 ) pop
 
-argv dup 1 get exch 2 get false vdiff
+argv dup 1 get exch dup 2 get exch {3 get} stopped {pop pop false} if vdiff
