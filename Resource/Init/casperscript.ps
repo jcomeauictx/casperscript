@@ -14,6 +14,11 @@ forthdict begin
     % print to stdout all words from all dictionaries, like FORTH
     countdictstack array dictstack {dictwords} forall
   } bind def
+  /bye /quit load def  % alias Forth 'bye' to ps 'quit'
+  /see {  % *not* prefix like Forth; use as `/someword see`
+    {mark exch load dup mark exch ===} stopped {cleartomark ==} {pop} ifelse
+    cleartomark  % necessary in case `load` was unrecognized
+  } bind def
 end  % forthdict
 
 /casperdict 1024 dict def
