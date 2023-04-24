@@ -1,30 +1,47 @@
-#!/usr/bin/python3
-'''
-visual diff two pnm files
-'''
-import sys
-import logging
-from PIL import Image
+#! bin/bccs
+% visual diff two pnm files
 
-logging.basicConfig(level=logging.DEBUG if __debug__ else logging.INFO)
+/multiplier <<
+  /P1 1
+  /P2 1
+  /P3 3
+>> def
 
-MULTIPLIER = {
-    'P1': 1,
-    'P2': 1,
-    'P3': 3,
-}
+/mode <<
+  /P1 (1)
+  /P2 (L)
+  /P3 (RGB)
+>> def
 
-MODE = {
-    'P1': '1',
-    'P2': 'L',
-    'P3': 'RGB',
-}
+/pnm <<
+  /height 0
+  /width 0
+  /type /P0  % (invalid type)
+  /maxvalue 1  % (default for P1)
+  /data null
+>>
 
-def vdiff(filename1, filename2, sidebyside=False):
-    '''
-    generate pnm of differences between two pnm files
-    '''
-    file1 = open(filename1, 'r')
+/comment (#) 0 get def  % comment introducer
+
+/readpnm {  % filename - pnminstance
+  % read PNM file into dict
+  % we confine ourselves to gs-created pnm files, which only have a single
+  % whole-line comment on 2nd line. this won't work with end-of-line comments.
+  pnm dup length dict copy /instance exch def  % new instance of pnm dictionary
+  filename (r) file /infile exch def
+  /buffer 1024 string exch def  % hopefully enough for any PNM line length
+  infile buffer readline (**) copy instance /type put
+  instance
+} bind def
+
+/vdiff {  % filename1 filename2 sidebyside -
+  % generate pnm of differences between two pnm files
+  /sidebyside exch def
+  /filename2 exch def
+  /filename1 exch def
+  filename1 readpnm ==
+} bind def
+(    file1 = open(filename1, 'r')
     file2 = open(filename2, 'r')
     pnmtypes = (get(file1).strip(), get(file2).strip())
     if pnmtypes[0] != pnmtypes[1]:
@@ -95,3 +112,6 @@ def get(iterable):
 
 if __name__ == '__main__':
     vdiff(*sys.argv[1:])
+) pop
+
+argv dup 1 get exch 2 get false vdiff
