@@ -19,7 +19,7 @@
   /type /P0  % (invalid type)
   /maxvalue 1  % (default for P1)
   /data null
->>
+>> def
 
 /comment (#) 0 get def  % comment introducer
 
@@ -28,7 +28,7 @@
   % we confine ourselves to gs-created pnm files, which only have a single
   % whole-line comment on 2nd line. this won't work with end-of-line comments.
   pnm dup length dict copy /instance exch def  % new instance of pnm dictionary
-  filename (r) file /infile exch def
+  (r) file /infile exch def
   /buffer 1024 string exch def  % hopefully enough for any PNM line length
   infile buffer readline (**) copy instance /type put
   instance
