@@ -14,7 +14,7 @@ MULTIPLIER = {
     'P3': 3,
 }
 
-MODES = {
+MODE = {
     'P1': '1',
     'P2': 'L',
     'P3': 'RGB',
@@ -62,20 +62,22 @@ def vdiff(filename1, filename2, sidebyside=False):
         raise ValueError('Unexpected length: %d != %d' %
                          (lengths[0], expected_length))
     imagebytes = (bytes(data[0]), bytes(data[1]))
-    image1 = Image.frombytes(MODES[pnmtypes[0]], dimensions[0], imagebytes[0])
-    image2 = Image.frombytes(MODES[pnmtypes[1]], dimensions[1], imagebytes[1])
-    merged = Image.frombytes(MODES[pnmtypes[0]], dimensions[0], merge(*data))
+    image1 = Image.frombytes(MODE[pnmtypes[0]], dimensions[0], imagebytes[0])
+    image2 = Image.frombytes(MODE[pnmtypes[1]], dimensions[1], imagebytes[1])
+    merged = Image.frombytes(MODE[pnmtypes[0]], dimensions[0],
+                             merge(*data, maxvalues[0]))
     if sidebyside:
         image1.show()
         image2.show()
     else:
         merged.show()
 
-def merge(data0, data1):
+def merge(data0, data1, maxvalue):
     '''
     return difference, as bytes, between two arrays of numbers
     '''
-    return bytes([abs(data1[n] - data0[n]) for n in range(len(data0))])
+    merged = [maxvalue - abs(data1[n] - data0[n]) for n in range(len(data0))]
+    return bytes(merged)
 
 def get(iterable):
     '''
