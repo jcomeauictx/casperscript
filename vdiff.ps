@@ -13,10 +13,18 @@
   /P3 (RGB)
 >> def
 
-/pnm <<
-  /height 0
-  /width 0
-  /type /P0  % (invalid type)
+/pnm <<  % make this a valid type 1 image dict, but also have needed PNM
+	 % keys (lowercased) and values
+  /ImageType 1
+  /Height 0
+  /Width 0
+  /ImageMatrix [w 0 0 -h 0 h]  % placeholder for top-bottom left-right data
+  /MultipleDataSources false  % optional (default) but might as well be explicit
+  /DataSource null  % replace with input stream
+  /BitsPerComponent 1  % default for P1
+  /Decode [0 1]  % map colors into range 0 to 1 ([0 1 0 1 0 1] for RGB)
+  /Interpolate false  % another optional, default false
+  /type (P0)  % (invalid type)
   /maxvalue 1  % (default for P1)
   /data null
 >> def
@@ -36,8 +44,8 @@
   infile buffer readline pop 0 get comment ne {
     (Not gs-created pnm file) = /valueerror signalerror
   } if
-  instance /height infile token pop cvi put
-  instance /width infile token pop cvi put
+  instance /Height infile token pop cvi dup /height exch def put
+  instance /Width infile token pop cvi dup /width exch def put
   instance /type (P1) ne {instance /maxvalue infile token pop cvi put} if
   instance
 } bind def
