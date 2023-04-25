@@ -37,3 +37,5 @@ dup /MultipleDataSources 2 copy known {get} {pop pop false} ifelse exch
 /DeviceRGB setcolorspace colorimage
 restore
 showpage
+
+(imagedict: ) = ocimage ===  % display on stdout
