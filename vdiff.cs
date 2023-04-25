@@ -56,8 +56,7 @@
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
   /FakeData (/dev/urandom) (r) file def
-  /fakedata {FakeData 1 string readstring pop} bind def
-  instance /DataSource fakedata put
+  instance /DataSource {FakeData 1 string readstring pop} put
   instance dup (instance: ) print === colorspace
   setcolorspace 
   72 72 moveto currentpoint translate 
