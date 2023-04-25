@@ -46,8 +46,8 @@
   infile buffer readline pop 0 get comment ne {
     (Not gs-created pnm file) = /valueerror signalerror
   } if
-  instance /Height infile token pop cvi dup /height exch def put
   instance /Width infile token pop cvi dup /width exch def put
+  instance /Height infile token pop cvi dup /height exch def put
   instance /ImageMatrix get dup dup  % we're going to overwrite the /w etc.
     0 width put
     3 height neg put
@@ -56,8 +56,8 @@
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
   % read in the image data from the same file
-  instance /DataSource {infile buffer readline pop pstack} bind put
-  instance colorspace
+  instance /DataSource {infile buffer readline pop} bind put
+  instance dup (instance: ) print === colorspace
 } bind def
 
 /vdiff {  % filename1 filename2 sidebyside -
