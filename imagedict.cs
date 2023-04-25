@@ -17,7 +17,7 @@
 
 save
 1 inch 2 inch moveto currentpoint translate
-400 400 scale
+5 inch 7 inch scale
 ocimage
 /DeviceRGB setcolorspace image
 restore
@@ -25,7 +25,7 @@ showpage
 
 save
 1 inch 2 inch moveto currentpoint translate
-400 400 scale
+5 inch 7 inch scale
 ocimage 
 dup /Width get exch
 dup /Height get exch
