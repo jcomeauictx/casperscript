@@ -55,11 +55,12 @@
   pnmtype (P1) ne {  % P2 and P3 have an extra line, max value
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
-  /FakeData (/dev/urandom) (r) file def
-  instance /DataSource {FakeData 1 string readstring pop} put
+  instance /DataSource {
+    infile token {1 string dup 0 4 -1 roll put} {()} ifelse
+  } put
   instance dup (instance: ) print === colorspace
   setcolorspace 
-  72 72 moveto currentpoint translate 
+  72 72 translate 
   400 400 scale
   image showpage
 } bind def
