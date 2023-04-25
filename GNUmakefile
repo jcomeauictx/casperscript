@@ -37,3 +37,5 @@ env:
 	mv $(<D)/$@ .
 %:	| $(CS_MAKEFILES)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
+vdiff: vdiff.cs
+	./$< reference/cjk/iso2022.ps.1.pnm testing/cjk/iso2022.ps.1.pnm
