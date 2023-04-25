@@ -55,8 +55,14 @@
   pnmtype (P1) ne {  % P2 and P3 have an extra line, max value
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
-  instance /DataSource infile put
+  /FakeData (/dev/urandom) (r) file def
+  /fakedata {FakeData 1 string readstring pop} bind def
+  instance /DataSource fakedata put
   instance dup (instance: ) print === colorspace
+  setcolorspace 
+  72 72 moveto currentpoint translate 
+  400 400 scale
+  image showpage
 } bind def
 
 /vdiff {  % filename1 filename2 sidebyside -
@@ -66,65 +72,6 @@
   /filename2 exch def
   /filename1 exch def
   filename1 (r) file readpnm (stack before setcolorspace: ) = pstack
-  setcolorspace 
-  72 72 moveto currentpoint translate 
-  400 400 scale
-  image
 } bind def
-(    file1 = open(filename1, 'r')
-    file2 = open(filename2, 'r')
-    pnmtypes = (get(file1).strip(), get(file2).strip())
-    if pnmtypes[0] != pnmtypes[1]:
-        raise ValueError('Different PNM types %s and %s' % pnmtypes)
-    logging.debug('pnmtypes: %s', pnmtypes)
-    dimensions = (get(file1).strip(), get(file2).strip())
-    if dimensions[0] != dimensions[1]:
-        raise ValueError('Different dimensions %s and %s' % dimensions)
-    dimensions = tuple(map(lambda s: tuple(map(int, s.split())), dimensions))
-    logging.debug('dimensions: %s', dimensions)
-    expected_length = int.__mul__(*dimensions[0]) * MULTIPLIER[pnmtypes[0]]
-    logging.debug('expected file length: %d', expected_length)
-    if pnmtypes[0] == 'P1':
-        maxvalues = ('1', '1')
-    else:
-        maxvalues = (get(file1).strip(), get(file2).strip())
-    logging.debug('maxvalues: %s', maxvalues)
-    if maxvalues[0] != maxvalues[1]:
-        raise ValueError('incompatible max values %s', maxvalues)
-    maxvalues = tuple(map(int, maxvalues))
-    data = [[], []]
-    while True:
-        try:
-            raw1, raw2 = get(file1).strip(), get(file2).strip()
-            if ' ' in raw1:
-                raw1, raw2 = raw1.split(), raw2.split()
-            data[0] += list(map(int, raw1))
-            data[1] += list(map(int, raw2))
-        except StopIteration:
-            break
-    lengths = tuple(map(len, data))
-    if lengths[0] != lengths[1]:
-        raise ValueError('Different lengths: %s' % lines)
-    if lengths[0] != expected_length:
-        raise ValueError('Unexpected length: %d != %d' %
-                         (lengths[0], expected_length))
-    imagebytes = (bytes(data[0]), bytes(data[1]))
-    image1 = Image.frombytes(MODE[pnmtypes[0]], dimensions[0], imagebytes[0])
-    image2 = Image.frombytes(MODE[pnmtypes[1]], dimensions[1], imagebytes[1])
-    merged = Image.frombytes(MODE[pnmtypes[0]], dimensions[0],
-                             merge(*data, maxvalues[0]))
-    if sidebyside:
-        image1.show()
-        image2.show()
-    else:
-        merged.show()
-
-def merge(data0, data1, maxvalue):
-    '''
-    return difference, as bytes, between two arrays of numbers
-    '''
-    merged = [maxvalue - abs(data1[n] - data0[n]) for n in range(len(data0))]
-    return bytes(merged)
-) pop
 
 argv dup 1 get exch dup 2 get exch {3 get} stopped {pop pop false} if vdiff
