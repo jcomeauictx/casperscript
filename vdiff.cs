@@ -60,7 +60,7 @@
   } put
   instance dup (instance: ) print === colorspace
   setcolorspace 
-  400 400 scale
+  width height scale
   image
 } bind def
 
