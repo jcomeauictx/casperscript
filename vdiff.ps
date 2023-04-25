@@ -56,7 +56,21 @@
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
   % read in the image data from the same file
-  instance /DataSource {infile buffer readline pop} bind put
+  % convert ASCII numbers to bytestring on the fly
+  /asciifilter {  % infile buffer - infile buffer bytestring
+    % convert (255 0 1 255) to (\377\000\001\377)
+    2 copy  % keep infile and buffer for reuse
+    readline pop 0 1 index {token  % stack (255 0 1 255) 0 (0 1 255) 255 true
+      {3 index 2 index 3 -1 roll put exch 1 add exch}
+      % otherwise, stack (\377\000\001\3770 1 255) 4 false
+      {string copy exit} ifelse
+      (stack inside loop:) = pstack
+    } loop
+    (stack outside loop:) = pstack
+  } bind def
+  instance /DataSource {infile buffer asciifilter} bind put
+  /generator (/dev/zero) (r) file def  % until we figure out filter
+  instance /DataSource {generator 24 string readstring pop} bind put
   instance dup (instance: ) print === colorspace
 } bind def
 
