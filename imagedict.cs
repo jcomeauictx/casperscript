@@ -13,10 +13,19 @@
     /DataSource (/dev/urandom) (r) file
   >> def
 
+save
 1 inch 2 inch moveto currentpoint translate
 400 400 scale
 /DeviceRGB ocimage
 dup === pstack
 exch setcolorspace image
+restore
+showpage
 
+save
+1 inch 2 inch moveto currentpoint translate
+400 400 scale
+/DeviceRGB ocimage
+exch setcolorspace image
+restore
 showpage
