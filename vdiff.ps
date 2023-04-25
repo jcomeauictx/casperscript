@@ -69,8 +69,9 @@
     (stack outside loop:) = pstack
   } bind def
   instance /DataSource {infile buffer asciifilter} bind put
-  /generator (/dev/zero) (r) file def  % until we figure out filter
-  instance /DataSource {generator 24 string readstring pop} bind put
+  /generator (/dev/urandom) (r) file def  % until we figure out filter
+  /bytecount 0 def  % for keeping track of bytes read
+  instance /DataSource {generator 24 string readstring pop (stack: ) = pstack} bind put
   instance dup (instance: ) print === colorspace
 } bind def
 
@@ -80,7 +81,7 @@
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 readpnm setcolorspace 10 10 moveto image showpage
+  filename1 readpnm setcolorspace 100 100 moveto image 9 sleep
 } bind def
 (    file1 = open(filename1, 'r')
     file2 = open(filename2, 'r')
