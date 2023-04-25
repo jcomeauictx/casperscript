@@ -8,9 +8,11 @@
     /Width 5 inch
     /Height 7 inch
     /ImageMatrix [5 inch 0 0 7 inch neg 0 7 inch]
+    /MultipleDataSources false
+    /DataSource (/dev/urandom) (r) file
     /BitsPerComponent 8
     /Decode [0 1 0 1 0 1]
-    /DataSource (/dev/urandom) (r) file
+    /Interpolate false
   >> def
 
 save
