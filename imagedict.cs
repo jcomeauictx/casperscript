@@ -16,16 +16,22 @@
 save
 1 inch 2 inch moveto currentpoint translate
 400 400 scale
-/DeviceRGB ocimage
-dup === pstack
-exch setcolorspace image
+ocimage
+/DeviceRGB pstack setcolorspace image
 restore
 showpage
 
 save
 1 inch 2 inch moveto currentpoint translate
 400 400 scale
-/DeviceRGB ocimage
-exch setcolorspace image
+ocimage 
+dup /Width get exch
+dup /Height get exch
+dup /BitsPerComponent get exch
+dup /ImageMatrix get exch
+dup /DataSource get exch
+1 index type /arraytype eq exch  % true or false
+/Decode get length 2 div cvi % number of colors
+/DeviceRGB pstack setcolorspace colorimage
 restore
 showpage
