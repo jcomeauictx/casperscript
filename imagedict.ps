@@ -1,0 +1,24 @@
+%!ps
+% adapted from https://stackoverflow.com/a/15167678/493161
+/inch {72 mul} def
+
+/ocimage
+{
+  <<
+    /ImageType 1
+    /Width 5 inch
+    /Height 7 inch
+    /ImageMatrix [5 inch 0 0 7 inch neg 0 7 inch]
+    /BitsPerComponent 8
+    /Decode [0 1 0 1 0 1]
+    /DataSource (/dev/urandom) (r) file
+  >>
+} bind def
+
+1 inch 2 inch moveto currentpoint translate
+400 400 scale
+/DeviceRGB ocimage
+dup === pstack
+exch setcolorspace image
+
+showpage
