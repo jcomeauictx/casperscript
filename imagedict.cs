@@ -1,4 +1,4 @@
-%!ps
+#! bin/cs -S --
 % adapted from https://stackoverflow.com/a/15167678/493161
 /inch {72 mul} def
 
