@@ -55,7 +55,8 @@
   pnmtype (P1) ne {  % P2 and P3 have an extra line, max value
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
-  instance /DataSource infile put  % read the image data from the file
+  % read in the image data from the same file
+  instance /DataSource {infile buffer readline pop pstack} bind put
   instance colorspace
 } bind def
 
@@ -65,7 +66,7 @@
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 readpnm 10 10 moveto setcolorspace image showpage
+  filename1 readpnm setcolorspace 10 10 moveto image showpage
 } bind def
 (    file1 = open(filename1, 'r')
     file2 = open(filename2, 'r')
