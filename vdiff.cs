@@ -32,7 +32,7 @@
 
 /comment (#) 0 get def  % comment introducer
 
-/readpnm {  % file - pnminstance colorspace
+/showpnm {  % file - pnminstance colorspace
   % read PNM file into dict
   % we confine ourselves to gs-created pnm files, which only have a single
   % whole-line comment on 2nd line. this won't work with end-of-line comments.
@@ -60,9 +60,8 @@
   } put
   instance dup (instance: ) print === colorspace
   setcolorspace 
-  72 72 translate 
   400 400 scale
-  image showpage
+  image
 } bind def
 
 /vdiff {  % filename1 filename2 sidebyside -
@@ -71,7 +70,11 @@
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 (r) file readpnm (stack before setcolorspace: ) = pstack
+  filename1 (r) file 72 72 translate showpnm
+  showpage
+  filename2 (r) file 72 72 translate showpnm
+  showpage
+  (pstack at end: ) = pstack
 } bind def
 
 argv dup 1 get exch dup 2 get exch {3 get} stopped {pop pop false} if vdiff
