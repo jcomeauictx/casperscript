@@ -3,7 +3,6 @@
 /inch {72 mul} def
 
 /ocimage
-{
   <<
     /ImageType 1
     /Width 5 inch
@@ -12,8 +11,7 @@
     /BitsPerComponent 8
     /Decode [0 1 0 1 0 1]
     /DataSource (/dev/urandom) (r) file
-  >>
-} bind def
+  >> def
 
 1 inch 2 inch moveto currentpoint translate
 400 400 scale
