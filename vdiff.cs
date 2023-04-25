@@ -57,7 +57,7 @@
   } if
   instance /DataSource {
     infile token {1 string dup 0 4 -1 roll put} {()} ifelse
-  } put
+  } ReusableStreamDecode filter put
   instance dup (instance: ) print === colorspace
   setcolorspace 
   width height scale
