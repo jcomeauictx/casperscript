@@ -22,6 +22,7 @@ restore
 showpage
 
 save
+(again, without dict) =
 1 inch 2 inch moveto currentpoint translate
 400 400 scale
 ocimage 
@@ -30,8 +31,10 @@ dup /Height get exch
 dup /BitsPerComponent get exch
 dup /ImageMatrix get exch
 dup /DataSource get exch
-1 index type /arraytype eq exch  % true or false
+(checking MultipleDataSources) =
+dup /MultipleDataSources 2 copy known {get} {pop pop false} ifelse exch
+(checking Decode) = pstack
 /Decode get length 2 div cvi % number of colors
-/DeviceRGB pstack setcolorspace colorimage
+/DeviceRGB (before setcolorspace) = pstack setcolorspace colorimage
 restore
 showpage
