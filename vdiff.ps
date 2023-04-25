@@ -1,4 +1,4 @@
-#! bin/cs -S -dBATCH -dNOPAUSE -C --
+#! bin/cs -S -C --
 % visual diff two pnm files
 
 /bits <<  % translate maxvalue into bits per sample
@@ -32,12 +32,12 @@
 
 /comment (#) 0 get def  % comment introducer
 
-/readpnm {  % filename - pnminstance colorspace
+/readpnm {  % file - pnminstance colorspace
   % read PNM file into dict
   % we confine ourselves to gs-created pnm files, which only have a single
   % whole-line comment on 2nd line. this won't work with end-of-line comments.
   pnm dup length dict copy /instance exch def  % new instance of pnm dictionary
-  (r) file /infile exch def  % open file and store handle in `infile`.
+  /infile exch def  % store open file handle in `infile`.
   /buffer 1024 string def  % hopefully enough for any PNM line length
   /pnmtype infile token pop cvlit def  % /P1, /P2, or /P3
   instance /Decode decode pnmtype get put
@@ -55,7 +55,7 @@
   pnmtype (P1) ne {  % P2 and P3 have an extra line, max value
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
-  instance /DataSource (/dev/urandom) (r) file put
+  instance /DataSource infile put
   instance dup (instance: ) print === colorspace
 } bind def
 
@@ -65,7 +65,8 @@
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 readpnm (stack before setcolorspace: ) = pstack setcolorspace 
+  filename1 (r) file readpnm (stack before setcolorspace: ) = pstack
+  setcolorspace 
   72 72 moveto currentpoint translate 
   400 400 scale
   image
