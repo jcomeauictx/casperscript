@@ -1,4 +1,4 @@
-#! bin/cs -S -C --
+#! bin/cs --
 % visual diff two pnm files
 
 /inch {72 mul} bind def
