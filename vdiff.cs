@@ -69,18 +69,33 @@
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 .25 inch .25 inch translate readpnm
+  filename1 0 0 translate readpnm
   setcolorspace
   dup /Width get exch dup /Height get exch 3 1 roll scale dup image
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
   (pstack after first file, should have data: ) = pstack
-  filename2 .25 inch .25 inch translate readpnm
-  setcolorspace
+  filename2 0 0 translate readpnm
+  dup setcolorspace exch
+  (pstack after 2nd setcolorspace, should be dict color data: ) = pstack
   dup dup /Width get exch dup /Height get exch 3 1 roll scale dup image
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
-  (pstack after second file, should have data, dict, data: ) = pstack
+  (pstack after second showpage, should have data dict color data: ) = pstack
+  3 -1 roll  % put colorspace on top
+  setcolorspace 0 0 translate
+  (pstack after setcolorspace, should have file2data dict file1data: ) = pstack
+  3 -1 roll  % put file1data on top
+  /file1data exch def /file2data exch def
+  (pstack after data removed: ) = pstack
+  dup  % extra copy of dict for `image` operator
+  /DataSource {file1data read file2data read  % n true n true, or false false
+    {exch pop sub abs 1 string put} {()} ifelse
+  } put
+  (pstack after setting DataSource: ) = pstack
+  dup /Width get exch dup /Height get exch 3 1 roll
+  (pstack before scale: ) = pstack
+  scale (pstack before image: ) = pstack image
   (pstack at end: ) = pstack
 } bind def
 
