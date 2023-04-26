@@ -32,8 +32,37 @@
 
 /comment (#) 0 get def  % comment introducer
 
-/showpnm {  % file - pnminstance colorspace
+/readpnm {  % filename - pnminstance colorspace
   % read PNM file into dict
+  % we confine ourselves to gs-created pnm files, which only have a single
+  % whole-line comment on 2nd line. this won't work with end-of-line comments.
+  pnm dup length dict copy /instance exch def  % new instance of pnm dictionary
+  (r) file /infile exch def  % store open file handle in `infile`.
+  /buffer 1024 string def  % hopefully enough for any PNM line length
+  /pnmtype infile token pop cvlit def  % /P1, /P2, or /P3
+  instance /Decode decode pnmtype get put
+  /colorspace colorspaces pnmtype get def
+  % read and discard the expected comment, throw error on failure.
+  infile buffer readline pop 0 get comment ne {
+    (Not gs-created pnm file) = /valueerror signalerror
+  } if
+  instance /Width infile token pop cvi dup /width exch def put
+  instance /Height infile token pop cvi dup /height exch def put
+  instance /ImageMatrix get dup dup  % we're going to overwrite the /w etc.
+    0 width put
+    3 height neg put
+    5 height put
+  pnmtype (P1) ne {  % P2 and P3 have an extra line, max value
+    instance /BitsPerComponent bits infile token pop cvi get put
+  } if
+  instance /DataSource {
+    infile token {1 string dup 0 4 -1 roll put} {()} ifelse
+  } ReusableStreamDecode filter put
+  instance dup (instance: ) print === colorspace
+} bind def
+
+/showpnm {  % file - 
+  % read PNM file into dict and show on page
   % we confine ourselves to gs-created pnm files, which only have a single
   % whole-line comment on 2nd line. this won't work with end-of-line comments.
   pnm dup length dict copy /instance exch def  % new instance of pnm dictionary
@@ -70,9 +99,11 @@
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 (r) file 72 72 translate showpnm
+  filename1 36 36 translate readpnm
+  setcolorspace
+  dup /Width get exch dup /Height get exch 3 1 roll scale image
   showpage
-  filename2 (r) file 72 72 translate showpnm
+  filename2 (r) file 36 36 translate showpnm
   showpage
   (pstack at end: ) = pstack
 } bind def
