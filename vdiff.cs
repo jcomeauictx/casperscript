@@ -90,12 +90,13 @@
   (pstack after data removed: ) = pstack
   dup  % extra copy of dict for `image` operator
   /DataSource {file1data read file2data read  % n true n true, or false false
-    {exch pop sub abs 1 string put} {()} ifelse
+    {exch pop sub abs 1 string dup 3 -1 roll 0 exch put} {pop ()} ifelse
   } put
   (pstack after setting DataSource: ) = pstack
   dup /Width get exch dup /Height get exch 3 1 roll
   (pstack before scale: ) = pstack
   scale (pstack before image: ) = pstack image
+  showpage
   (pstack at end: ) = pstack
 } bind def
 
