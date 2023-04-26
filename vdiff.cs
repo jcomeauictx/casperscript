@@ -88,9 +88,11 @@
   3 -1 roll  % put file1data on top
   /file1data exch def /file2data exch def
   (pstack after data removed: ) = pstack
+  dup /BitsPerComponent get 1 exch bitshift 1 sub /maxvalue exch def
   dup  % extra copy of dict for `image` operator
   /DataSource {file1data read file2data read  % n true n true, or false false
-    {exch pop sub abs 1 string dup 3 -1 roll 0 exch put} {pop ()} ifelse
+    {exch pop sub abs maxvalue exch sub 1 string dup 3 -1 roll 0 exch put}
+    {pop ()} ifelse
   } put
   (pstack after setting DataSource: ) = pstack
   dup /Width get exch dup /Height get exch 3 1 roll
