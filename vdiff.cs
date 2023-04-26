@@ -69,19 +69,25 @@
   /sidebyside exch def
   /filename2 exch def
   /filename1 exch def
-  filename1 0 0 translate readpnm
+  filename1 readpnm
   setcolorspace
-  dup /Width get exch dup /Height get exch 3 1 roll scale dup image
+  dup /Width get /width exch def
+  dup /Height get /height exch def
+  <<  % set page device to landscape so as to fit both images
+    /Duplex true  % duplex to have originals on one side, diffs on the other
+    /PageSize [height width 2 mul]
+  >> sidebyside {setpagedevice} {pop} (before setpagedevice: ) = pstack ifelse
+  0 0 translate width height scale dup image
+  sidebyside not {showpage} if  % only show if *not* sidebyside mode
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
-  showpage
   (pstack after first file, should have data: ) = pstack
-  filename2 0 0 translate readpnm
+  filename2 readpnm
   dup setcolorspace exch
   (pstack after 2nd setcolorspace, should be dict color data: ) = pstack
-  dup dup /Width get exch dup /Height get exch 3 1 roll scale dup image
+  sidebyside {height} {0} ifelse 0 translate width height scale dup image
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
-  (pstack after second showpage, should have data dict color data: ) = pstack
+  (pstack after showpage, should have data dict color data: ) = pstack
   3 -1 roll  % put colorspace on top
   setcolorspace 0 0 translate
   (pstack after setcolorspace, should have file2data dict file1data: ) = pstack
@@ -95,11 +101,12 @@
     {pop ()} ifelse
   } put
   (pstack after setting DataSource: ) = pstack
-  dup /Width get exch dup /Height get exch 3 1 roll
   (pstack before scale: ) = pstack
-  scale (pstack before image: ) = pstack image
+  width height scale image
   showpage
   (pstack at end: ) = pstack
 } bind def
 
-argv dup 1 get exch dup 2 get exch {3 get} stopped {pop pop false} if vdiff
+argv dup 1 get exch dup 2 get exch {3 get} stopped
+  {pop pop false} {cvi 0 gt} ifelse  % sidebyside mode if > 0
+  vdiff
