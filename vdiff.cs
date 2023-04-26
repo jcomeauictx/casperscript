@@ -89,7 +89,7 @@
   showpage
   (pstack after showpage, should have data dict color data: ) = pstack
   3 -1 roll  % put colorspace on top
-  setcolorspace 0 0 translate
+  dup /colorspace exch def setcolorspace 0 0 translate
   (pstack after setcolorspace, should have file2data dict file1data: ) = pstack
   3 -1 roll  % put file1data on top
   /file1data exch def /file2data exch def
@@ -102,7 +102,18 @@
   } put
   (pstack after setting DataSource: ) = pstack
   (pstack before scale: ) = pstack
-  width height scale image
+  width height scale dup image
+  showpage
+  (pstack after "positive" diff: ) = pstack
+  dup  % extra copy of dict for `image` operator
+  file1data resetfile file2data resetfile  % before reusing for "negative" diff
+  /DataSource {file1data read file2data read  % n true n true, or false false
+    {exch pop sub abs 1 string dup 3 -1 roll 0 exch put}  % "negative" diff
+    {pop ()} ifelse
+  } put
+  (pstack after setting DataSource: ) = pstack
+  (pstack before final scale: ) = pstack
+  sidebyside {height} {0} ifelse 0 translate width height scale image
   showpage
   (pstack at end: ) = pstack
 } bind def
