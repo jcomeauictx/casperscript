@@ -84,7 +84,7 @@
   filename2 readpnm
   dup setcolorspace exch
   (pstack after 2nd setcolorspace, should be dict color data: ) = pstack
-  sidebyside {height} {0} ifelse 0 translate width height scale dup image
+  sidebyside {height} {0} ifelse 0 translate width height scale dup dup image
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
   (pstack after showpage, should have data dict color data: ) = pstack
