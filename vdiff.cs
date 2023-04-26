@@ -57,7 +57,7 @@
   } if
   instance /DataSource {
     infile token {1 string dup 0 4 -1 roll put} {()} ifelse
-  } ReusableStreamDecode filter put
+  } /ReusableStreamDecode filter put
   instance dup (instance: ) print === colorspace
 } bind def
 
@@ -86,7 +86,7 @@
   } if
   instance /DataSource {
     infile token {1 string dup 0 4 -1 roll put} {()} ifelse
-  } ReusableStreamDecode filter put
+  } /ReusableStreamDecode filter put
   instance dup (instance: ) print === colorspace
   setcolorspace 
   width height scale
@@ -101,7 +101,8 @@
   /filename1 exch def
   filename1 36 36 translate readpnm
   setcolorspace
-  dup /Width get exch dup /Height get exch 3 1 roll scale image
+  dup /Width get exch dup /Height get exch 3 1 roll scale dup image
+  /DataSource get dup resetfile bytesavailable (data length: ) print =
   showpage
   filename2 (r) file 36 36 translate showpnm
   showpage
