@@ -79,6 +79,8 @@ casperdict begin
   /.argcargv {
     userdict dup /ARGUMENTS where {pop ARGUMENTS length} {0} ifelse 1 add
       /.argc exch put .argc array dup 0 argv0 put
+      scriptpath strlen 0 gt {dup 0 scriptpath put} if
+      % replace programname with scriptpath if the latter exists
       .argc 1 gt {dup 1 ARGUMENTS putinterval} if /.argv exch put
     } bind def
   /argc {userdict /.argc known {.argc} {.argcargv .argc} ifelse} bind def

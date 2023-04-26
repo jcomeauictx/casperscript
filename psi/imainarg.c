@@ -120,11 +120,12 @@ static void print_paths(gs_main_instance *);
 static void print_help_trailer(const gs_main_instance *);
 
 #ifdef BUILD_CASPERSCRIPT
-char canonicalpath[4][PATH_MAX + 256] = {"", "", "", ""};
+char canonicalpath[5][PATH_MAX + 256] = {"", "", "", "", ""};
 char *argv0 = canonicalpath[0];
 char *programdirectory = canonicalpath[1];
 char *programname = canonicalpath[2];
 char *developmentlibs = canonicalpath[3];
+char *scriptpath = canonicalpath[4];
 #endif
 
 /* ------ Main program ------ */
@@ -591,6 +592,7 @@ run_stdin:
                     arg_finit(pal);
                     return gs_error_Fatal;
                 }
+                DISCARD(strcpy(canonicalpath[4], psarg));  /* `scriptpath` */
                 psarg = arg_copy(psarg, minst->heap);
                 if (psarg == NULL)
                     code = gs_error_Fatal;

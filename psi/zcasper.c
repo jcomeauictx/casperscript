@@ -19,6 +19,7 @@
 #include "gsprintf.h"  /* for gsprintf and thus zsprintf */
 extern char *argv0;
 extern char *programname;
+extern char *scriptpath;
 
 int sleep(double seconds) {
     struct timespec requested;
@@ -77,8 +78,8 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
 /* define constants for casperscript */
 int zcasperinit(i_ctx_t *i_ctx_p) {
     int code = 0, i;
-    const char *names[16] = {"argv0", "programname"};
-    const char *strings[] = {argv0, programname};
+    const char *names[16] = {"argv0", "programname", "scriptpath"};
+    const char *strings[] = {argv0, programname, scriptpath};
     int arraysize = sizeof(strings) / sizeof(char *);
     ref objects[arraysize];
     syslog(LOG_USER | LOG_DEBUG, "making systemdict entries for %d strings",

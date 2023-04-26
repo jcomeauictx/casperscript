@@ -1,2 +1,2 @@
-#! bin/cs -S -q -dNODISPLAY -dBATCH --
-{ARGUMENTS 0 get} stopped {(sleep: missing argument) =} {cvr sleep} ifelse
+#! bin/bccs
+{argv 1 get} stopped {(sleep: missing argument) =} {cvr sleep} ifelse
