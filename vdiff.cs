@@ -72,13 +72,15 @@
   filename1 .25 inch .25 inch translate readpnm
   setcolorspace
   dup /Width get exch dup /Height get exch 3 1 roll scale dup image
-  /DataSource get dup resetfile bytesavailable (data length: ) print =
+  /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
+  (pstack after first file, should have data: ) = pstack
   filename2 .25 inch .25 inch translate readpnm
   setcolorspace
-  dup /Width get exch dup /Height get exch 3 1 roll scale dup image
-  /DataSource get dup resetfile bytesavailable (data length: ) print =
+  dup dup /Width get exch dup /Height get exch 3 1 roll scale dup image
+  /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
+  (pstack after second file, should have data, dict, data: ) = pstack
   (pstack at end: ) = pstack
 } bind def
 
