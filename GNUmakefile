@@ -39,3 +39,8 @@ env:
 	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
 vdiff: vdiff.cs
 	./$< reference/cjk/iso2022.ps.1.pnm testing/cjk/iso2022.ps.1.pnm
+/tmp/vdiff.pdf: vdiff.cs
+	bin/gs -dNOSAFER -sDEVICE=pdfwrite -sOutputFile=$@ \
+	 -sPAPERSIZE=ledger -C -- $< \
+	 reference/cjk/iso2022.ps.1.pnm \
+	 testing/cjk/iso2022.ps.1.pnm
