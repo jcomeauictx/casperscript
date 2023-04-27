@@ -106,14 +106,22 @@
   showpage
   (pstack after "positive" diff: ) = pstack
   dup  % extra copy of dict for `image` operator
-  file1data resetfile file2data resetfile  % before reusing for "negative" diff
+  % rewind data files before reusing for "negative" diff
+  file1data dup resetfile bytesavailable (data length: ) print =
+  file2data resetfile
   /DataSource {file1data read file2data read  % n true n true, or false false
+    (pstack generating "negative" diff: ) = pstack
     {exch pop sub abs 1 string dup 3 -1 roll 0 exch put}  % "negative" diff
     {pop ()} ifelse
   } put
+  dup  % copy imagedict so we can put fake datasource in it for testing
+  /DataSource (/dev/urandom) (r) file put
   (pstack after setting DataSource: ) = pstack
   (pstack before final scale: ) = pstack
-  sidebyside {height} {0} ifelse 0 translate width height scale image
+  sidebyside {height} {0} ifelse 0 translate width height scale
+  (pstack before final image: ) = pstack
+  (image dict: ) = dup ===
+  image
   showpage
   (pstack at end: ) = pstack
 } bind def
