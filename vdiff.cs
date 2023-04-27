@@ -110,12 +110,11 @@
   file1data dup resetfile bytesavailable (data length: ) print =
   file2data resetfile
   /DataSource {file1data read file2data read  % n true n true, or false false
-    (pstack generating "negative" diff: ) = pstack
     {exch pop sub abs 1 string dup 3 -1 roll 0 exch put}  % "negative" diff
     {pop ()} ifelse
   } put
-  dup  % copy imagedict so we can put fake datasource in it for testing
-  /DataSource (/dev/urandom) (r) file put
+  %dup  % copy imagedict so we can put fake datasource in it for testing
+  %/DataSource (/dev/urandom) (r) file put
   (pstack after setting DataSource: ) = pstack
   (pstack before final scale: ) = pstack
   colorspace setcolorspace
