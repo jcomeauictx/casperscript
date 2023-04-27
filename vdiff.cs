@@ -73,12 +73,6 @@
   setcolorspace
   dup /Width get /width exch def
   dup /Height get /height exch def
-  <<  % set page device to landscape so as to fit both images
-    /Duplex true  % duplex to have originals on one side, diffs on the other
-    /PageSize [height width 2 mul]
-    /HalftoneDefault currenthalftone
-  >> pop  % not using this; using -sPAPERSIZE=ledger instead
-  %sidebyside {(before setpagedevice: ) = pstack setpagedevice} {pop} ifelse
   0 0 translate width height scale dup image
   sidebyside not {showpage} if  % only show if *not* sidebyside mode
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
@@ -86,7 +80,7 @@
   filename2 readpnm
   dup setcolorspace exch
   (pstack after 2nd setcolorspace, should be dict color data: ) = pstack
-  sidebyside {height} {0} ifelse 0 translate width height scale dup dup image
+  sidebyside {width} {0} ifelse 0 translate width height scale dup dup image
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
   (pstack after showpage, should have data dict color data: ) = pstack
@@ -120,7 +114,7 @@
   (pstack after setting DataSource: ) = pstack
   (pstack before final scale: ) = pstack
   colorspace setcolorspace
-  sidebyside {height} {0} ifelse 0 translate width height scale
+  sidebyside {width} {0} ifelse 0 translate width height scale
   (pstack before final image: ) = pstack
   (image dict: ) = dup ===
   image
