@@ -77,8 +77,8 @@
     /Duplex true  % duplex to have originals on one side, diffs on the other
     /PageSize [height width 2 mul]
     /HalftoneDefault currenthalftone
-  >>
-  sidebyside {(before setpagedevice: ) = pstack setpagedevice} {pop} ifelse
+  >> pop  % not using this; using -sPAPERSIZE=ledger instead
+  %sidebyside {(before setpagedevice: ) = pstack setpagedevice} {pop} ifelse
   0 0 translate width height scale dup image
   sidebyside not {showpage} if  % only show if *not* sidebyside mode
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
