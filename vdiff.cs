@@ -70,6 +70,7 @@
   /filename2 exch def
   /filename1 exch def
   filename1 readpnm
+  gsave
   setcolorspace
   dup /Width get /width exch def
   dup /Height get /height exch def
@@ -77,20 +78,24 @@
   (drawing image 1 at ) print currentpoint exch 10 string cvs print ( ) print =
   currentpoint translate width height scale dup
   image
+  grestore
   sidebyside not {showpage} if  % only show if *not* sidebyside mode
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   (pstack after first file, should have data: ) = pstack
   filename2 readpnm
+  gsave
   dup setcolorspace exch
   (pstack after 2nd setcolorspace, should be dict color data: ) = pstack
   sidebyside {width} {0} ifelse 0 moveto
   (drawing image 2 at ) print currentpoint exch 10 string cvs print ( ) print =
   currentpoint translate width height scale dup dup
   image
+  grestore
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
   (pstack after showpage, should have data dict color data: ) = pstack
   3 -1 roll  % put colorspace on top
+  gsave
   dup /colorspace exch def setcolorspace
   (pstack after setcolorspace, should have file2data dict file1data: ) = pstack
   0 0 moveto
@@ -107,7 +112,9 @@
   } put
   (pstack after setting DataSource: ) = pstack
   (pstack before scale: ) = pstack
-  width height scale dup image
+  width height scale dup 
+  image
+  grestore
   sidebyside not {showpage} if  % only show here if *not* sidebyside mode
   (pstack after "positive" diff: ) = pstack
   dup  % extra copy of dict for `image` operator
@@ -118,10 +125,9 @@
     {exch pop sub abs 1 string dup 3 -1 roll 0 exch put}  % "negative" diff
     {pop ()} ifelse
   } put
-  %dup  % copy imagedict so we can put fake datasource in it for testing
-  %/DataSource (/dev/urandom) (r) file put
   (pstack after setting DataSource: ) = pstack
   (pstack before final scale: ) = pstack
+  gsave
   colorspace setcolorspace
   sidebyside {width} {0} ifelse 0 moveto
   (drawing image 4 at ) print currentpoint exch 10 string cvs print ( ) print =
@@ -130,6 +136,7 @@
   (pstack before final image: ) = pstack
   (image dict: ) = dup ===
   image
+  grestore
   showpage
   (pstack at end: ) = pstack
 } bind def
