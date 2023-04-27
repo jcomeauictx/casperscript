@@ -118,6 +118,7 @@
   /DataSource (/dev/urandom) (r) file put
   (pstack after setting DataSource: ) = pstack
   (pstack before final scale: ) = pstack
+  colorspace setcolorspace
   sidebyside {height} {0} ifelse 0 translate width height scale
   (pstack before final image: ) = pstack
   (image dict: ) = dup ===
