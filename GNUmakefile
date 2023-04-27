@@ -43,4 +43,4 @@ vdiff: vdiff.cs
 	bin/gs -dNOSAFER -sDEVICE=pdfwrite -sOutputFile=$@ \
 	 -sPAPERSIZE=ledger -C -- $< \
 	 reference/cjk/iso2022.ps.1.pnm \
-	 testing/cjk/iso2022.ps.1.pnm
+	 testing/cjk/iso2022.ps.1.pnm 1

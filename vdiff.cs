@@ -76,6 +76,7 @@
   <<  % set page device to landscape so as to fit both images
     /Duplex true  % duplex to have originals on one side, diffs on the other
     /PageSize [height width 2 mul]
+    /HalftoneDefault currenthalftone
   >>
   sidebyside {(before setpagedevice: ) = pstack setpagedevice} {pop} ifelse
   0 0 translate width height scale dup image
