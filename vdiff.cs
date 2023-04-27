@@ -76,7 +76,8 @@
   <<  % set page device to landscape so as to fit both images
     /Duplex true  % duplex to have originals on one side, diffs on the other
     /PageSize [height width 2 mul]
-  >> sidebyside {setpagedevice} {pop} (before setpagedevice: ) = pstack ifelse
+  >>
+  sidebyside {(before setpagedevice: ) = pstack setpagedevice} {pop} ifelse
   0 0 translate width height scale dup image
   sidebyside not {showpage} if  % only show if *not* sidebyside mode
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
@@ -103,7 +104,7 @@
   (pstack after setting DataSource: ) = pstack
   (pstack before scale: ) = pstack
   width height scale dup image
-  showpage
+  sidebyside not {showpage} if  % only show here if *not* sidebyside mode
   (pstack after "positive" diff: ) = pstack
   dup  % extra copy of dict for `image` operator
   % rewind data files before reusing for "negative" diff
