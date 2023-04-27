@@ -73,19 +73,24 @@
   setcolorspace
   dup /Width get /width exch def
   dup /Height get /height exch def
-  0 0 translate width height scale dup image
+  0 0 moveto currentpoint translate width height scale dup
+  (drawing image 1 at ) print currentpoint exch 10 string cvs print ( ) print =
+  image
   sidebyside not {showpage} if  % only show if *not* sidebyside mode
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   (pstack after first file, should have data: ) = pstack
   filename2 readpnm
   dup setcolorspace exch
   (pstack after 2nd setcolorspace, should be dict color data: ) = pstack
-  sidebyside {width} {0} ifelse 0 translate width height scale dup dup image
+  sidebyside {width} {0} ifelse 0 moveto
+  currentpoint translate width height scale dup dup
+  (drawing image 2 at ) print currentpoint exch 10 string cvs print ( ) print =
+  image
   /DataSource get dup dup resetfile bytesavailable (data length: ) print =
   showpage
   (pstack after showpage, should have data dict color data: ) = pstack
   3 -1 roll  % put colorspace on top
-  dup /colorspace exch def setcolorspace 0 0 translate
+  dup /colorspace exch def setcolorspace 0 0 moveto currentpoint translate
   (pstack after setcolorspace, should have file2data dict file1data: ) = pstack
   3 -1 roll  % put file1data on top
   /file1data exch def /file2data exch def
@@ -98,6 +103,7 @@
   } put
   (pstack after setting DataSource: ) = pstack
   (pstack before scale: ) = pstack
+  (drawing image 3 at ) print currentpoint exch 10 string cvs print ( ) print =
   width height scale dup image
   sidebyside not {showpage} if  % only show here if *not* sidebyside mode
   (pstack after "positive" diff: ) = pstack
@@ -114,9 +120,11 @@
   (pstack after setting DataSource: ) = pstack
   (pstack before final scale: ) = pstack
   colorspace setcolorspace
-  sidebyside {width} {0} ifelse 0 translate width height scale
+  sidebyside {width} {0} ifelse 0 moveto currentpoint translate
+  width height scale
   (pstack before final image: ) = pstack
   (image dict: ) = dup ===
+  (drawing image 4 at ) print currentpoint exch 10 string cvs print ( ) print =
   image
   showpage
   (pstack at end: ) = pstack
