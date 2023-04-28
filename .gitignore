@@ -149,5 +149,5 @@ gs.dsm
 splitargs
 # ignore generated files
 reference
-testing
-tests.log
+latest
+*.log
