@@ -1,4 +1,4 @@
-#! bin/cs.exe -S -q -dNODISPLAY -dBATCH -I_DEV_ --
+#! bin/bccs
 (testing...) =
 /ARGUMENTS dup where {(ARGUMENTS: ) print exch get ==} {pop} ifelse
 /abc (abc) def
