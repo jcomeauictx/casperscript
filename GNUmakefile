@@ -7,19 +7,7 @@ XCFLAGS += -DUSE_LIBREADLINE
 #XCFLAGS += -DTEST_ZCASPER=1
 CASPERLIBS += -lreadline
 XTRALIBS += $(CASPERLIBS)
-NULLSTR :=
-SPACE := $(NULLSTR) $(NULLSTR)
-PATHSEP := :
-TESTSPACE := A$(SPACE)B
-# fontpaths for Debian, likely needed for regression tests
-# leave a space as shown, we will replace it with ':'
-GS_FONTPATH += /usr/share/ghostscript/fonts
-GS_FONTPATH += /var/lib/ghostscript/fonts
-GS_FONTPATH += /usr/share/cups/fonts
-GS_FONTPATH += /usr/local/lib/ghostscript/fonts
-GS_FONTPATH += /usr/share/fonts
-GS_FONTPATH := $(subst $(SPACE),$(PATHSEP),$(GS_FONTPATH))
-export GS_FONTPATH XTRALIBS TESTSPACE
+export XTRALIBS TESTSPACE
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)

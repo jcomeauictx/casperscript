@@ -7,6 +7,19 @@ TEST_OUT := $(addsuffix .1.pnm, $(patsubst examples/%,testing/%,$(FILES)))
 COMPARE := $(addsuffix .diff, $(TEST_OUT))
 TIMESTAMP := $(shell date '+%Y-%m-%d %H:%M:%S')
 LOG := tests.log
+# fontpaths for Debian, likely needed for regression tests
+# leave a space as shown, we will replace it with ':'
+NULLSTR :=
+SPACE := $(NULLSTR) $(NULLSTR)
+PATHSEP := :
+TESTSPACE := A$(SPACE)B
+GS_FONTPATH += /usr/share/ghostscript/fonts
+GS_FONTPATH += /var/lib/ghostscript/fonts
+GS_FONTPATH += /usr/share/cups/fonts
+GS_FONTPATH += /usr/local/lib/ghostscript/fonts
+GS_FONTPATH += /usr/share/fonts
+GS_FONTPATH := $(subst $(SPACE),$(PATHSEP),$(GS_FONTPATH))
+export GS_FONTPATH
 all: init $(OUT) $(TEST_OUT) $(COMPARE)
 	@echo Complete >&2
 init:
@@ -28,3 +41,5 @@ check:
 	@echo reference: $(OUT)
 	@echo regression test: $(TEST_OUT)
 	@echo compare: $(COMPARE)
+env:
+	$@
