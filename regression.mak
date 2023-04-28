@@ -49,3 +49,7 @@ check:
 	@echo compare: $(COMPARE)
 env:
 	$@
+vdiffs/%.pdf: reference/% latest/%
+	mkdir -p $(@D)
+	bin/gs -dNOSAFER -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -sOutputFile=$@ \
+	 -sPAPERSIZE=ledger -C -- vdiff.cs $^ 1
