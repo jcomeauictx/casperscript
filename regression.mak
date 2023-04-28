@@ -14,11 +14,11 @@ init:
 reference/%.1.pnm: examples/%
 	mkdir -p $(@D)
 	-$(DIST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm \
-		-sOutputFile=$(@D)/$*.%00d.pnm $<
+		-sOutputFile=$(@:.1.pnm=.%0d.pnm) $<
 testing/%.1.pnm: examples/%
 	mkdir -p $(@D)
 	-$(TEST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm \
-		-sOutputFile=$(@D)/$*.%00d.pnm $<
+		-sOutputFile=$(@:.1.pnm=.%0d.pnm) $<
 testing/%.diff: reference/%
 	-for file in $(<:.1.pnm=*); do \
 		echo comparing $$file >> $(LOG); \
