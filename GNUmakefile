@@ -11,7 +11,11 @@ XCFLAGS += -DUSE_LIBREADLINE
 #XCFLAGS += -DTEST_ZCASPER=1
 CASPERLIBS += -lreadline
 XTRALIBS += $(CASPERLIBS)
+VDIFF_TESTDIRS := reference latest
+VDIFF_TESTFILE ?= cjk/iso2022.ps.1.pnm
+VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
 export CASPER XTRALIBS
+export VDIFF_TESTFILES  # for `make env` check
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -41,13 +45,11 @@ env:
 	mv $(<D)/$@ .
 %:	| $(CS_MAKEFILES)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
-vdiff: vdiff.cs
-	./$< reference/cjk/iso2022.ps.1.pnm testing/cjk/iso2022.ps.1.pnm
-/tmp/vdiff.pdf: vdiff.cs
+vdiff: vdiff.cs $(VDIFF_TESTFILES)
+	./$^
+/tmp/vdiff.pdf: vdiff.cs $(VDIFF_TESTFILES)
 	bin/gs -dNOSAFER -sDEVICE=pdfwrite -sOutputFile=$@ \
-	 -sPAPERSIZE=ledger -C -- $< \
-	 reference/cjk/iso2022.ps.1.pnm \
-	 testing/cjk/iso2022.ps.1.pnm 1
+	 -sPAPERSIZE=ledger -C -- $^ 1
 tests:
 	make -f regression.mak
 help:
