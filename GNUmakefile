@@ -1,13 +1,17 @@
+CASPER ?= 1
 ARCH := $(shell uname -m)
-CONFIG_ARGS ?= --with-gs=cs --with-x --prefix=$(HOME)
+CONFIG_ARGS ?= --with-x --prefix=$(HOME)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
+ifneq ($(strip $(CASPER)),)
+CONFIG_ARGS += --with-gs=cs
 XCFLAGS += -DBUILD_CASPERSCRIPT
+endif
 XCFLAGS += -DSYSLOG_DEBUGGING
 XCFLAGS += -DUSE_LIBREADLINE
 #XCFLAGS += -DTEST_ZCASPER=1
 CASPERLIBS += -lreadline
 XTRALIBS += $(CASPERLIBS)
-export XTRALIBS TESTSPACE
+export CASPER XTRALIBS
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -15,7 +19,7 @@ else
 	CS_DEFAULT := $(ARCH).mak
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
-default: $(CS_MAKEFILES)
+all: $(CS_MAKEFILES)
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
 	if [ \! -e bin/cs.exe ]; then \
@@ -48,3 +52,6 @@ tests:
 	make -f regression.mak
 help:
 	bin/gs -h
+ghostscript:
+	-$(MAKE) distclean
+	$(MAKE) CASPER= all install

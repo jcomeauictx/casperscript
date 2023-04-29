@@ -564,7 +564,10 @@ Z9=$(PSOBJ)zdevice.$(OBJ) $(PSOBJ)zfont.$(OBJ) $(PSOBJ)zfontenum.$(OBJ) $(PSOBJ)
 Z10=$(PSOBJ)zht.$(OBJ) $(PSOBJ)zimage.$(OBJ) $(PSOBJ)zmatrix.$(OBJ)
 Z11=$(PSOBJ)zpaint.$(OBJ) $(PSOBJ)zpath.$(OBJ)
 Z12=$(PSOBJ)zncdummy.$(OBJ)
-Z1OPS=zarith zarray zcontrol1 zcontrol2 zcontrol3 zcasper
+Z1OPS=zarith zarray zcontrol1 zcontrol2 zcontrol3
+ifneq ($(strip $(CASPER)),)
+ Z1OPS += zcasper
+endif
 Z2OPS=zdict1 zdict2 zfile zfile1 zfileio1 zfileio2
 Z3_4OPS=zfilter zfproc zgeneric ziodev zmath zalg
 Z5_6OPS=zmisc_a zmisc_b zpacked zrelbit zstack zstring zsysvm

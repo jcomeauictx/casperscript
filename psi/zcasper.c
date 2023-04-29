@@ -1,3 +1,4 @@
+#ifdef BUILD_CASPERSCRIPT
 /* add support for casperscript extensions */
 #include <time.h>  /* for nanosleep(), ... */
 #include <math.h>  /* for roundl(), ... */
@@ -114,5 +115,5 @@ int main(int argc, char **argv) {
     return code;
 }
 #endif
-
+#endif  /* BUILD_CASPERSCRIPT */
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
