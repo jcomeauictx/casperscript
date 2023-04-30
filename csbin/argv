@@ -1,2 +1,7 @@
 #! bin/bccs
-argv {print ( ) print} forall (\n) print
+argv dup length argc ne {
+ 128 string (argc (%d) incorrect, actual length %d) [argc argv length] sprintf =}
+{
+ {print ( ) print} forall (\n) print
+}
+ifelse

@@ -1,0 +1,2 @@
+#! bin/bccs
+ARGUMENTS {print ( ) print} forall (\n) print

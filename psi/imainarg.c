@@ -66,6 +66,12 @@
 extern int zflush(i_ctx_t *);
 extern int zflushpage(i_ctx_t *);
 
+#ifdef BUILD_CASPERSCRIPT
+#define ARGPREFIX "userdict/argv["
+#else
+#define ARGPREFIX "userdict/ARGUMENTS["
+#endif
+
 #ifndef GS_LIB
 #  define GS_LIB "GS_LIB"
 #endif
@@ -597,9 +603,11 @@ run_stdin:
                 else
                     code = gs_main_init2(minst);
                 if (code >= 0)
-                    code = run_string(minst, "userdict/ARGS[", 0, minst->user_errors, NULL, NULL);
+                    code = run_string(minst, ARGPREFIX, 0, minst->user_errors, NULL, NULL);
+#ifdef BUILD_CASPERSCRIPT  /* store scriptname as argv[0] */
                 if (code >= 0)
                     code = runarg(minst, "", psarg, "", runInit, minst->user_errors, NULL, NULL);
+#endif
                 if (code >= 0)
                     while ((code = arg_next(pal, (const char **)&arg, minst->heap)) > 0) {
                         code = gs_lib_ctx_stash_sanitized_arg(minst->heap->gs_lib_ctx, arg);
@@ -611,11 +619,23 @@ run_stdin:
                     }
                 if (code >= 0)
                     code = run_string(minst, "]put", 0, minst->user_errors, NULL, NULL);
+#ifdef BUILD_CASPERSCRIPT
+                if (code >= 0) {
+                    code = run_string(minst, "userdict /argc argv length put",
+                            0, minst->user_errors, NULL, NULL);
+                }
+                if (code >= 0) {
+                    code = run_string(minst,
+                            "userdict /ARGUMENTS argv dup length "
+                            "1 sub 1 exch getinterval put",
+                            0, minst->user_errors, NULL, NULL);
+                }
+#endif
                 if (code >= 0) {
                     syslog(LOG_USER | LOG_DEBUG,
                            "code: %d; --, -+, or -@ arg being run: %s",
                            code, psarg);
-                    code = argproc(minst, psarg);
+                    code = argproc(minst, psarg);  /* run the named program */
                 }
                 arg_free((char *)psarg, minst->heap);
                 if (code >= 0) {

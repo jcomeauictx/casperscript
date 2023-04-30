@@ -71,19 +71,10 @@ casperdict begin
     {truncate} stopped {strtruncate} if
   } bind def
   /add /+ alias  % allow use of `+` for `add`
-  % set up `argc` and `argv` in userdict, as in C and Python.
-  % as of 2023-04-19 argv0 is not visible to csbin/* programs, so we
-  % need to check for it.
-  % NOTE: problem is that ARGS isn't set up until after processing --,
-  % so `argc` and `argv` need to be procedures
-  /.argcargv {
-    userdict dup /ARGS known
-      {dup /ARGS get /.argv exch put}
-      {/.argv [argv0] put} ifelse
-    userdict dup /.argv get length /.argc exch put
-  } bind def
-  /argc {userdict /.argc known {.argc} {.argcargv .argc} ifelse} bind def
-  /argv {userdict /.argv known {.argv} {.argcargv .argv} ifelse} bind def
+  /sub /- alias  % allow use of `-` for `sub`
+  /mul /* alias  % allow use of `*` for `mul`
+  % cannot use `/` for `div`, nor `//` for `idiv`, until we hijack the parser
+  % for the same reason we cannot use `%` for `mod`
 end  % casperdict
 
 /casper {  % -
