@@ -597,7 +597,9 @@ run_stdin:
                 else
                     code = gs_main_init2(minst);
                 if (code >= 0)
-                    code = run_string(minst, "userdict/ARGUMENTS[", 0, minst->user_errors, NULL, NULL);
+                    code = run_string(minst, "userdict/ARGS[", 0, minst->user_errors, NULL, NULL);
+                if (code >= 0)
+                    code = runarg(minst, "", psarg, "", runInit, minst->user_errors, NULL, NULL);
                 if (code >= 0)
                     while ((code = arg_next(pal, (const char **)&arg, minst->heap)) > 0) {
                         code = gs_lib_ctx_stash_sanitized_arg(minst->heap->gs_lib_ctx, arg);

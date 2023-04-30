@@ -954,6 +954,11 @@ userdict /.currentresourcefile //null put
   { /run .systemvar exec } .execasresource
 } bind def
 
+% build ARGUMENTS from ARGS (casperscript, see psi/imainarg.c)
+/ARGS where {
+  /ARGS get dup length 1 sub 1 exch getinterval
+  /ARGUMENTS exch def
+} if
 % Convenience function (documented extension)
 /.shellarguments		% -> shell_arguments true (or) false
         { /ARGUMENTS where

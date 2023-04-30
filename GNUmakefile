@@ -2,7 +2,9 @@ CASPER ?= 1
 ARCH := $(shell uname -m)
 CONFIG_ARGS ?= --with-x --prefix=$(HOME)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
+GSNAME := gs
 ifneq ($(strip $(CASPER)),)
+GSNAME := cs
 CONFIG_ARGS += --with-gs=cs
 XCFLAGS += -DBUILD_CASPERSCRIPT
 endif
@@ -27,10 +29,11 @@ all: $(CS_MAKEFILES)
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
 	if [ \! -e bin/cs.exe ]; then \
-		cd bin && ln -s cs cs.exe; \
+		cd bin && ln -s $(GSNAME) cs.exe; \
 	fi
 	# make other aliases
-	cd bin && ln -sf cs gs
+	-[ "$(GSNAME)" = cs ] && cd bin && ln -sf cs gs
+	-[ "$(GSNAME)" = gs ] && cd bin && ln -sf gs cs
 	cd bin && ln -sf cs ccs  # "console cs" for -dNODISPLAY
 	cd bin && ln -sf cs bccs  # "batch console cs" for csbin/*
 Makefile: | configure
