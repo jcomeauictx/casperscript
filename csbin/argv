@@ -1,0 +1,2 @@
+#! bin/bccs
+argv {print ( ) print} forall (\n) print
