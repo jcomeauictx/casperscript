@@ -89,27 +89,30 @@ casperdict begin
       %(should be e.g. zbcxya 5:) = pstack
     } for pop
   } bind def
-  (languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
-  (version: ) print version =
-  /os <<  % os attributes for GNU/Linux assumed
-    /path null  % fill in later with posixpath
-    /name (posix)
-    /curdir (.)
-    /pardir (..)
-    /sep (/)
-    /extsep (.)
-    /altsep (null)
-    /pathsep (:)
-    /linesep (\n)
-    /devnull (/dev/null)
-  >> def
-  /posixpath <<  % path functions expected to work on posix (and URL paths)
+  %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
+  %(version: ) print version =
+  /os 16 dict def
+  os begin  % os attributes for GNU/Linux assumed
+    /path null def  % fill in later with posixpath
+    /name (posix) def
+    /curdir (.) def
+    /pardir (..) def
+    /sep (/) def
+    /extsep (.) def
+    /altsep (null) def
+    /pathsep (:) def
+    /linesep (\n) def
+    /devnull (/dev/null) def
+  end  % os
+  /posixpath 16 dict def
+  posixpath begin
+    % path functions expected to work on posix (and URL paths)
     /split {  % pathspec - dirspec namespec; e.g. /path/to/xyz.ps
       reversed os /sep get search  % ot/htap/ / sp.zyx
         {exch pop reversed exch reversed exch}
         {reversed () exch}
       ifelse
-    }
+    } bind def
     /splitext {  % pathspec.ext - pathspec .ext
       % NOTE that this won't work with, e.g. /path/to.some/filewithnoext,
       % it will return /path/to .some/filewithnoext
@@ -118,8 +121,8 @@ casperdict begin
         {reversed + exch reversed exch}  % /path/to/xyz .ps
         {reversed ()}  % pathwithnoext ''
       ifelse
-    }
-  >> def
+    } bind def
+  end  % posixpath
 end  % casperdict
 
 /casper {  % -
