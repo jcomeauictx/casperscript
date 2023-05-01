@@ -124,6 +124,8 @@ casperdict begin
     } bind def
   end  % posixpath
   os /path posixpath put
+  % NOTE: remember that `argv` is *not* defined at this point! `casper` is
+  % run at processing of `-C`, and a script is run only after processing `--`.
   /scriptname {
     argv 0 get os /path get dup /split get 3 -1 roll exch exec
     (scriptname after split:) = pstack
