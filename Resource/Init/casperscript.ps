@@ -123,6 +123,14 @@ casperdict begin
       ifelse
     } bind def
   end  % posixpath
+  os /path posixpath put
+  /scriptname {
+    argv 0 get os /path get dup /split get 3 -1 roll exch exec
+    (scriptname after split:) = pstack
+    exch pop exch /splitext get exec
+    (scriptname after splitext:) = pstack
+    pop
+  } bind def
 end  % casperdict
 
 /casper {  % -

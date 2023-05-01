@@ -1,0 +1,2 @@
+#! bin/bccs
+scriptname (scriptname) eq {scriptname =} {/undefined handleerror} ifelse
