@@ -95,6 +95,7 @@ casperdict begin
     /curdir (.)
     /pardir (..)
     /sep (/)
+    /extsep (.)
     /altsep (null)
     /pathsep (:)
     /linesep (\n)
@@ -105,6 +106,15 @@ casperdict begin
       reversed os /sep get search  % ot/htap/ / sp.zyx
         {exch pop reversed exch reversed exch}
         {reversed () exch}
+      ifelse
+    }
+    /splitext {  % pathspec.ext - pathspec .ext
+      % NOTE that this won't work with, e.g. /path/to.some/filewithnoext,
+      % it will return /path/to .some/filewithnoext
+      % so, one should always `split` before `splitext`
+      reversed os /extsep get search  % zyx/ot/htap/ . sp
+        {reversed + exch reversed exch}  % /path/to/xyz .ps
+        {reversed ()}  % pathwithnoext ''
       ifelse
     }
   >> def
