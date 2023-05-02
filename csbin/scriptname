@@ -1,25 +1,7 @@
 #! bin/bccs
-(argv:) = argv ==
+%(argv:) = argv ==
 scriptname (scriptname) eq
-  {(argv:) = argv == scriptname =}
-  {128 string (scriptname reported incorrectly as %s) [scriptname]
-    sprintf pop =}
-  ifelse
-(argv:) = argv ==
-scriptname (scriptname) eq
-  {(argv:) = argv == scriptname =}
-  {128 string (scriptname reported incorrectly as %s) [scriptname]
-    sprintf pop =}
-  ifelse
-(argv:) = argv ==
-scriptname (scriptname) eq
-  {(argv:) = argv == scriptname =}
-  {128 string (scriptname reported incorrectly as %s) [scriptname]
-    sprintf pop =}
-  ifelse
-(argv:) = argv ==
-scriptname (scriptname) eq
-  {(argv:) = argv == scriptname =}
+  {scriptname =}
   {128 string (scriptname reported incorrectly as %s) [scriptname]
     sprintf pop =}
   ifelse
