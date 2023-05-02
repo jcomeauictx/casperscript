@@ -112,6 +112,7 @@ int zsavesession(i_ctx_t *i_ctx_p) {
     historyfile = gp_fopen(imemory, filename, "w");
     for (i = 0; i < history_state->length; i++) {
         code |= gp_fputs(history_state->entries[i]->line, historyfile);
+        code |= gp_fputc('\n', historyfile);
         if (code < 0) break;
     }
     code |= gp_fclose(historyfile);
