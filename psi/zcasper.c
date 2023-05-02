@@ -7,6 +7,7 @@
 #include "gssyslog.h"
 #include "zcasper.h"
 #include "interp.h"  /* for i_initial_enter_name() */
+#include <readline/history.h>  /* for history functionality */
 #ifdef TEST_ZCASPER
 #include <stdio.h>   /* for fprintf(), ... */
 #else
@@ -16,8 +17,9 @@
 #include "store.h"
 #include "estack.h"
 #include "std.h"
-#endif
+#endif  /* TEST_ZCASPER */
 #include "gsprintf.h"  /* for gsprintf and thus zsprintf */
+#define PATHLENGTH 1024  /* for savesession filename */
 extern char *argv0;
 extern char *programname;
 
@@ -75,7 +77,7 @@ static int zsprintf(i_ctx_t *i_ctx_p) {
     return 0;
 }
 
-/* define constants for casperscript */
+/* define constants for casperscript, and do any other initialization */
 int zcasperinit(i_ctx_t *i_ctx_p) {
     int code = 0, i;
     const char *names[16] = {"argv0", "programname"};
@@ -91,8 +93,33 @@ int zcasperinit(i_ctx_t *i_ctx_p) {
                 objects[i].tas.rsize, objects[i].value.bytes);
         code |= i_initial_enter_name(i_ctx_p, names[i], &objects[i]);
     }
+    syslog(LOG_USER | LOG_DEBUG, "initializing readline history");
+    using_history();
     return code;
 };
+
+int zsavesession(i_ctx_t *i_ctx_p);
+int zsavesession(i_ctx_t *i_ctx_p) {
+    HISTORY_STATE *history_state = history_get_history_state();
+    gp_file *historyfile = NULL;
+    os_ptr op = osp;
+    int i, code = 0;
+    char filename[PATHLENGTH];
+    if (r_type(op) != t_string) return_op_typecheck(op);
+    if (r_size(op) >= PATHLENGTH) return_error(gs_error_rangecheck);
+    DISCARD(strncpy(filename, (char *)op->value.bytes, r_size(op)));
+    filename[r_size(op)] = '\0';
+    historyfile = gp_fopen(imemory, filename, "w");
+    for (i = 0; i < history_state->length; i++) {
+        code |= gp_fputs(history_state->entries[i]->line, historyfile);
+        if (code < 0) break;
+    }
+    code |= gp_fclose(historyfile);
+    code = code < 0 ? -1 : 0;
+    pop(1);
+    return code;
+}
+#endif  /* TEST_ZCASPER */
 
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =
@@ -100,9 +127,9 @@ const op_def zcasper_op_defs[] =
     /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
     {"3sprintf", zsprintf},
+    {"1savesession", zsavesession},
     op_def_end(0)
 };
-#endif
 
 #ifdef TEST_ZCASPER
 int main(int argc, char **argv) {
@@ -114,6 +141,6 @@ int main(int argc, char **argv) {
     else code = sleep(atof(argv[1]));
     return code;
 }
-#endif
+#endif  /* TEST_ZCASPER */
 #endif  /* BUILD_CASPERSCRIPT */
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
