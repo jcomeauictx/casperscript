@@ -141,6 +141,8 @@
   (pstack at end: ) = pstack
 } bind def
 
-argv dup 1 get exch dup 2 get exch {3 get} stopped
+scriptname (vdiff) eq {
+  argv dup 1 get exch dup 2 get exch {3 get} stopped
   {pop pop false} {cvi 0 gt} ifelse  % sidebyside mode if > 0
   vdiff
+} if
