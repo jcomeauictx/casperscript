@@ -30,12 +30,12 @@ init:
 	@echo gs regression tests output $(TIMESTAMP) > stderr_latest_$(LOG)
 reference/%.1.pnm: examples/%
 	mkdir -p $(@D)
-	-$(DIST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm \
+	-$(DIST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm -dALLOWPSTRANSPARENCY \
 		-sOutputFile=$(@:.1.pnm=.%0d.pnm) $< \
 		>>stdout_reference_$(LOG) 2>>stderr_reference_$(LOG)
 latest/%.1.pnm: examples/%
 	mkdir -p $(@D)
-	-$(TEST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm \
+	-$(TEST_GS) -dNOPAUSE -dBATCH -sDEVICE=pnm -dALLOWPSTRANSPARENCY \
 		-sOutputFile=$(@:.1.pnm=.%0d.pnm) $< \
 		>>stdout_latest_$(LOG) 2>>stderr_latest_$(LOG)
 latest/%.diff: reference/%
