@@ -2,6 +2,7 @@
 % visual diff two pnm files
 
 /inch {72 mul} bind def
+/zero (0) 0 get def  % value of ASCII zero (0x30)
 
 /bits <<  % translate maxvalue into bits per sample
   1 1
@@ -12,6 +13,16 @@
   /P1 [0 1]
   /P2 [0 1]
   /P3 [0 1 0 1 0 1]
+>> def
+
+/binarize <<  % Pn type into binary stream
+  /P1 {infile 1024 string readline
+    {0 1 2 index length 1 - {1 index exch 2 copy get zero - put} for}
+    {()}
+    ifelse
+  }
+  /P2 {infile token {1 string dup 0 4 -1 roll put} {()} ifelse}
+  /P3 {infile token {1 string dup 0 4 -1 roll put} {()} ifelse}
 >> def
 
 /colorspaces <<  % Pn type into colorspace
@@ -57,9 +68,7 @@
   pnmtype (P1) ne {  % P2 and P3 have an extra line, max value
     instance /BitsPerComponent bits infile token pop cvi get put
   } if
-  instance /DataSource {
-    infile token {1 string dup 0 4 -1 roll put} {()} ifelse
-  } /ReusableStreamDecode filter put
+  instance /DataSource binarize pnmtype get /ReusableStreamDecode filter put
   instance dup (instance: ) print === colorspace
 } bind def
 
