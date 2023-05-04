@@ -16,10 +16,16 @@
 >> def
 
 /binarize <<  % Pn type into binary stream
-  /P1 {infile 1024 string readline
-    {0 1 2 index length 1 - {1 index exch 2 copy get zero - put} for}
-    {()}
-    ifelse
+  /P1 {
+    % read until (0), (1), or EOF
+    {infile read
+      {dup 1 not and zero eq
+        {zero - 1 string dup 0 4 -1 roll put exit}
+        {pop}
+        ifelse}
+      {() exit}
+      ifelse
+    } loop
   }
   /P2 {infile token {1 string dup 0 4 -1 roll put} {()} ifelse}
   /P3 {infile token {1 string dup 0 4 -1 roll put} {()} ifelse}
@@ -155,3 +161,4 @@ scriptname (vdiff) eq {
   {pop pop false} {cvi 0 gt} ifelse  % sidebyside mode if > 0
   vdiff
 } if
+% vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
