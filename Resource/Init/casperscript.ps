@@ -1,4 +1,13 @@
 % top-level definitions go into systemdict
+% NOTE: cannot use <<>> format for dicts, use `n dict def`, `begin`, `end`.
+% NOTE: interpreter is languagelevel 1 at load time.
+% HINT: test changes using `/usr/bin/gs -dNODISPLAY`,
+% `(Resource/Init/casperscript.ps) run`
+% `casper`
+% `0.0 cvbool =`
+% for example, before `make all install`
+% NOTE: for this to work, don't do anything in this file that *presupposes*
+% any casperscript extensions.
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
 /# /#! load def  % also enable # comments
 /.silent -112 def  % gs_error_silent in base/gserrors.h
@@ -103,6 +112,20 @@ casperdict begin
       %(should be e.g. zbcxya 5:) = pstack
     } for pop  % drop length-1
   } bind def
+  /cvbool {  % something - boolean
+    % convert anything (well, some things) to boolean
+    /booldict 8 dict def
+    booldict begin
+      /nulltype {pop false} def
+      /integertype {0 ne} def
+      /realtype {0 ne} def
+    end  % booldict
+    dup type dup booldict exch known
+      {booldict exch get exec}
+      {pop length 0 ne}
+      ifelse
+  } bind def
+
   %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
   %(version: ) print version =
   /os 16 dict def
