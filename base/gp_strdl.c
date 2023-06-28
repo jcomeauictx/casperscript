@@ -58,6 +58,9 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXREPLY 12
 #define MINREPLY 5  /* 5 is absolute minimum reply: <CSI>1;1R */
 #define QUERY "\033[6n"
+/* a readline prompt that has special significance to the terminal needs to
+ * be wrapped in ^A and ^B */
+#define CHA "\001\033%dG\002"  /* Cursor Horizontal Absolute */
     const byte *query = (byte *)QUERY;
     /* uint querysize = strlen((char *)query); */ /* no need using outprintf */
     /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[
@@ -92,6 +95,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
              * with <ESC>[{ROW};{COLUMN}R
              */
             if (isatty(CS_STDIN)) {
+                int columnlength = 0, cha_promptsize = strlen(CHA);
                 /*FIXME: this needs to be wrapped in timeout and ^C trap */
                 tcgetattr(CS_STDIN, &settings[0]);  /* for reference */
                 settings[1] = settings[0];  /* let gcc generate the code */
@@ -112,10 +116,19 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     if (digit < '0' || digit > '9') break;
                     promptsize += ((digit - '0') * multiplier);
                     multiplier *= 10;
+                    columnlength += 1;
                 }
+#ifndef USE_CHA_PROMPT
                 promptsize -= 1;  /* column returned is one *past* prompt */
                 memset(promptstring, '.', promptsize);
                 promptstring[promptsize] = '\0';
+#else
+                /* the `%d' will be replaced by the actual column number */
+                /* but add 1 for final "\0" in `size` arg to snprintf */
+                syslog(LOG_USER | LOG_DEBUG, "columnlength: %d", columnlength);
+                cha_promptsize += (columnlength - 2) + 1;
+                DISCARD(snprintf(promptstring, cha_promptsize, CHA, promptsize)); 
+#endif
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
                         promptstring);
                 tcsetattr(CS_STDIN, TCSANOW, &settings[0]);  /* restore term */
