@@ -11,7 +11,7 @@ endif
 XCFLAGS += -DSYSLOG_DEBUGGING
 XCFLAGS += -DUSE_LIBREADLINE
 # CHA prompt was an attempt to fix prompt on Termux, but it fails on xterm
-#XCFLAGS += -DUSE_CHA_PROMPT
+XCFLAGS += -DUSE_CHA_PROMPT
 #XCFLAGS += -DTEST_ZCASPER=1
 CASPERLIBS += -lreadline
 XTRALIBS += $(CASPERLIBS)

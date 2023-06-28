@@ -58,9 +58,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXREPLY 12
 #define MINREPLY 5  /* 5 is absolute minimum reply: <CSI>1;1R */
 #define QUERY "\033[6n"
-/* a readline prompt that has special significance to the terminal needs to
- * be wrapped in ^A and ^B */
-#define CHA "\001\033%dG\002"  /* Cursor Horizontal Absolute */
+#define CHA "\033[%dG"  /* Cursor Horizontal Absolute */
     const byte *query = (byte *)QUERY;
     /* uint querysize = strlen((char *)query); */ /* no need using outprintf */
     /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[
@@ -111,7 +109,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 }
                 syslog(LOG_USER | LOG_DEBUG, "gp_readline reply: <ESC>%.*s",
                         replysize - 1, reply + 1);
-                while (replysize + offset > 0) {
+                while (replysize - offset > 0) {
                     digit = reply[replysize - offset++];
                     if (digit < '0' || digit > '9') break;
                     promptsize += ((digit - '0') * multiplier);
@@ -173,5 +171,4 @@ void
 gp_readline_finit(void *readline_data)
 {
 }
-/* vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
- */
+// vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4
