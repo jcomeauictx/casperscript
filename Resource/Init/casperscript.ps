@@ -11,8 +11,9 @@
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
 /# /#! load def  % also enable # comments
 /.silent -112 def  % gs_error_silent in base/gserrors.h
-
-/forthdict 1024 dict def
+% PLRM recommends only allocating enough for immediate needs with `dict`
+% it will grow as needed (languagelevels 2+)
+/forthdict 16 dict def
 forthdict begin
   % add some helpful words from FORTH, starting with `words`
   /dictwords {  % dict -
@@ -30,7 +31,7 @@ forthdict begin
   } bind def
 end  % forthdict
 
-/casperdict 1024 dict def
+/casperdict 64 dict def
 casperdict begin
   % add some generally useful words without polluting systemdict
   /topdown {  % -
@@ -114,7 +115,7 @@ casperdict begin
   } bind def
   /cvbool {  % something - boolean
     % convert anything (well, some things) to boolean
-    /booldict 8 dict def
+    /booldict 3 dict def
     booldict begin
       /nulltype {pop false} def
       /integertype {0 ne} def
@@ -174,6 +175,11 @@ casperdict begin
     %(argv after splitext:) argv ==
     pop
     %(pstack after scriptname:) = pstack
+  } bind def
+  /docstrings 16 dict def
+  /docstring {  % name string - name
+    docstrings 2 index  % name string dict name
+    3 -1 roll put  % bring string to TOS and store in docstrings
   } bind def
 end  % casperdict
 
