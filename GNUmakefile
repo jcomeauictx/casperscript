@@ -4,8 +4,9 @@ CONFIG_ARGS ?= --with-x --prefix=$(HOME)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
+CS_VERSION ?= $(shell git tag)
 GSNAME := cs
-CONFIG_ARGS += --with-gs=cs
+CONFIG_ARGS += --with-gs=$(GSNAME)
 XCFLAGS += -DBUILD_CASPERSCRIPT
 endif
 XCFLAGS += -DSYSLOG_DEBUGGING
