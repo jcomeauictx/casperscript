@@ -34,6 +34,11 @@ end  % forthdict
 /casperdict 64 dict def
 casperdict begin
   % add some generally useful words without polluting systemdict
+  /docstring {  % name string - name
+    % intended to be used just after /name and before function definition
+    docstrings 2 index  % name string dict name
+    3 -1 roll put  % bring string to TOS and store in docstrings
+  } bind def
   /topdown {  % -
     % changes behavior of interpreter to allow topdown design
     % instead of causing /undefined errors, lets you run program at every
@@ -44,8 +49,8 @@ casperdict begin
       } bind def
     end
   } bind def
-  /alias {  % /currentname /newname -
-    % alias currentname to newname
+  /alias (  /currentname /newname -
+    alias currentname to newname) docstring {
     exch load def
   } bind def
   /strlen {  % anystring - strlen  % length to first null (\000)
@@ -175,11 +180,6 @@ casperdict begin
     %(argv after splitext:) argv ==
     pop
     %(pstack after scriptname:) = pstack
-  } bind def
-  /docstrings 16 dict def
-  /docstring {  % name string - name
-    docstrings 2 index  % name string dict name
-    3 -1 roll put  % bring string to TOS and store in docstrings
   } bind def
 end  % casperdict
 
