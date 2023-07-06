@@ -257,8 +257,8 @@ currentdict /DEVICE known not
 
 % Define procedures to assist users who don't read the documentation.
 userdict begin
-/docstrings 16 dict def
-/help
+/docstrings 16 dict def  % casperscript addition
+/help  % casperscript adds context-specific help
  { count 0 eq
   {(Enter PostScript commands.  '(filename) run' runs a file, 'quit' exits.)}
   {dup docstrings exch known {docstrings exch get} if}
