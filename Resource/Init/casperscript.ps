@@ -43,9 +43,13 @@ casperdict begin
     % changes behavior of interpreter to allow topdown design
     % instead of causing /undefined errors, lets you run program at every
     % phase of development, showing a placeholder for undefined words.
+    errordict /.undefined errordict /undefined get put
     errordict begin
       /undefined {
-        (\(/) print =only ( not yet defined\) ) print
+        dup type /nametype eq
+          {(\(/) print =only ( not yet defined\) ) print}
+          {pop /.undefined signalerror}
+        ifelse
       } bind def
     end
   } bind def
