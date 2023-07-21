@@ -1,8 +1,10 @@
 # allow bashisms in recipes
 SHELL := /bin/bash
 CASPER ?= 1
+# review `install` recipe if using other CONFIG_ARGS
+INSTALL_PREFIX ?= $(HOME)
+CONFIG_ARGS ?= --with-x --prefix=$(INSTALL_PREFIX)
 ARCH := $(shell uname -m)
-CONFIG_ARGS ?= --with-x --prefix=$(HOME)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
@@ -36,12 +38,18 @@ all: $(CS_MAKEFILES)
 	if [ \! -e bin/cs.exe ]; then \
 		cd bin && ln -s $(GSNAME) cs.exe; \
 	fi
+install: $(CS_MAKEFILES)
+	make -f $< install
 	# make other aliases
-	-[ "$${GSNAME:0:2}" = cs ] && cd bin && ln -sf $(GSNAME) cs
-	-[ "$(GSNAME)" = cs ] && cd bin && ln -sf cs gs
-	-[ "$(GSNAME)" = gs ] && cd bin && ln -sf gs cs
-	cd bin && ln -sf cs ccs  # "console cs" for -dNODISPLAY
-	cd bin && ln -sf cs bccs  # "batch console cs" for csbin/*
+	if [ "$${GSNAME:0:2}" = cs ]; then \
+	 cd $(INSTALL_PREFIX)/bin && ln -sf $(GSNAME) cs && ln -sf cs gs; \
+	else \
+	 cd $(INSTALL_PREFIX)/bin && ln -sf gs cs; \
+	fi
+	# "console cs" for -dNODISPLAY
+	cd $(INSTALL_PREFIX)/bin && ln -sf cs ccs
+	# "batch console cs" for csbin/*
+	cd $(INSTALL_PREFIX)/bin && ln -sf cs bccs
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
