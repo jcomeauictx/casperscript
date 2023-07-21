@@ -1,3 +1,5 @@
+# allow bashisms in recipes
+SHELL := /bin/bash
 CASPER ?= 1
 ARCH := $(shell uname -m)
 CONFIG_ARGS ?= --with-x --prefix=$(HOME)
@@ -5,7 +7,7 @@ XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
 CS_VERSION ?= $(shell git tag)
-GSNAME := cs
+GSNAME := cs-$(CS_VERSION)
 CONFIG_ARGS += --with-gs=$(GSNAME)
 XCFLAGS += -DBUILD_CASPERSCRIPT
 endif
@@ -20,7 +22,7 @@ VDIFF_TESTDIRS := reference latest
 VDIFF_TESTFILE ?= cjk/iso2022.ps.1.pnm
 VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
 export CASPER XTRALIBS
-export VDIFF_TESTFILES  # for `make env` check
+export VDIFF_TESTFILES GSNAME # for `make env` check
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -35,6 +37,7 @@ all: $(CS_MAKEFILES)
 		cd bin && ln -s $(GSNAME) cs.exe; \
 	fi
 	# make other aliases
+	-[ "$${GSNAME:0:2}" = cs ] && cd bin && ln -sf $(GSNAME) cs
 	-[ "$(GSNAME)" = cs ] && cd bin && ln -sf cs gs
 	-[ "$(GSNAME)" = gs ] && cd bin && ln -sf gs cs
 	cd bin && ln -sf cs ccs  # "console cs" for -dNODISPLAY
