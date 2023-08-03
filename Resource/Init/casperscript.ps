@@ -135,6 +135,10 @@ casperdict begin
       {pop length 0 ne}
       ifelse
   } bind def
+  /pagesize {  % - pagewidth pageheight
+    % get current page size
+    currentpagedevice /PageSize get dup 1 get exch 0 get
+  } bind def
 
   %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
   %(version: ) print version =
