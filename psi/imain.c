@@ -786,7 +786,11 @@ gs_main_set_lib_paths(gs_main_instance * minst)
         code = lib_path_add(minst, "%rom%lib/");
     }
     else code = 0;
-
+#ifdef BUILD_CASPERSCRIPT
+#define STRINGIFY(x) #x
+#define CASPERLIB STRINGIFY(INSTALL_PREFIX) "/lib/casper"
+    code = lib_path_add(minst, CASPERLIB);
+#endif
     if (minst->lib_path.final != NULL && code >= 0)
         code = lib_path_add(minst, minst->lib_path.final);
     return code;
