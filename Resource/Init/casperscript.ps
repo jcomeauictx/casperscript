@@ -139,6 +139,24 @@ casperdict begin
     % get current page size
     currentpagedevice /PageSize get dup 1 get exch 0 get
   } bind def
+  /.import {  % /dictname -
+    % unconditionally import dict, and each component thereof as dict.component
+    /importname 1 index 64 string cvs def  % name of imported dict
+    /filename importname (.cs) + def
+    dup 5 dict def dup load
+    begin filename runlibfile end  % loads file into dict of same name
+  } bind def
+  /import {  % /dictname reimport -
+    % import the dict, and each component thereof as dict.component
+    % does nothing if dict already present in currentdict and reimport is false
+    % gives error if dictname present but not a dict
+    currentdict 2 index known  % stack: /dictname reimport known
+      {  % already in dict, so make sure correct type
+        2 index load type /dicttype eq .import
+      }
+      {.import}  % not already in dict
+    ifelse
+  } bind def
 
   %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
   %(version: ) print version =
