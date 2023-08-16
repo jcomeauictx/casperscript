@@ -1,7 +1,7 @@
 % top-level definitions go into systemdict
 % NOTE: cannot use <<>> format for dicts, use `n dict def`, `begin`, `end`.
 % NOTE: interpreter is languagelevel 1 at load time.
-% HINT: test changes using `/usr/bin/gs -dNODISPLAY`,
+% HINT: test changes using `/usr/bin/gs -dNOSAFER -dNODISPLAY`,
 % `(Resource/Init/casperscript.ps) run`
 % `casper`
 % `0.0 cvbool =`
@@ -43,6 +43,14 @@ casperdict begin
     % changes behavior of interpreter to allow topdown design
     % instead of causing /undefined errors, lets you run program at every
     % phase of development, showing a placeholder for undefined words.
+    % NEW as of 2023-08-16: parses dot-notation names to allow for syntax
+    % like `os.path.split`
+    % the following uppercase constants should maybe be placed outside
+    % this definition once tested
+    /MAX_DOT_DEPTH 3 def
+    /MAX_CASPER_NAME_LENGTH 32 def
+    /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
+     1 - + def  % 32 times 3, plus 2 dots
     errordict /.undefined errordict /undefined get put
     errordict begin
       /undefined {
