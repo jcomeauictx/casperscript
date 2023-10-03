@@ -1,12 +1,17 @@
+# allow bashisms in recipes
+SHELL := /bin/bash
 CASPER ?= 1
+# review `install` recipe if using other CONFIG_ARGS
+INSTALL_PREFIX ?= $(HOME)
+CONFIG_ARGS ?= --with-x --prefix=$(INSTALL_PREFIX)
 ARCH := $(shell uname -m)
-CONFIG_ARGS ?= --with-x --prefix=$(HOME)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
-GSNAME := cs
-CONFIG_ARGS += --with-gs=cs
-XCFLAGS += -DBUILD_CASPERSCRIPT
+CS_VERSION ?= $(shell git tag)
+GSNAME := cs-$(CS_VERSION)
+CONFIG_ARGS += --with-gs=$(GSNAME)
+XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
 XCFLAGS += -DSYSLOG_DEBUGGING
 XCFLAGS += -DUSE_LIBREADLINE
@@ -19,7 +24,7 @@ VDIFF_TESTDIRS := reference latest
 VDIFF_TESTFILE ?= cjk/iso2022.ps.1.pnm
 VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
 export CASPER XTRALIBS
-export VDIFF_TESTFILES  # for `make env` check
+export VDIFF_TESTFILES GSNAME # for `make env` check
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -33,11 +38,18 @@ all: $(CS_MAKEFILES)
 	if [ \! -e bin/cs.exe ]; then \
 		cd bin && ln -s $(GSNAME) cs.exe; \
 	fi
+install: $(CS_MAKEFILES)
+	make -f $< install
 	# make other aliases
-	-[ "$(GSNAME)" = cs ] && cd bin && ln -sf cs gs
-	-[ "$(GSNAME)" = gs ] && cd bin && ln -sf gs cs
-	cd bin && ln -sf cs ccs  # "console cs" for -dNODISPLAY
-	cd bin && ln -sf cs bccs  # "batch console cs" for csbin/*
+	if [ "$${GSNAME:0:2}" = cs ]; then \
+	 cd $(INSTALL_PREFIX)/bin && ln -sf $(GSNAME) cs && ln -sf cs gs; \
+	else \
+	 cd $(INSTALL_PREFIX)/bin && ln -sf gs cs; \
+	fi
+	# "console cs" for -dNODISPLAY
+	cd $(INSTALL_PREFIX)/bin && ln -sf cs ccs
+	# "batch console cs" for csbin/*
+	cd $(INSTALL_PREFIX)/bin && ln -sf cs bccs
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh

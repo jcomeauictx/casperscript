@@ -58,10 +58,9 @@
 #include "idisp.h"              /* for setting display device callback */
 #include "iplugin.h"
 #include "zfile.h"
-
 #include "valgrind.h"
-
 #include "gssyslog.h"
+#include "base/casper.h"  /* stringizing and casperscript-related stuff */
 
 /* ------ Exported data ------ */
 
@@ -786,7 +785,10 @@ gs_main_set_lib_paths(gs_main_instance * minst)
         code = lib_path_add(minst, "%rom%lib/");
     }
     else code = 0;
-
+#ifdef BUILD_CASPERSCRIPT
+#define CASPERLIB STRINGIZE_VALUE(INSTALL_PREFIX) "/lib/casper"
+    code = lib_path_add(minst, CASPERLIB);
+#endif
     if (minst->lib_path.final != NULL && code >= 0)
         code = lib_path_add(minst, minst->lib_path.final);
     return code;

@@ -1,7 +1,7 @@
 % top-level definitions go into systemdict
 % NOTE: cannot use <<>> format for dicts, use `n dict def`, `begin`, `end`.
 % NOTE: interpreter is languagelevel 1 at load time.
-% HINT: test changes using `/usr/bin/gs -dNODISPLAY`,
+% HINT: test changes using `/usr/bin/gs -dNOSAFER -dNODISPLAY`,
 % `(Resource/Init/casperscript.ps) run`
 % `casper`
 % `0.0 cvbool =`
@@ -34,18 +34,35 @@ end  % forthdict
 /casperdict 64 dict def
 casperdict begin
   % add some generally useful words without polluting systemdict
+  /docstring {  % name string - name
+    % intended to be used just after /name and before function definition
+    docstrings 2 index  % name string dict name
+    3 -1 roll put  % bring string to TOS and store in docstrings
+  } bind def
   /topdown {  % -
     % changes behavior of interpreter to allow topdown design
     % instead of causing /undefined errors, lets you run program at every
     % phase of development, showing a placeholder for undefined words.
+    % NEW as of 2023-08-16: parses dot-notation names to allow for syntax
+    % like `os.path.split`
+    % the following uppercase constants should maybe be placed outside
+    % this definition once tested
+    /MAX_DOT_DEPTH 3 def
+    /MAX_CASPER_NAME_LENGTH 32 def
+    /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
+     1 - + def  % 32 times 3, plus 2 dots
+    errordict /.undefined errordict /undefined get put
     errordict begin
       /undefined {
-        (\(/) print =only ( not yet defined\) ) print
+        dup type /nametype eq
+          {(\(/) print =only ( not yet defined\) ) print}
+          {pop /.undefined signalerror}
+        ifelse
       } bind def
     end
   } bind def
-  /alias {  % /currentname /newname -
-    % alias currentname to newname
+  /alias (  /currentname /newname -
+    alias currentname to newname) docstring {
     exch load def
   } bind def
   /strlen {  % anystring - strlen  % length to first null (\000)
@@ -126,6 +143,32 @@ casperdict begin
       {pop length 0 ne}
       ifelse
   } bind def
+  /pagesize {  % - pagewidth pageheight
+    % get current page size
+    currentpagedevice /PageSize get dup 1 get exch 0 get
+  } bind def
+  /.import {  % /dictname -
+    % unconditionally import dict
+    /dottedname 1 index 64 string cvs (.) + def  % dotted name of imported dict
+    /filename dottedname (cs) + def  % we look for file with .cs extension
+    dup 5 dict def load
+    begin filename runlibfile end  % loads file into dict of same name
+  } bind def
+  /import {  % /dictname reimport -
+    % import the dict
+    % does nothing if dict already present in currentdict and reimport is false
+    % gives error if dictname present but not a dict
+    currentdict 2 index known  % stack: /dictname reimport known
+      {  % already in dict, so make sure correct type
+        1 index load type /dicttype eq
+          {{(reimporting) = .import} {=only ( already imported) =} ifelse}
+          {1 index dup =only ( already exists and is not a dict) =
+           /typecheck signalerror}
+          ifelse
+      }
+      {pop .import}  % not already in dict
+    ifelse
+  } bind def
 
   %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
   %(version: ) print version =
@@ -164,8 +207,10 @@ casperdict begin
     } bind def
   end  % posixpath
   os /path posixpath put
-  % NOTE: remember that `argv` is *not* defined at this point! `casper` is
-  % run at processing of `-C`, and a script is run only after processing `--`.
+  % NOTE: remember that only a minimal `argv` is defined at this point, created
+  % by `casper`, % run at processing of `-C`.
+  % A script is run only after processing `--`, and that is where the full
+  % `argv` is defined.
   /scriptname {
     argv 0 get os /path get dup /split get 3 -1 roll exch exec
     %(scriptname after split:) = pstack
@@ -176,17 +221,14 @@ casperdict begin
     pop
     %(pstack after scriptname:) = pstack
   } bind def
-  /docstrings 16 dict def
-  /docstring {  % name string - name
-    docstrings 2 index  % name string dict name
-    3 -1 roll put  % bring string to TOS and store in docstrings
-  } bind def
 end  % casperdict
 
 /casper {  % -
   % initialize for programming with casper extensions
   % first copy above dictionaries into userdict
   forthdict userdict copy casperdict exch copy pop
+  % put a minimal `argv` into userdict in case a script is not being run
+  userdict /argv [argv0] put
   % now enable top-down programming method
   topdown
 } bind def
