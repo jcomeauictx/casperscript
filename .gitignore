@@ -147,6 +147,7 @@ showargs
 gs.xxd
 gs.dsm
 splitargs
+test.cs
 # ignore generated files
 reference
 latest
