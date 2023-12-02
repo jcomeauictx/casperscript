@@ -38,18 +38,22 @@ all: $(CS_MAKEFILES)
 	if [ \! -e bin/cs.exe ]; then \
 		cd bin && ln -s $(GSNAME) cs.exe; \
 	fi
+	# make the same symlinks as for install, but in $(CWD)/bin
+	# we don't know what GSNAME is, so we just try 'em all and ignore errors
+	cd bin && for symlink in cs gs ccs bccs; do \
+	 ln -s $(GSNAME) $$symlink || true; \
+	done
 install: $(CS_MAKEFILES)
 	make -f $< install
-	# make other aliases
-	if [ "$${GSNAME:0:2}" = cs ]; then \
-	 cd $(INSTALL_PREFIX)/bin && ln -sf $(GSNAME) cs && ln -sf cs gs; \
-	else \
-	 cd $(INSTALL_PREFIX)/bin && ln -sf gs cs; \
-	fi
-	# "console cs" for -dNODISPLAY
-	cd $(INSTALL_PREFIX)/bin && ln -sf cs ccs
-	# "batch console cs" for csbin/*
-	cd $(INSTALL_PREFIX)/bin && ln -sf cs bccs
+	# make other aliases:
+	# gs "ghostscript"
+	# cs "casperscript"
+	# ccs "console cs (cs -dNODISPLAY)"
+	# bccs "batch console cs"
+	# don't overwrite existing filenames but don't fail either (|| true)
+	cd $(INSTALL_PREFIX)/bin && for symlink in cs gs ccs bccs; do \
+	 ln -s $(GSNAME) $$symlink || true; \
+	done
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
