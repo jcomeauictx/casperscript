@@ -12,8 +12,8 @@
   <<
     /ImageType 1
     /Width imagewidth
-    /Height 7 inches
-    /ImageMatrix [5 inches 0 0 7 inches neg 0 7 inches]
+    /Height imageheight
+    /ImageMatrix [imagewidth 0 0 imageheight neg 0 imageheight]
     /MultipleDataSources false
     /DataSource infile (r) file
     /BitsPerComponent bits
@@ -23,7 +23,8 @@
 
 save
 1 inches 2 inches moveto currentpoint translate
-5 inches 7 inches scale
+5 inches dup imageheight imagewidth div mul 2 copy scale [0 0] astore
+128 string (scale: %d %d) 3 -1 roll sprintf {==} {pop} ifelse
 rgbimage
 /DeviceRGB setcolorspace image
 restore
