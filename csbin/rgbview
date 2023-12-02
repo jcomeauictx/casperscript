@@ -1,13 +1,15 @@
 #!/usr/src/jcomeauictx/casperscript/bin/cs -S --
 # adapted from https://stackoverflow.com/a/15167678/493161
 /inches {72 mul} def
+/pagewidth currentpagedevice /PageSize get aload pop /pageheight exch def def
+(page width and height: ) print [pagewidth pageheight] ==
 /infile argc 1 gt {argv 1 get} {(/dev/urandom)} ifelse def
-/imagewidth argc 2 gt {argv 2 get cvi} {7.5 inches} ifelse def
+/imagewidth argc 2 gt {argv 2 get cvi} {pagewidth 1 inches sub} ifelse def
 /imageheight argc 3 gt
  {argv 3 get cvi}
  {[ infile status ] 1 get dup 0 gt
   {imagewidth div 3 div cvi dup (height calculated from file size: ) print =}
-  {10 inches}
+  {pageheight 1 inches sub}
   ifelse}
  ifelse def
 /bits 8 def  # maybe someday make it support different bits/sample
@@ -28,8 +30,11 @@
   >> def
 
 save
-0.5 inches 0.5 inches moveto currentpoint translate
-7.5 inches dup imageheight imagewidth div mul 2 copy scale [0 0] astore
+# RGB image data is stored top to bottom, left to right; but
+# PostScript draws from bottom to top. So we have to invert the image by
+# negating the vertical scaling, and positioning to the top of the page.
+0.5 inches pageheight 0.5 inches sub moveto currentpoint translate
+7.5 inches dup imageheight neg imagewidth div mul 2 copy scale [0 0] astore
 128 string (scale: %f %f) 3 -1 roll sprintf {==} {pop} ifelse
 rgbimage
 /DeviceRGB setcolorspace image
