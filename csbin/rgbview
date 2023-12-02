@@ -1,0 +1,30 @@
+#!/usr/src/jcomeauictx/casperscript/bin/cs -S --
+# adapted from https://stackoverflow.com/a/15167678/493161
+/inches {72 mul} def
+/infile argc 1 gt {argv 1 get} {(/dev/urandom)} ifelse def
+/imagewidth argc 2 gt {argv 2 get cvi} {5 inches} ifelse def
+/imageheight argc 3 gt {argv 3 get cvi} {7 inches} ifelse def
+/bits argc 4 gt {argv 4 get cvi} {8} ifelse def
+128 string (displaying %s with width %d, height %d, %d bits per color)
+[infile imagewidth imageheight bits] sprintf {==} {pop} ifelse
+
+/rgbimage
+  <<
+    /ImageType 1
+    /Width imagewidth
+    /Height 7 inches
+    /ImageMatrix [5 inches 0 0 7 inches neg 0 7 inches]
+    /MultipleDataSources false
+    /DataSource infile (r) file
+    /BitsPerComponent bits
+    /Decode [0 1 0 1 0 1]
+    /Interpolate false
+  >> def
+
+save
+1 inches 2 inches moveto currentpoint translate
+5 inches 7 inches scale
+rgbimage
+/DeviceRGB setcolorspace image
+restore
+showpage
