@@ -3,8 +3,14 @@
 /inches {72 mul} def
 /infile argc 1 gt {argv 1 get} {(/dev/urandom)} ifelse def
 /imagewidth argc 2 gt {argv 2 get cvi} {7.5 inches} ifelse def
-/imageheight argc 3 gt {argv 3 get cvi} {10 inches} ifelse def
-/bits argc 4 gt {argv 4 get cvi} {8} ifelse def
+/imageheight argc 3 gt
+ {argv 3 get cvi}
+ {[ infile status ] 1 get dup 0 gt
+  {imagewidth div 3 div cvi dup (height calculated from file size: ) print =}
+  {10 inches}
+  ifelse}
+ ifelse def
+/bits 8 def  # maybe someday make it support different bits/sample
 128 string (displaying %s with width %d, height %d, %d bits per color)
 [infile imagewidth imageheight bits] sprintf {==} {pop} ifelse
 
