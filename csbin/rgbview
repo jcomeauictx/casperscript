@@ -13,6 +13,7 @@
   ifelse}
  ifelse def
 /bits 8 def  # maybe someday make it support different bits/sample
+/flip argc 4 gt {argv 4 get} {(none)} ifelse def  # flip (v), flop (h), both
 128 string (displaying %s with width %d, height %d, %d bits per color)
 [infile imagewidth imageheight bits] sprintf {==} {pop} ifelse
 
@@ -21,7 +22,12 @@
     /ImageType 1
     /Width imagewidth
     /Height imageheight
-    /ImageMatrix [imagewidth 0 0 imageheight neg 0 imageheight]
+    /ImageMatrix <<
+      (none) [imagewidth 0 0 imageheight 0 0]
+      (flip) [imagewidth 0 0 imageheight neg 0 imageheight]
+      (flop) [imagewidth neg 0 0 imageheight imagewidth 0]
+      (both) [imagewidth neg 0 0 imageheight neg imagewidth imageheight]
+    >> flip get
     /MultipleDataSources false
     /DataSource infile (r) file
     /BitsPerComponent bits
@@ -30,11 +36,19 @@
   >> def
 
 save
-# RGB image data is stored top to bottom, left to right; but
-# PostScript draws from bottom to top. So we have to invert the image by
-# negating the vertical scaling, and positioning to the top of the page.
-0.5 inches pageheight 0.5 inches sub moveto currentpoint translate
-7.5 inches dup imageheight neg imagewidth div mul 2 copy scale [0 0] astore
+# RGB image data is, presumably, ordinarily stored top to bottom, left to
+# right; but PostScript draws from bottom to top unless the CTM (Current
+# Transformation Matrix), ImageMatrix, or `scale` operator change this.
+# It turns out the images in the PDF files I'm using already expect the
+# bottom-to-top rendering, having the bytes for the bottom line at the
+# very end of the file.
+
+0.5 inches 0.5 inches moveto currentpoint translate
+
+# fill the page as best we can, keeping the 1:1 aspect ratio
+/imageratio imageheight imagewidth div def
+/pageratio pageheight pagewidth div def
+pagewidth 1 inches sub dup imageratio mul 2 copy scale [0 0] astore
 128 string (scale: %f %f) 3 -1 roll sprintf {==} {pop} ifelse
 rgbimage
 /DeviceRGB setcolorspace image
