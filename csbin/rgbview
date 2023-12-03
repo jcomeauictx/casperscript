@@ -3,16 +3,24 @@
 /inches {72 mul} def
 /pagewidth currentpagedevice /PageSize get aload pop /pageheight exch def def
 (page width and height: ) print [pagewidth pageheight] ==
+# pull random data if file not specified
 /infile argc 1 gt {argv 1 get} {(/dev/urandom)} ifelse def
-/imagewidth argc 2 gt {argv 2 get cvi} {pagewidth 1 inches sub} ifelse def
-/imageheight argc 3 gt
- {argv 3 get cvi}
+# use all printable area on page if width not specified
+/imagewidth argc 2 gt {argv 2 get} {pagewidth 1 inches sub} ifelse cvi def
+# calculate unspecified height from image size if available
+# otherwise use all prinable area on page
+# can specify as zero if you want it calculated, and use flip argument too
+/imageheight argc 3 gt {argv 3 get cvi} {0} ifelse def
+(imageheight: ) print imageheight =
+/imageheight imageheight 0 eq
  {[ infile status ] 1 get dup 0 gt
-  {imagewidth div 3 div cvi dup (height calculated from file size: ) print =}
-  {pageheight 1 inches sub}
-  ifelse}
- ifelse def
+  {imagewidth div 3 div cvi dup (image height from file size: ) print =}
+  {pop pageheight 1 inches sub dup (image height chosen to fit page: ) print =}
+  ifelse cvi def
+ } if
+128 string (image size: %d %d) [imagewidth imageheight] sprintf {=} if
 /bits 8 def  # maybe someday make it support different bits/sample
+# specify 'flip' if bytes are in normal PostScript (bottom-up) order
 /flip argc 4 gt {argv 4 get} {(none)} ifelse def  # flip (v), flop (h), both
 128 string (displaying %s with width %d, height %d, %d bits per color)
 [infile imagewidth imageheight bits] sprintf {==} {pop} ifelse
@@ -23,8 +31,11 @@
     /Width imagewidth
     /Height imageheight
     /ImageMatrix <<
-      (none) [imagewidth 0 0 imageheight 0 0]
-      (flip) [imagewidth 0 0 imageheight neg 0 imageheight]
+      # (none) actually flips the image while displaying, since postscript
+      # displays bottom-up while RGB data is typically top-down
+      # this is to match ImageMagick `display` options.
+      (none) [imagewidth 0 0 imageheight neg 0 imageheight]
+      (flip) [imagewidth 0 0 imageheight 0 0]
       (flop) [imagewidth neg 0 0 imageheight imagewidth 0]
       (both) [imagewidth neg 0 0 imageheight neg imagewidth imageheight]
     >> flip get
@@ -48,7 +59,7 @@ save
 # fill the page as best we can, keeping the 1:1 aspect ratio
 /imageratio imageheight imagewidth div def
 /pageratio pageheight pagewidth div def
-pagewidth 1 inches sub dup imageratio mul 2 copy scale [0 0] astore
+pagewidth 1 inches sub dup imageratio mul 2 copy scale 2 array astore
 128 string (scale: %f %f) 3 -1 roll sprintf {==} {pop} ifelse
 rgbimage
 /DeviceRGB setcolorspace image
