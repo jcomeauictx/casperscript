@@ -47,19 +47,24 @@ casperdict begin
     % like `os.path.split`
     % the following uppercase constants should maybe be placed outside
     % this definition once tested
-    /MAX_DOT_DEPTH 3 def
-    /MAX_CASPER_NAME_LENGTH 32 def
-    /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
-     1 - + def  % 32 times 3, plus 2 dots
-    errordict /.undefined errordict /undefined get put
-    errordict begin
-      /undefined {
-        dup type /nametype eq
-          {(\(/) print =only ( not yet defined\) ) print}
-          {pop /.undefined signalerror}
-        ifelse
-      } bind def
-    end
+    errordict /.undefined known
+      {(topdown already initialized) =}
+      {
+        /MAX_DOT_DEPTH 3 def
+        /MAX_CASPER_NAME_LENGTH 32 def
+        /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
+         1 - + def  % 32 times 3, plus 2 dots
+        errordict /.undefined errordict /undefined get put
+        errordict begin
+          /undefined {
+            dup type /nametype eq
+              {(\(/) print =only ( not yet defined\) ) print}
+              {pop /.undefined signalerror}
+            ifelse
+          } bind def
+        end
+      }
+      ifelse
   } bind def
   /alias (  /currentname /newname -
     alias currentname to newname) docstring {
