@@ -69,13 +69,13 @@ save
 # first see if it will fit without shrinking it
 (stack before scale: ) = pstack
 <<
-(  (true true)  # both height and width too large, shrink so larger fits
+  (true true)  # both height and width too large, shrink so larger fits
     {heightratio widthratio gt
       {1 heightratio div}
       {1 widthratio div}
-      ifelse
+      ifelse}
   (true false) {1 heightratio div}
-  (false true) {1 widthratio div}) pop
+  (false true) {1 widthratio div}
   (false false)  # will fit in both dimensions, expand to fit page?
     # for now we'll leave it alone
     {1}
