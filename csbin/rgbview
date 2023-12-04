@@ -12,12 +12,13 @@
 # can specify as zero if you want it calculated, and use flip argument too
 /imageheight argc 3 gt {argv 3 get cvi} {0} ifelse def
 (imageheight: ) print imageheight =
-/imageheight imageheight 0 eq
+imageheight 0 eq
  {[ infile status ] 1 get dup 0 gt
   {imagewidth div 3 div cvi dup (image height from file size: ) print =}
   {pop pageheight 1 inches sub dup (image height chosen to fit page: ) print =}
-  ifelse cvi def
- } if
+  ifelse cvi /imageheight exch def
+ }
+ if
 128 string (image size: %d %d) [imagewidth imageheight] sprintf {=} if
 /bits 8 def  # maybe someday make it support different bits/sample
 # specify 'flip' if bytes are in normal PostScript (bottom-up) order
@@ -59,9 +60,30 @@ save
 # fill the page as best we can, keeping the 1:1 aspect ratio
 /imageratio imageheight imagewidth div def
 /pageratio pageheight pagewidth div def
+/heightratio pageheight imageheight div def
+/widthratio pagewidth imagewidth div def
+# first see if it will fit without shrinking it
+(stack before scale: ) = pstack
+<<
+(  (true true)  # both height and width too large, shrink so larger fits
+    {heightratio widthratio gt
+      {1 heightratio div}
+      {1 widthratio div}
+      ifelse
+  (true false) {1 heightratio div}
+  (false true) {1 widthratio div}) pop
+  (false false)  # will fit in both dimensions, expand to fit page?
+    # for now we'll leave it alone
+    {1}
+>>
+heightratio 1 lt 8 string cvs ( ) + widthratio 1 lt 8 string cvs + dup ==
+ get exec
+(scale factor: ) print =
+# expand to fit printable width
 pagewidth 1 inches sub dup imageratio mul 2 copy scale 2 array astore
 128 string (scale: %f %f) 3 -1 roll sprintf {==} {pop} ifelse
 rgbimage
 /DeviceRGB setcolorspace image
 restore
 showpage
+# vim: tabstop=8 expandtab shiftwidth=2 softtabstop=2
