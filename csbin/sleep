@@ -1,2 +1,2 @@
 #! bin/bccs
-{argv 1 get} stopped {(sleep: missing argument) =} {cvr sleep} ifelse
+{sys.argv 1 get} stopped {(sleep: missing argument) =} {cvr sleep} ifelse

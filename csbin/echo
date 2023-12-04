@@ -1,2 +1,2 @@
 #! bin/bccs
-1 1 argv length 1 sub {argv exch get print ( ) print} for (\n) print
+1 1 sys.argv length 1 sub {sys.argv exch get print ( ) print} for (\n) print

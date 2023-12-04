@@ -1,2 +1,2 @@
 #! bin/ccs -S -q --
-(scriptpath: ) print argv 0 get =
+(scriptpath: ) print sys.argv 0 get =

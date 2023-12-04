@@ -207,17 +207,17 @@ casperdict begin
     } bind def
   end  % posixpath
   os /path posixpath put
-  % NOTE: remember that only a minimal `argv` is defined at this point, created
-  % by `casper`, % run at processing of `-C`.
+  % NOTE: remember that only a minimal `sys.argv` is defined at this point,
+  % created by `casper`, % run at processing of `-C`.
   % A script is run only after processing `--`, and that is where the full
-  % `argv` is defined.
+  % `sys.argv` is defined.
   /scriptname {
-    argv 0 get os /path get dup /split get 3 -1 roll exch exec
+    sys.argv 0 get os /path get dup /split get 3 -1 roll exch exec
     %(scriptname after split:) = pstack
-    %(argv after split:) = argv ==
+    %(sys.argv after split:) = sys.argv ==
     exch pop exch /splitext get exec
     %(scriptname after splitext:) = pstack
-    %(argv after splitext:) argv ==
+    %(sys.argv after splitext:) sys.argv ==
     pop
     %(pstack after scriptname:) = pstack
   } bind def
@@ -227,8 +227,9 @@ end  % casperdict
   % initialize for programming with casper extensions
   % first copy above dictionaries into userdict
   forthdict userdict copy casperdict exch copy pop
-  % put a minimal `argv` into userdict in case a script is not being run
-  userdict /argv [argv0] put
+  % put a minimal `sys.argv` into userdict in case a script is not being run
+  userdict /sys.argv [argv0] put
+  userdict /sys.argc 1 put
   % now enable top-down programming method
   topdown
 } bind def

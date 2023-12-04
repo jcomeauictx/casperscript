@@ -1,5 +1,4 @@
 #! bin/bccs
-%(argv:) = argv ==
 scriptname (scriptname) eq
   {scriptname =}
   {128 string (scriptname reported incorrectly as %s) [scriptname]

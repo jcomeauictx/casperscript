@@ -67,7 +67,7 @@ extern int zflush(i_ctx_t *);
 extern int zflushpage(i_ctx_t *);
 
 #ifdef BUILD_CASPERSCRIPT
-#define ARGPREFIX "userdict/argv["
+#define ARGPREFIX "userdict/sys.argv["
 #else
 #define ARGPREFIX "userdict/ARGUMENTS["
 #endif
@@ -621,12 +621,12 @@ run_stdin:
                     code = run_string(minst, "]put", 0, minst->user_errors, NULL, NULL);
 #ifdef BUILD_CASPERSCRIPT
                 if (code >= 0) {
-                    code = run_string(minst, "userdict /argc argv length put",
+                    code = run_string(minst, "userdict /sys.argc sys.argv length put",
                             0, minst->user_errors, NULL, NULL);
                 }
                 if (code >= 0) {
                     code = run_string(minst,
-                            "userdict /ARGUMENTS argv dup length "
+                            "userdict /ARGUMENTS sys.argv dup length "
                             "1 sub 1 exch getinterval put",
                             0, minst->user_errors, NULL, NULL);
                 }

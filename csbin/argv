@@ -1,6 +1,7 @@
 #! bin/bccs
-argv dup length argc ne {
- 128 string (argc (%d) incorrect, actual length %d) [argc argv length] sprintf =}
+sys.argv dup length sys.argc ne {
+ 128 string (sys.argc (%d) incorrect, actual length %d)
+   [sys.argc sys.argv length] sprintf =}
 {
  {print ( ) print} forall (\n) print
 }
