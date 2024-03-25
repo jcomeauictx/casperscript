@@ -2,7 +2,7 @@
 SHELL := /bin/bash
 CASPER ?= 1
 # review `install` recipe if using other CONFIG_ARGS
-INSTALL_PREFIX ?= $(HOME)
+INSTALL_PREFIX ?= /usr/local/casperscript
 CONFIG_ARGS ?= --with-x --prefix=$(INSTALL_PREFIX)
 ARCH := $(shell uname -m)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.

@@ -148,9 +148,12 @@ casperdict begin
       {pop length 0 ne}
       ifelse
   } bind def
+  /pagewidth {currentpagedevice /PageSize get 0 get} bind def
+  /pageheight {currentpagedevice /PageSize get 1 get} bind def
   /pagesize {  % - pagewidth pageheight
     % get current page size
-    currentpagedevice /PageSize get dup 1 get exch 0 get
+    % NOTE: original casperscript got this backwards!
+    currentpagedevice /PageSize get dup 0 get exch 1 get
   } bind def
   /.import {  % /dictname -
     % unconditionally import dict
