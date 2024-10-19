@@ -57,8 +57,8 @@ casperdict begin
         errordict /.undefined errordict /undefined get put
         errordict begin
           /undefined {
-            dup type /nametype eq
-              {(\(/) print =only ( not yet defined\) ) print}
+            dup type /nametype eq exch dup xcheck 3 -1 roll and
+              {(\(/) print =only ( not yet defined\)) =}
               {pop /.undefined signalerror}
             ifelse
           } bind def
