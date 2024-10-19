@@ -28,7 +28,8 @@ sys.path.insert(0, os.path.abspath("."))
 #
 extensions = [
     'rst2pdf.pdfbuilder',
-    'sphinx.ext.autosectionlabel'
+    'sphinx.ext.autosectionlabel',
+    'sphinx_copybutton'
 ]
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ["_templates"]
@@ -40,7 +41,7 @@ source_suffix = ".rst"
 # source_encoding = 'utf-8-sig'
 
 # The master toctree document.
-master_doc = "toc"
+master_doc = "index"
 
 # General information about the project.
 project = "Ghostscript"
@@ -224,7 +225,7 @@ latex_elements = {
 # (source start file, target name, title,
 #  author, documentclass [howto, manual, or own class]).
 latex_documents = [
-    ("toc", "Ghostscript.tex", u"Ghostscript Documentation", u"Artifex", "manual")
+    ("index", "Ghostscript.tex", u"Ghostscript Documentation", u"Artifex", "manual")
 ]
 # The name of an image file (relative to this directory) to place at the top of
 # the title page.
@@ -250,7 +251,7 @@ latex_domain_indices = True
 # Grouping the document tree into PDF files. List of tuples
 # (source start file, target name, title, author).
 
-pdf_documents = [("toc", "Ghostscript", "Ghostscript Manual", "Artifex")]
+pdf_documents = [("index", "Ghostscript", "Ghostscript Manual", "Artifex")]
 
 # A comma-separated list of custom stylesheets. Example:
 #pdf_stylesheets = ["sphinx", "bahnschrift", "a4"]

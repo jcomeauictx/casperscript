@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -49,7 +49,7 @@ mem_spec_op(gx_device *pdev, int dev_spec_op,
     cmm_dev_profile_t *dev_profile;
     gx_device_memory *mdev = (gx_device_memory *)pdev;
 
-    if (pdev->is_planar &&
+    if (pdev->num_planar_planes &&
         (dev_spec_op == gxdso_supports_devn ||
          dev_spec_op == gxdso_skip_icc_component_validation)) {
         dev_proc(pdev, get_profile)(pdev, &dev_profile);
@@ -95,7 +95,7 @@ gdev_mem_set_planar_interleaved(gx_device_memory * mdev, int num_planes,
     const gdev_mem_functions *fns =
                     gdev_mem_functions_for_bits(mdev->color_info.depth);
 
-    if (num_planes < 1 || num_planes > GX_DEVICE_COLOR_MAX_COMPONENTS || num_planes != mdev->color_info.num_components)
+    if (num_planes < 1 || num_planes > GX_DEVICE_COLOR_MAX_COMPONENTS || num_planes < mdev->color_info.num_components)
         return_error(gs_error_rangecheck);
     for (pi = 0, total_depth = 0; pi < num_planes; ++pi) {
         int shift = planes[pi].shift;
@@ -119,7 +119,7 @@ gdev_mem_set_planar_interleaved(gx_device_memory * mdev, int num_planes,
     }
     if (total_depth > mdev->color_info.depth)
         return_error(gs_error_rangecheck);
-    mdev->is_planar = 1;
+    mdev->num_planar_planes = num_planes;
     memcpy(mdev->planes, planes, num_planes * sizeof(planes[0]));
     mdev->plane_depth = same_depth;
     /* Change the drawing procedures. */
@@ -187,7 +187,7 @@ mem_planar_open(gx_device * dev)
     gx_device_memory *const mdev = (gx_device_memory *)dev;
 
     /* Check that we aren't trying to open a chunky device as planar. */
-    if (!dev->is_planar)
+    if (!dev->num_planar_planes)
         return_error(gs_error_rangecheck);
     return gdev_mem_open_scan_lines(mdev, dev->height);
 }
@@ -198,7 +198,7 @@ mem_planar_open_interleaved(gx_device * dev)
     gx_device_memory *const mdev = (gx_device_memory *)dev;
 
     /* Check that we aren't trying to open a chunky device as planar. */
-    if (!dev->is_planar)
+    if (!dev->num_planar_planes)
         return_error(gs_error_rangecheck);
     return gdev_mem_open_scan_lines_interleaved(mdev, dev->height, 1);
 }
@@ -248,12 +248,12 @@ put_image_copy_planes(gx_device * dev, const byte **base_ptr, int sourcex,
     mem_save_params_t save;
     const gdev_mem_functions *fns;
     int code = 0;
-    uchar plane;
+    int plane;
     const byte *base;
-    int last_plane = mdev->color_info.num_components - 1;
+    int last_plane = mdev->num_planar_planes - 1;
 
     MEM_SAVE_PARAMS(mdev, save);
-    for (plane = 0; plane < mdev->color_info.num_components; plane++)
+    for (plane = 0; plane < mdev->num_planar_planes; plane++)
     {
         if (tag_offset && plane == last_plane)
             base = base_ptr[tag_offset];
@@ -306,7 +306,7 @@ mem_planar_fill_rectangle_hl_color(gx_device *dev, const gs_fixed_rect *rect,
 {
     gx_device_memory * const mdev = (gx_device_memory *)dev;
     mem_save_params_t save;
-    uchar pi;
+    int pi;
     int x = fixed2int(rect->p.x);
     int y = fixed2int(rect->p.y);
     int w = fixed2int(rect->q.x) - x;
@@ -318,7 +318,7 @@ mem_planar_fill_rectangle_hl_color(gx_device *dev, const gs_fixed_rect *rect,
         return gx_fill_rectangle_device_rop( x, y, w, h, pdcolor, dev, lop_default);
     }
     MEM_SAVE_PARAMS(mdev, save);
-    for (pi = 0; pi < mdev->color_info.num_components; ++pi) {
+    for (pi = 0; pi < mdev->num_planar_planes; ++pi) {
         int plane_depth = mdev->planes[pi].depth;
         gx_color_index mask = ((gx_color_index)1 << plane_depth) - 1;
         int shift = 16 - plane_depth;
@@ -341,10 +341,10 @@ mem_planar_fill_rectangle(gx_device * dev, int x, int y, int w, int h,
 {
     gx_device_memory * const mdev = (gx_device_memory *)dev;
     mem_save_params_t save;
-    uchar pi;
+    int pi;
 
     MEM_SAVE_PARAMS(mdev, save);
-    for (pi = 0; pi < mdev->color_info.num_components; ++pi) {
+    for (pi = 0; pi < mdev->num_planar_planes; ++pi) {
         int plane_depth = mdev->planes[pi].depth;
         gx_color_index mask = ((gx_color_index)1 << plane_depth) - 1;
         const gdev_mem_functions *fns =
@@ -367,10 +367,10 @@ mem_planar_copy_mono(gx_device * dev, const byte * base, int sourcex,
 {
     gx_device_memory * const mdev = (gx_device_memory *)dev;
     mem_save_params_t save;
-    uchar pi;
+    int pi;
 
     MEM_SAVE_PARAMS(mdev, save);
-    for (pi = 0; pi < mdev->color_info.num_components; ++pi) {
+    for (pi = 0; pi < mdev->num_planar_planes; ++pi) {
         int plane_depth = mdev->planes[pi].depth;
         int shift = mdev->planes[pi].shift;
         gx_color_index mask = ((gx_color_index)1 << plane_depth) - 1;
@@ -867,7 +867,7 @@ mem_planar_copy_color(gx_device * dev, const byte * base, int sourcex,
     } buf;
     int source_depth = dev->color_info.depth;
     mem_save_params_t save;
-    uchar pi;
+    int pi;
 
     /* This routine cannot copy from 3bit chunky data, as 3 bit
      * things don't pack nicely into bytes or words. Accordingly
@@ -879,7 +879,7 @@ mem_planar_copy_color(gx_device * dev, const byte * base, int sourcex,
 
     fit_copy(dev, base, sourcex, sraster, id, x, y, w, h);
     MEM_SAVE_PARAMS(mdev, save);
-    for (pi = 0; pi < mdev->color_info.num_components; ++pi) {
+    for (pi = 0; pi < mdev->num_planar_planes; ++pi) {
         int plane_depth = mdev->planes[pi].depth;
         int shift = mdev->planes[pi].shift;
         gx_color_index mask = ((gx_color_index)1 << plane_depth) - 1;
@@ -980,10 +980,10 @@ mem_planar_copy_planes(gx_device * dev, const byte * base, int sourcex,
     gx_device_memory * const mdev = (gx_device_memory *)dev;
     mem_save_params_t save;
     int code = 0;
-    uchar plane;
+    int plane;
 
     MEM_SAVE_PARAMS(mdev, save);
-    for (plane = 0; plane < mdev->color_info.num_components; plane++)
+    for (plane = 0; plane < mdev->num_planar_planes; plane++)
     {
         int plane_depth = mdev->planes[plane].depth;
         const gdev_mem_functions *fns =
@@ -1010,10 +1010,10 @@ mem_planar_strip_tile_rect_devn(gx_device * dev, const gx_strip_bitmap * tiles,
 {
     gx_device_memory * const mdev = (gx_device_memory *)dev;
     mem_save_params_t save;
-    uchar pi;
+    int pi;
 
     MEM_SAVE_PARAMS(mdev, save);
-    for (pi = 0; pi < mdev->color_info.num_components; ++pi) {
+    for (pi = 0; pi < mdev->num_planar_planes; ++pi) {
         int plane_depth = mdev->planes[pi].depth;
         gx_color_index mask = ((gx_color_index)1 << plane_depth) - 1;
         int shift = 16 - plane_depth;
@@ -1062,14 +1062,14 @@ mem_planar_strip_tile_rectangle(gx_device * dev, const gx_strip_bitmap * tiles,
 {
     gx_device_memory * const mdev = (gx_device_memory *)dev;
     mem_save_params_t save;
-    uchar pi;
+    int pi;
 
     /* We can't split up the transfer if the tile is colored. */
     if (color0 == gx_no_color_index && color1 == gx_no_color_index)
         return gx_default_strip_tile_rectangle
             (dev, tiles, x, y, w, h, color0, color1, px, py);
     MEM_SAVE_PARAMS(mdev, save);
-    for (pi = 0; pi < mdev->color_info.num_components; ++pi) {
+    for (pi = 0; pi < mdev->num_planar_planes; ++pi) {
         int plane_depth = mdev->planes[pi].depth;
         int shift = mdev->planes[pi].shift;
         gx_color_index mask = ((gx_color_index)1 << plane_depth) - 1;
@@ -1729,7 +1729,7 @@ plane_strip_copy_rop2(gx_device_memory * mdev,
     mem_save_params_t save;
     int code;
     const gdev_mem_functions *fns;
-    int n;
+    int n, m;
     dev_proc_encode_color(*save_encode);
     dev_proc_get_color_mapping_procs(*save_gcmp);
     gx_color_index save_black, save_white;
@@ -1765,12 +1765,15 @@ plane_strip_copy_rop2(gx_device_memory * mdev,
     mdev->color_info.depth = mdev->planes[plane].depth;
     n = mdev->color_info.num_components;
     mdev->color_info.num_components = 1;
+    m = mdev->num_planar_planes;
+    mdev->num_planar_planes = 1;
     code = fns->strip_copy_rop2((gx_device *)mdev, sdata, sourcex, sraster,
                                 id, scolors, textures, tcolors,
                                 x, y, width, height,
                                 phase_x, phase_y, lop, planar_height);
     /* Restore color details. */
     mdev->color_info.num_components = n;
+    mdev->num_planar_planes = m;
     set_dev_proc(mdev, get_bits_rectangle, mem_planar_get_bits_rectangle);
     set_dev_proc(mdev, fill_rectangle, mem_planar_fill_rectangle);
     set_dev_proc(mdev, encode_color, save_encode);
@@ -1792,7 +1795,7 @@ planar_to_chunky(gx_device_memory *mdev, int x, int y, int w, int h,
                  int offset, uint draster, byte *dest, byte **line_ptrs,
                  int plane_height)
 {
-    int num_planes = mdev->color_info.num_components;
+    int num_planes = mdev->num_planar_planes;
     const byte *sptr[GX_DEVICE_COLOR_MAX_COMPONENTS];
     int sbit[GX_DEVICE_COLOR_MAX_COMPONENTS];
     byte *dptr;
@@ -1931,19 +1934,19 @@ mem_planar_strip_copy_rop2(gx_device * dev,
          * convert whole lines of s, but only as many lines as we have to. */
         /* We assume that scolors == NULL here */
         int i;
-        uchar j;
+        int j;
         uint chunky_sraster;
         uint nbytes;
         byte **line_ptrs;
         byte *sbuf, *buf;
 
-        chunky_sraster = sraster * mdev->color_info.num_components;
+        chunky_sraster = sraster * mdev->num_planar_planes;
         nbytes = height * chunky_sraster;
         buf = gs_alloc_bytes(mdev->memory, nbytes, "mem_planar_strip_copy_rop(buf)");
         if (buf == NULL) {
             return gs_note_error(gs_error_VMerror);
         }
-        nbytes = sizeof(byte *) * mdev->color_info.num_components * height;
+        nbytes = sizeof(byte *) * mdev->num_planar_planes * height;
         line_ptrs = (byte **)gs_alloc_bytes(mdev->memory, nbytes, "mem_planar_strip_copy_rop(line_ptrs)");
         if (line_ptrs == NULL) {
             gs_free_object(mdev->memory, buf, "mem_planar_strip_copy_rop(buf)");
@@ -1956,7 +1959,7 @@ mem_planar_strip_copy_rop2(gx_device * dev,
                 sbuf += sraster;
             }
         }
-        line_ptrs -= height * mdev->color_info.num_components;
+        line_ptrs -= height * mdev->num_planar_planes;
         planar_to_chunky(mdev, sourcex, 0, width, height,
                          0, chunky_sraster, buf, line_ptrs, height);
         gs_free_object(mdev->memory, line_ptrs, "mem_planar_strip_copy_rop(line_ptrs)");
@@ -2001,18 +2004,18 @@ mem_planar_strip_copy_rop2(gx_device * dev,
         if (buf == NULL) {
             return gs_note_error(gs_error_VMerror);
         }
-        nbytes = sizeof(byte *) * mdev->color_info.num_components * textures->rep_height;
+        nbytes = sizeof(byte *) * mdev->num_planar_planes * textures->rep_height;
         line_ptrs = (byte **)gs_alloc_bytes(mdev->memory, nbytes, "mem_planar_strip_copy_rop(line_ptrs)");
         if (line_ptrs == NULL) {
             gs_free_object(mdev->memory, buf, "mem_planar_strip_copy_rop(buf)");
             return gs_note_error(gs_error_VMerror);
         }
         tbuf = textures->data;
-        for (i = textures->rep_height * mdev->color_info.num_components; i > 0; i--) {
+        for (i = textures->rep_height * mdev->num_planar_planes; i > 0; i--) {
             *line_ptrs++ = tbuf;
             tbuf += textures->raster;
         }
-        line_ptrs -= textures->rep_height * mdev->color_info.num_components;
+        line_ptrs -= textures->rep_height * mdev->num_planar_planes;
         planar_to_chunky(mdev, 0, ty, textures->rep_width, chunky_t_height,
                          0, chunky_t_raster, buf, line_ptrs, textures->rep_height);
         gs_free_object(mdev->memory, line_ptrs, "mem_planar_strip_copy_rop(line_ptrs)");
@@ -2033,11 +2036,12 @@ mem_planar_strip_copy_rop2(gx_device * dev,
     /* Not doing a planar lop. If we carry on down the default path here,
      * we'll end up doing a planar_to_chunky; we may be able to sidestep
      * that by spotting cases where we can operate directly. */
-    if (!lop_uses_T(lop) || (tcolors && (tcolors[0] == tcolors[1]))) {
+    if ((!lop_uses_T(lop) || (tcolors && (tcolors[0] == tcolors[1]))) &&
+        (mdev->color_info.num_components == mdev->num_planar_planes)) {
         /* No T in use, or constant T. */
         if ((!lop_uses_S(lop) || (scolors && (scolors[0] == scolors[1]))) &&
             ((mdev->color_info.num_components == 1) || (mdev->color_info.num_components == 3))) {
-            uchar plane;
+            int plane;
             /* No S in use, or constant S. And either greyscale or rgb,
              * so we can just do the rop on each plane in turn. */
             for (plane=0; plane < mdev->color_info.num_components; plane++)
@@ -2102,7 +2106,7 @@ mem_planar_get_bits_rectangle(gx_device * dev, const gs_int_rect * prect,
     gx_device_memory * const mdev = (gx_device_memory *)dev;
     gs_get_bits_options_t options = params->options;
     int x = prect->p.x, w = prect->q.x - x, y = prect->p.y, h = prect->q.y - y;
-    uchar num_planes = mdev->color_info.num_components;
+    int num_planes = mdev->num_planar_planes;
     gs_get_bits_params_t copy_params;
     int code;
 
@@ -2168,13 +2172,13 @@ mem_planar_get_bits_rectangle(gx_device * dev, const gs_int_rect * prect,
      */
     if (!(~options & (GB_PACKING_PLANAR | GB_SELECT_PLANES))) {
         /* Check that only a single plane is being requested. */
-        uchar pi;
+        int pi;
 
         for (pi = 0; pi < num_planes; ++pi)
             if (params->data[pi] != 0)
                 break;
         if (pi < num_planes) {
-            uchar plane = pi++;
+            int plane = pi++;
 
             for (; pi < num_planes; ++pi)
                 if (params->data[pi] != 0)
@@ -2222,7 +2226,7 @@ mem_planar_get_bits_rectangle(gx_device * dev, const gs_int_rect * prect,
                                           &copy_params, base);
         if (code >= 0) {
             /* get_bits worked. Let's copy the data out. */
-            int bpc = mdev->color_info.depth / mdev->color_info.num_components;
+            int bpc = mdev->color_info.depth / mdev->num_planar_planes;
             int left = x;
             int right = x+w;
             int i, j;
@@ -2237,7 +2241,7 @@ mem_planar_get_bits_rectangle(gx_device * dev, const gs_int_rect * prect,
                 default: return_error(gs_error_rangecheck);
             }
             right -= left;
-            for (i = 0; i < mdev->color_info.num_components; i++) {
+            for (i = 0; i < mdev->num_planar_planes; i++) {
                 byte *d = params->data[i];
                 const byte *s = params2.data[i];
                 for (j = 0; j < h; j++) {

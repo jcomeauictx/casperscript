@@ -1,4 +1,4 @@
-.. Copyright (C) 2001-2022 Artifex Software, Inc.
+.. Copyright (C) 2001-2023 Artifex Software, Inc.
 .. All Rights Reserved.
 
 .. title:: High Level Devices
@@ -6,7 +6,7 @@
 
 .. include:: header.rst
 
-.. _VectorDevices.htm:
+.. _VectorDevices.html:
 
 
 High Level Devices
@@ -117,13 +117,21 @@ The options in the command line may include any switches that may be used with t
 
 
   ``AlwaysOutline``
-    Similar to the :ref:`-dNoOutputFonts<VectorDevices_NoOutputFonts>` control, this can be used to control whether text is converted into linework or preserved as a font, based on the name. Text using a font which is listed in the ``AlwaysOutline`` array will always be converted into linework and the font will not be embedded in the output.
+    Similar to the :ref:`-dNoOutputFonts<VectorDevices_NoOutputFonts>` control, this can be used to control whether text is converted into linework or preserved as a font, based on the name. Text using a font which is listed in the ``AlwaysOutline`` array will always be converted into linework and the font will not be embedded in the output. Subset fonts have a prefix of the form 'ABCDE+' (Acrobat does not display the prefix in the Fonts dialog) and the code will remove this from fonts used in the document before matching so you should not specify that part of the font name.
 
     Example usage:
 
     .. code-block:: c
 
       gs -sDEVICE=pdfwrite -o out.pdf -c "<< /AlwaysOutline [/Calibri (Comic Sans) cvn] >> setdistillerparams" -f input.pdf
+    
+    .. note::
+    
+      CIDFonts are composed with the CMap name to produce the final font name, and it is not possible to reliably remove the CMap name in the font name matching, so you must specify the composed name.
+
+    .. code-block:: c
+    
+      gs -sDEVICE=pdfwrite -o out.pdf -c "<< /AlwaysOutline [/Calibri-Identity-H (Comic Sans-Identity-H) cvn] >> setdistillerparams" -f input.pdf
 
 
   ``NeverOutline``
@@ -412,7 +420,7 @@ The :title:`pdfwrite` family of devices recognize all of the Acrobat Distiller 5
      - false
      - false
    * - EmbedAllFonts
-     -
+     - :ref:`(17)<DistillerParameters_note_17>`
      - true
      - false
      - true
@@ -858,6 +866,11 @@ Note 16
 ^^^^^^^^^
    When true image data in the source which is encoded using the JPX (JPEG 2000) filter will not be decompressed and then recompressed on output. This prevents the multiplication of JPEG artefacts caused by lossy compression. ``PassThroughJPXImages`` currently only affects simple JPX encoded images. It has no effect on JPEG encoded images (see above) or masked images. In addition this parameter will be ignored if the :title:`pdfwrite` device needs to modify the source data. This can happen if the image is being downsampled, changing colour space or having transfer functions applied. Note that this parameter essentially overrides the ``EncodeColorImages`` and ``EncodeGrayImages`` parameters if they are false, the image will still be written with a ``JPXDecode`` filter. NB this feature currently only works with PostScript or PDF input, it does not work with PCL, PXL or XPS input.
 
+.. _DistillerParameters_note_17:
+
+Note 17
+^^^^^^^^^
+   When ``EmbedAllFonts`` is false only Fonts (not CIDFonts) which are symbolic will be embedded in the output file. When ``EmbedAllFonts`` is true the behaviour is dependent on the input type. Ordinarily (all interpreters except PDF) all the fonts will be embedded in the output. Fonts which are not embedded in the input will have a substitute assigned and that will be embedded in the output. For PDF input only, if the Font or CIDFont is not embedded in the input then it will not be embedded in the output. This is a change in behaviour with the release of 10.03.0. If you have defined a specific font as a known good substitute in Fontmap.GS or cidfmap then you will also need to add it to the ``AlwaysEmbed`` array in order that it gets embedded.
 
 
 Color Conversion and Management
@@ -993,7 +1006,7 @@ PDF file output - ``pdfwrite``
    For example, adding the follow to the command line: ``-c "/PreserveAnnotTypes [/Text /UnderLine] def" -f <input file>`` would preserve only annotations with the subtypes "Text" and "UnderLine".
 
 ``-dPreserveMarkedContent=boolean``
-   We now attempt to preserve marked content from input PDF files through to the output PDF file (note, not in output PostScript!) This does not include marked content relating to optional content, because currently we do not preserve optional content, it is instead applied by the interpreter.
+   We now attempt to preserve marked content from input PDF files through to the output PDF file (note, not in output PostScript!). This does now include marked content relating to optional content.
 
    This control also requires the PDF interpreter to pass the marked content to the :title:`pdfwrite` device, this is only done with the new (C-based) PDF interpreter. The old (PostScript-based) interpreter does not support this feature and will not pass marked content to the :title:`pdfwrite` device.
 
@@ -1117,6 +1130,16 @@ The following switches are used for generating metadata according to the Adobe X
 
    Obviously this is all heuristic and undoubtedly there is more we can do to improve the functionality here, but we need concrete examples to work from.
 
+``-dWriteXRefStm=boolean``
+   Controls whether the pdfwrite device will use an XRef stream in the output file instead of a regular xref table. This switch defaults to true, however if the output file is less than PDF 1.5 then XRef streams are not supported, and it will be set to false.
+   
+   Using an XRef stream instead of a regular xref can reduce the size of the output file, and is required in order to use ObjStms (see below) which can reduce the file size even further. This is currently a new feature and can be disabled if problems arise.
+
+``-dWriteObjStms=boolean``
+   Controls whether the pdfwrite device will use ObjStms to store non-stream objects in the output file. This switch defaults to true, however if the output file is less than PDF 1.5, or XRef streams are disabled then ObjStms are not supported and this switch will be set to false. Additionally, the pdfwrite device does not currently support ObjStms when Linearizing (Optimize for Fast Web View) the output file and ObjStms will be disabled if Linearization is activated.
+   
+   Using ObjStms can significantly reduce the size of some PDF files, at the cost of somewhat reduced performance. Taking as an exmple the PDF 1.7 Reference Manual; the original file is ~32MB, producing a PDF file from it using pdfwrite without the XRefStm or ObjStms enabled produces a file ~19MB, with both these features enabled the output file is ~13.9MB. This is currently a new feature and can be disabled if problems arise.
+
 ----
 
 
@@ -1224,7 +1247,7 @@ To create a PDF/X-3 document from a Postscript or a PDF file, you should :
 
 - Specify the ``-dPDFX`` option. It provides the document conformity and forces ``-dCompatibilityLevel=1.3``.
 
-- Specify ``-sColorConversionStrategy=Gray``, ``-sColorConversionStrategy=CMYK`` or ``-sColorConversionStrategy=UseDeviceIndependentColor`` (RGB is not allowed). If you plan to create a device-independent color PDF file then you should set the ``ProcessColorModel`` using ``-sProcessColorModel=DeviceGray`` or ``-sProcessColorModel=DeviceCMYK``.
+- Specify ``-sColorConversionStrategy=Gray``, ``-sColorConversionStrategy=CMYK`` or ``-sColorConversionStrategy=UseDeviceIndependentColor`` (RGB is not allowed).
 
 - Specify a PDF/X definition file before running the input document. It provides additional information to be included into the output document. A sample PDF/X definition file may be found in ``gs/lib/PDFX_def.ps``. You will need to modify the content of this file; in particular you must alter the ``/ICCProfile`` so that it points to a valid ICC profile for your ``OutputCondition``. The string '(...)' defining the ICCProfile must be a fully qualified device and path specification appropriate for your Operating System.
 
@@ -1285,7 +1308,7 @@ To create a PDF/A document, please follow the instructions for `Creating a PDF/X
 
 - Specify the ``-dPDFA`` option to specify ``PDF/A-1``, ``-dPDFA=2`` for ``PDF/A-2`` or ``-dPDFA=3`` for ``PDF/A-3``.
 
-- Specify ``-sColorConversionStrategy=RGB``, ``-sColorConversionStrategy=CMYK`` or ``-sColorConversionStrategy=UseDeviceIndependentColor``. If you plan to create a device-independent color PDF file then you should set the ``ProcessColorModel`` using ``-sProcessColorModel=DeviceRGB`` or ``-sProcessColorModel=DeviceCMYK``.
+- Specify ``-sColorConversionStrategy=RGB``, ``-sColorConversionStrategy=CMYK`` or ``-sColorConversionStrategy=UseDeviceIndependentColor``.
 
 - Specify a PDF/A definition file before running the input document. It provides additional information to be included in the output document. A sample PDF/A definition file may be found in ``gs/lib/PDFA_def.ps``. You will need to modify the content of this file; in particular you must alter the ``/ICCProfile`` so that it points to a valid ICC profile for your ``OutputIntent``. The string '(...)' defining the ICCProfile must be a fully qualified device and path specification appropriate for your Operating System.
 
@@ -1311,6 +1334,16 @@ Here is a sample command line to invoke Ghostscript for generating a PDF/A docum
 
 
 
+PDF Optimization and Compression
+------------------------------------------------------------
+
+The are techniques to compress & optmize **PDF** files which are explained in depth on our `Optimizing PDFs with Ghostscript blog <https://artifex.com/blog/optimizing-pdfs-with-ghostscript>`_.
+
+
+
+
+
+
 Ghostscript PDF Printer Description
 -----------------------------------------
 
@@ -1328,7 +1361,7 @@ To set distiller parameters, select the "Ghostscript PDF" Printing Preferences, 
 ``pdfmark`` extensions
 -----------------------------------------
 
-In order to better support the `ZugFERD electronic invoice standard`_ and potentially other standards in the future, a new non-standard ``pdfmark`` has been defined for use by pdfwrite.
+In order to better support the `ZUGFeRD electronic invoice standard`_ and potentially other standards in the future, a new non-standard ``pdfmark`` has been defined for use by pdfwrite. Find out more on our `creating ZUGFeRD documents with Ghostscript blog <https://artifex.com/blog/creating-zugferd-documents-with-ghostscript>`_.
 
 This ``pdfmark`` allows additional ``Metadata`` to be defined which will be inserted into the ``Metadata`` generated by the :title:`pdfwrite` device. This is necessary because the standard requires a PDF/A-3 file be produced, with an extension schema (and some additional XML data) contained within the ``Metadata`` referenced from the ``Catalog`` object.
 
@@ -1350,7 +1383,7 @@ Some applications, such as HIGZ, produce PostScript files that use ridiculously 
 
 .. _MuPDF: https://mupdf.com
 .. _IPA_2003-11_PDFX.pdf: http://www.color.org/IPA_2003-11_PDFX.pdf
-.. _ZugFERD electronic invoice standard: http://www.ferd-net.de/front_content.php?idcat=231&changelang=4
+.. _ZUGFeRD electronic invoice standard: http://www.ferd-net.de/front_content.php?idcat=231&changelang=4
 
 
 

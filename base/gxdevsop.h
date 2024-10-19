@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -510,6 +510,17 @@ enum {
      *  Returns 0 is no replacment is made.
      *  Returns >0 if replacement occurred. */
     gxdso_replacecolor,
+
+    /* Used solely (for now at least) by pdfwrite. We need to tell pdfwrite that Image and Form
+     * XObjects, have an /OC entry and what the object number of the optional content entry is.
+     * We should already have defined the optional content dictionary using a pdfmark.
+     */
+    gxdso_pending_optional_content,
+
+    /* Called to give a device the chance to update the color information after put_params
+     * has reset it. This enables device specific changes to not interfere when devices are
+     * cloned for NumRenderingThreads etc. */
+    gxdso_adjust_colors,
 
     /* Add new gxdso_ keys above this. */
     gxdso_pattern__LAST

@@ -52,19 +52,6 @@ zcurrentpoint(i_ctx_t *i_ctx_p)
     return 0;
 }
 
-/* - .currentpoint_valid <bool> */
-static int
-zcurrentpoint_valid(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    gs_point pt;
-    int code = gs_currentpoint(igs, &pt);
-
-    push(1);
-    make_bool(op, code == 0);
-    return 0;
-}
-
 /* <x> <y> moveto - */
 int
 zmoveto(i_ctx_t *i_ctx_p)
@@ -102,6 +89,7 @@ common_to(i_ctx_t *i_ctx_p,
     double opxy[2];
     int code;
 
+    check_op(2);
     if ((code = num_params(op, 2, opxy)) < 0 ||
         (code = (*add_proc)(igs, opxy[0], opxy[1])) < 0
         )
@@ -133,6 +121,7 @@ common_curve(i_ctx_t *i_ctx_p,
     double opxy[6];
     int code;
 
+    check_op(6);
     if ((code = num_params(op, 6, opxy)) < 0)
         return code;
     code = (*add_proc)(igs, opxy[0], opxy[1], opxy[2], opxy[3], opxy[4], opxy[5]);
@@ -176,7 +165,6 @@ const op_def zpath_op_defs[] =
     {"0clip", zclip},
     {"0closepath", zclosepath},
     {"0currentpoint", zcurrentpoint},
-    {"0.currentpoint_valid", zcurrentpoint_valid},
     {"6curveto", zcurveto},
     {"0eoclip", zeoclip},
     {"0initclip", zinitclip},

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -625,7 +625,7 @@ static int pdfi_get_child(pdf_context *ctx, pdf_array *Kids, int i, pdf_dict **p
                 goto errorExit;
             }
             pdfi_set_error(ctx, 0, NULL, E_PDF_DICT_IS_STREAM, "pdfi_get_child", NULL);
-            code = pdfi_stream_to_dict(ctx, (pdf_stream *)child, &d1);
+            code = pdfi_get_stream_dict(ctx, (pdf_stream *)child, &d1);
             if (code < 0)
                 goto errorExit;
             pdfi_countdown(child);
@@ -1069,6 +1069,9 @@ int pdfi_find_resource(pdf_context *ctx, unsigned char *Type, pdf_name *name,
         }
     }
 
+    pdfi_countdown(typedict);
+    typedict = NULL;
+
     if (ctx->current_stream != NULL) {
         pdf_dict *stream_dict = NULL;
         pdf_stream *stream = ctx->current_stream;
@@ -1111,7 +1114,7 @@ static int pdfi_doc_mark_the_outline(pdf_context *ctx, pdf_dict *outline)
     uint64_t dictsize;
     uint64_t index;
     pdf_name *Key = NULL;
-    double num;
+    double num = 0;
 
     /* Basically we only do /Count, /Title, /A, /C, /F
      * The /First, /Last, /Next, /Parent get written magically by pdfwrite
@@ -1137,16 +1140,22 @@ static int pdfi_doc_mark_the_outline(pdf_context *ctx, pdf_dict *outline)
     if (code < 0)
         goto exit;
 
-    if (code > 0) {
+    /* We can't rely on Count being present to indicate that the Outline has descendants
+     * see bug #707228. Instead, look for the presence of a /First key. If there is no count
+     * key, or it is 0, then assume the entry is closed.
+     */
+    {
         pdf_dict *current = NULL, *next = NULL;
-        int count = 0;
+        int count = 0, code1;
 
-        code = pdfi_dict_knownget_type(ctx, outline, "First", PDF_DICT, (pdf_obj **)&current);
-        if (code > 0) {
+        code1 = pdfi_dict_knownget_type(ctx, outline, "First", PDF_DICT, (pdf_obj **)&current);
+        if (code1 > 0) {
+            if (code <= 0)
+                pdfi_set_warning(ctx, 0, NULL, W_PDF_OUTLINECHILD_NO_COUNT, "pdfi_doc_mark_the_outline", NULL);
             count++;
             do {
-                code = pdfi_dict_knownget_type(ctx, current, "Next", PDF_DICT, (pdf_obj **)&next);
-                if (code > 0) {
+                code1 = pdfi_dict_knownget_type(ctx, current, "Next", PDF_DICT, (pdf_obj **)&next);
+                if (code1 > 0) {
                     pdfi_countdown(current);
                     current = next;
                     next = NULL;
@@ -1156,7 +1165,7 @@ static int pdfi_doc_mark_the_outline(pdf_context *ctx, pdf_dict *outline)
             } while (1);
             pdfi_countdown(current);
         }
-        if (num < 0)
+        if (num <= 0)
             count *= -1;
         pdfi_dict_put_int(ctx, tempdict, "Count", count);
     }
@@ -1602,6 +1611,13 @@ static int pdfi_doc_EmbeddedFiles(pdf_context *ctx)
     pdf_array *Names_array = NULL;
     pdf_array *Kids = NULL;
 
+    code = pdfi_dict_knownget_type(ctx, ctx->Root, "Collection", PDF_DICT, (pdf_obj **)&Names);
+    if (code < 0) goto exit;
+    if (code > 0) {
+        code = 0;
+        goto exit;
+    }
+
     code = pdfi_dict_knownget_type(ctx, ctx->Root, "Names", PDF_DICT, (pdf_obj **)&Names);
     if (code <= 0) goto exit;
 
@@ -1676,6 +1692,111 @@ static int pdfi_doc_AcroForm(pdf_context *ctx)
 }
 
 
+static int pdfi_doc_view(pdf_context *ctx)
+{
+    int code = 0;
+    pdf_dict *tempdict = NULL;
+    pdf_name *Mode = NULL;
+    pdf_obj *ActionDest = NULL;
+
+    code = pdfi_dict_knownget_type(ctx, ctx->Root, "PageMode", PDF_NAME, (pdf_obj **)&Mode);
+    if (code < 0)
+        return code;
+
+    if (code != 0) {
+        code = pdfi_dict_alloc(ctx, 1, &tempdict);
+        if (code < 0)
+            return code;
+
+        pdfi_countup(tempdict);
+
+        code = pdfi_dict_put(ctx, tempdict, "PageMode", (pdf_obj *)Mode);
+        if (code < 0)
+            goto exit;
+
+        code = pdfi_pdfmark_from_dict(ctx, tempdict, NULL, "DOCVIEW");
+        if (code < 0)
+            goto exit;
+        pdfi_countdown(tempdict);
+        tempdict = NULL;
+    }
+
+    code = pdfi_dict_knownget_type(ctx, ctx->Root, "PageLayout", PDF_NAME, (pdf_obj **)&Mode);
+    if (code < 0)
+        return code;
+
+    if (code != 0) {
+        code = pdfi_dict_alloc(ctx, 1, &tempdict);
+        if (code < 0)
+            return code;
+
+        pdfi_countup(tempdict);
+
+        code = pdfi_dict_put(ctx, tempdict, "PageLayout", (pdf_obj *)Mode);
+        if (code < 0)
+            goto exit;
+
+        code = pdfi_pdfmark_from_dict(ctx, tempdict, NULL, "DOCVIEW");
+        if (code < 0)
+            goto exit;
+        pdfi_countdown(tempdict);
+        tempdict = NULL;
+    }
+
+    code = pdfi_dict_knownget(ctx, ctx->Root, "OpenAction", &ActionDest);
+    if (code < 0)
+        return code;
+
+    if (code != 0) {
+        if (pdfi_type_of(ActionDest) == PDF_DICT) {
+            /* Dictionary means this is an action */
+            code = pdfi_dict_alloc(ctx, 1, &tempdict);
+            if (code < 0)
+                return code;
+
+            pdfi_countup(tempdict);
+
+            code = pdfi_dict_put(ctx, tempdict, "A", (pdf_obj *)ActionDest);
+            if (code < 0)
+                goto exit;
+
+            code = pdfi_pdfmark_modA(ctx, tempdict);
+            if (code < 0) goto exit;
+
+            code = pdfi_pdfmark_from_dict(ctx, tempdict, NULL, "DOCVIEW");
+        } else {
+            if (pdfi_type_of(ActionDest) == PDF_ARRAY) {
+                /* Array means this is a destination */
+                code = pdfi_dict_alloc(ctx, 1, &tempdict);
+                if (code < 0)
+                    return code;
+
+                pdfi_countup(tempdict);
+
+                code = pdfi_dict_put(ctx, tempdict, "Dest", (pdf_obj *)ActionDest);
+                if (code < 0)
+                    goto exit;
+                code = pdfi_pdfmark_modDest(ctx, tempdict);
+                if (code < 0)
+                    goto exit;
+                code = pdfi_pdfmark_from_dict(ctx, tempdict, NULL, "DOCVIEW");
+                if (code < 0)
+                    goto exit;
+            } else {
+                code = gs_note_error(gs_error_typecheck);
+                goto exit;
+            }
+        }
+    }
+
+exit:
+    pdfi_countdown(ActionDest);
+    pdfi_countdown(Mode);
+    pdfi_countdown(tempdict);
+    return code;
+}
+
+
 /* See pdf_main.ps/process_trailer_attrs()
  * Some of this stuff is about pdfmarks, and some of it is just handling
  * random things in the trailer.
@@ -1687,6 +1808,8 @@ int pdfi_doc_trailer(pdf_context *ctx)
     /* Can't do this stuff with no Trailer */
     if (!ctx->Trailer) {
         pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_TRAILER, "pdfi_doc_trailer", NULL);
+        if (ctx->args.pdfstoponwarning)
+            code = gs_note_error(gs_error_undefined);
         goto exit;
     }
 
@@ -1699,6 +1822,16 @@ int pdfi_doc_trailer(pdf_context *ctx)
                 goto exit;
         }
 
+        /* Handle Docview pdfmark stuff */
+        if (ctx->args.preservedocview) {
+            code = pdfi_doc_view(ctx);
+            if (code < 0) {
+                pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_VIEW, "pdfi_doc_view", NULL);
+                if (ctx->args.pdfstoponwarning)
+                    goto exit;
+            }
+        }
+
         /* Handle Info */
         code = pdfi_doc_Info(ctx);
         if (code < 0) {
@@ -1707,17 +1840,19 @@ int pdfi_doc_trailer(pdf_context *ctx)
              * told to create a PDF/A. the PDFA compatibility is 2, and the file info
              * cannot be handled. In that case, abort immediately.
              */
-            if (ctx->args.pdfstoponerror || code == gs_error_Fatal)
+            if (ctx->args.pdfstoponwarning || code == gs_error_Fatal)
                 goto exit;
         }
 
         /* Handle EmbeddedFiles */
         /* TODO: add a configuration option to embed or omit */
-        code = pdfi_doc_EmbeddedFiles(ctx);
-        if (code < 0) {
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_EMBEDDEDFILES, "pdfi_doc_trailer", NULL);
-            if (ctx->args.pdfstoponerror)
-                goto exit;
+        if (ctx->args.preserveembeddedfiles) {
+            code = pdfi_doc_EmbeddedFiles(ctx);
+            if (code < 0) {
+                pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_EMBEDDEDFILES, "pdfi_doc_trailer", NULL);
+                if (ctx->args.pdfstoponwarning)
+                    goto exit;
+            }
         }
     }
 
@@ -1728,7 +1863,7 @@ int pdfi_doc_trailer(pdf_context *ctx)
     code = pdfi_doc_AcroForm(ctx);
     if (code < 0) {
         pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_ACROFORM, "pdfi_doc_trailer", NULL);
-        if (ctx->args.pdfstoponerror)
+        if (ctx->args.pdfstoponwarning)
             goto exit;
     }
 
@@ -1736,7 +1871,7 @@ int pdfi_doc_trailer(pdf_context *ctx)
     code = pdfi_doc_OutputIntents(ctx);
     if (code < 0) {
         pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_OUTPUTINTENTS, "pdfi_doc_trailer", NULL);
-        if (ctx->args.pdfstoponerror)
+        if (ctx->args.pdfstoponwarning)
             goto exit;
     }
 
@@ -1744,7 +1879,7 @@ int pdfi_doc_trailer(pdf_context *ctx)
     code = pdfi_doc_PageLabels(ctx);
     if (code < 0) {
         pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_PAGELABELS, "pdfi_doc_trailer", NULL);
-        if (ctx->args.pdfstoponerror)
+        if (ctx->args.pdfstoponwarning)
             goto exit;
     }
 

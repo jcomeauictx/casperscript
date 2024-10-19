@@ -845,6 +845,9 @@ show_update(gs_show_enum * penum)
             ;
     }
     if (penum->charpath_flag != cpm_show) {
+        if (pgs->level <= penum->level) {
+            return_error(gs_error_invalidfont);
+        }
         /* Move back to the character origin, so that */
         /* show_move will get us to the right place. */
         code = gx_path_add_point(pgs->show_gstate->path,
@@ -1548,10 +1551,10 @@ show_cache_setup(gs_show_enum * penum)
     gs_gstate *pgs = penum->pgs;
     gs_memory_t *mem = penum->memory;
     gx_device_memory *dev =
-        gs_alloc_struct(mem, gx_device_memory, &st_device_memory,
+        gs_alloc_struct_immovable(mem, gx_device_memory, &st_device_memory,
                         "show_cache_setup(dev_cache)");
     gx_device_memory *dev2 =
-        gs_alloc_struct(mem, gx_device_memory, &st_device_memory,
+        gs_alloc_struct_immovable(mem, gx_device_memory, &st_device_memory,
                         "show_cache_setup(dev_cache2)");
 
     if (dev == 0 || dev2 == 0) {

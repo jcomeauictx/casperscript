@@ -55,6 +55,8 @@
 #include "iddict.h"	/* for idict_put_string */
 #include "zfrsd.h"      /* for make_rss() */
 #include "smd5.h"   /* To hash CIE colour spaces, in order to check equality in ICC cache */
+#include "gxhttype.h"   /* for ht_type_colorscreen */
+#include "gzht.h"
 
 /* Reject color spaces with excessive values of various parameters */
 /* to avoid dealing with overflows, INF, NaN during cache generation */
@@ -205,6 +207,7 @@ zcurrentcolorspace(i_ctx_t * i_ctx_p)
             }
         }
         r_set_attrs(&stref, a_executable);
+        check_estack(1);
         esp++;
         ref_assign(esp, &stref);
         return o_push_estack;
@@ -677,20 +680,54 @@ static int
 zsettransfer(i_ctx_t * i_ctx_p)
 {
     os_ptr  op = osp;
-    int     code;
+    int code, identity = r_size(op) == 0;
+    gx_transfer txfer, txfer1;
 
     check_proc(*op);
     check_ostack(zcolor_remap_one_ostack - 1);
     check_estack(1 + zcolor_remap_one_estack);
+
+    if (!identity) {
+        txfer = igs->set_transfer;
+        if (txfer.red != NULL)
+            rc_increment(txfer.red);
+        if (txfer.green != NULL)
+            rc_increment(txfer.green);
+        if (txfer.blue != NULL)
+            rc_increment(txfer.blue);
+        if (txfer.gray != NULL)
+            rc_increment(txfer.gray);
+    }
+
+    if ((code = gs_settransfer_remap(igs, gs_mapped_transfer, false)) < 0) {
+        if (!identity) {
+            rc_decrement(txfer.red, "settransfer");
+            rc_decrement(txfer.green, "settransfer");
+            rc_decrement(txfer.blue, "settransfer");
+            rc_decrement(txfer.gray, "settransfer");
+        }
+        return code;
+    }
     istate->transfer_procs.red =
         istate->transfer_procs.green =
         istate->transfer_procs.blue =
         istate->transfer_procs.gray = *op;
-    if ((code = gs_settransfer_remap(igs, gs_mapped_transfer, false)) < 0)
-        return code;
+
     push_op_estack(zcolor_reset_transfer);
     ref_stack_pop(&o_stack, 1);
-    return zcolor_remap_one( i_ctx_p,
+
+    if (!identity) {
+        txfer1 = igs->set_transfer;
+        igs->set_transfer = txfer;
+        txfer = txfer1;
+        gx_set_effective_transfer(igs);
+
+        return zcolor_remap_one( i_ctx_p,
+                             &istate->transfer_procs.gray,
+                             txfer.gray, igs,
+                             transfer_remap_one_finish );
+    } else
+        return zcolor_remap_one( i_ctx_p,
                              &istate->transfer_procs.gray,
                              igs->set_transfer.gray,
                              igs,
@@ -747,34 +784,155 @@ zcolor_remap_one(
 static int
 zcolor_remap_one_store(i_ctx_t *i_ctx_p, double min_value)
 {
-    int i;
+    int i, code = 0;
     gx_transfer_map *pmap = r_ptr(esp, gx_transfer_map);
 
-    rc_decrement_only(pmap, "zcolor_remap_one_store");
-    if (ref_stack_count(&o_stack) < transfer_map_size)
-        return_error(gs_error_stackunderflow);
+    if (ref_stack_count(&o_stack) < transfer_map_size) {
+        code = gs_note_error(gs_error_stackunderflow);
+        goto error;
+    }
     for (i = 0; i < transfer_map_size; i++) {
         double v;
-        int code =
-            real_param(ref_stack_index(&o_stack, transfer_map_size - 1 - i),
-                       &v);
+        ref *o;
 
-        if (code < 0)
-            return code;
+        o = ref_stack_index(&o_stack, transfer_map_size - 1 - i);
+        if (o == NULL)
+            return_error(gs_error_stackunderflow);
+
+        code = real_param(o, &v);
+        if (code < 0) {
+            goto error;
+        }
+
         pmap->values[i] =
             (v < min_value ? float2frac(min_value) :
              v >= 1.0 ? frac_1 :
              float2frac(v));
     }
+    rc_decrement_only(pmap, "zcolor_remap_one_store");
     ref_stack_pop(&o_stack, transfer_map_size);
     esp--;			/* pop pointer to transfer map */
     return o_pop_estack;
+
+error:
+    rc_decrement_only(pmap, "zcolor_remap_one_store");
+    make_null(esp);
+    return code;
 }
+
+int
+setblackgeneration_remap_one_finish(i_ctx_t *i_ctx_p)
+{
+    int code = 0;
+    gx_transfer_map *pmap = r_ptr(esp, gx_transfer_map);
+
+    code = zcolor_remap_one_store(i_ctx_p, 0.0);
+
+    rc_decrement(igs->black_generation, "");
+    igs->black_generation = pmap;
+    return code;
+}
+
+int
+transfer_remap_one_finish(i_ctx_t *i_ctx_p)
+{
+    int code = 0;
+    gx_transfer_map *map = r_ptr(esp, gx_transfer_map);
+
+    code = zcolor_remap_one_store(i_ctx_p, 0.0);
+
+    rc_decrement(igs->set_transfer.red, "");
+    igs->set_transfer.red = NULL;
+    rc_decrement(igs->set_transfer.green, "");
+    igs->set_transfer.green = NULL;
+    rc_decrement(igs->set_transfer.blue, "");
+    igs->set_transfer.blue = NULL;
+    rc_decrement(igs->set_transfer.gray, "");
+    igs->set_transfer.gray = map;
+    gx_set_effective_transfer(igs);
+    return code;
+}
+
+int
+transfer_remap_red_finish(i_ctx_t *i_ctx_p)
+{
+    int code = 0;
+    gx_transfer_map *map = r_ptr(esp, gx_transfer_map);
+
+    code = zcolor_remap_one_store(i_ctx_p, 0.0);
+
+    rc_decrement(igs->set_transfer.red, "");
+    igs->set_transfer.red = map;
+    igs->set_transfer.red_component_num =
+        gs_color_name_component_number(igs->device, "Red", 3, ht_type_colorscreen);
+    gx_set_effective_transfer(igs);
+    return code;
+}
+int
+transfer_remap_green_finish(i_ctx_t *i_ctx_p)
+{
+    int code = 0;
+    gx_transfer_map *map = r_ptr(esp, gx_transfer_map);
+
+    code = zcolor_remap_one_store(i_ctx_p, 0.0);
+
+    rc_decrement(igs->set_transfer.green, "");
+    igs->set_transfer.green = map;
+    igs->set_transfer.green_component_num =
+        gs_color_name_component_number(igs->device, "Green", 5, ht_type_colorscreen);
+    gx_set_effective_transfer(igs);
+    return code;
+}
+int
+transfer_remap_blue_finish(i_ctx_t *i_ctx_p)
+{
+    int code = 0;
+    gx_transfer_map *map = r_ptr(esp, gx_transfer_map);
+
+    code = zcolor_remap_one_store(i_ctx_p, 0.0);
+
+    rc_decrement(igs->set_transfer.blue, "");
+    igs->set_transfer.blue = map;
+    igs->set_transfer.blue_component_num =
+        gs_color_name_component_number(igs->device, "Blue", 4, ht_type_colorscreen);
+    gx_set_effective_transfer(igs);
+    return code;
+}
+int
+transfer_remap_gray_finish(i_ctx_t *i_ctx_p)
+{
+    int code = 0;
+    gx_transfer_map *map = r_ptr(esp, gx_transfer_map);
+
+    code = zcolor_remap_one_store(i_ctx_p, 0.0);
+
+    rc_decrement(igs->set_transfer.gray, "");
+    igs->set_transfer.gray = map;
+    igs->set_transfer.gray_component_num =
+        gs_color_name_component_number(igs->device, "Gray", 4, ht_type_colorscreen);
+    gx_set_effective_transfer(igs);
+    return code;
+}
+
 int
 zcolor_remap_one_finish(i_ctx_t *i_ctx_p)
 {
     return zcolor_remap_one_store(i_ctx_p, 0.0);
 }
+
+int
+setundercolor_remap_one_signed_finish(i_ctx_t *i_ctx_p)
+{
+    int code = 0;
+    gx_transfer_map *pmap = r_ptr(esp, gx_transfer_map);
+
+    code = zcolor_remap_one_store(i_ctx_p, -1.0);
+
+    rc_decrement(igs->undercolor_removal, "");
+    igs->undercolor_removal = pmap;
+    return code;
+}
+
 int
 zcolor_remap_one_signed_finish(i_ctx_t *i_ctx_p)
 {
@@ -1005,18 +1163,20 @@ static int setgrayspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int CI
                         memcpy(body, "/DefaultGray ..nosubstdevicetest",32);
                         make_string(&stref, a_all | icurrent_space, 32, body);
                         r_set_attrs(&stref, a_executable);
+                        check_estack(1);
                         esp++;
                         ref_assign(esp, &stref);
                         return o_push_estack;
                     } else {
                         *stage = 2;
                         *cont = 1;
-                        body = ialloc_string(47, "string");
+                        body = ialloc_string(89, "string");
                         if (body == 0)
                             return_error(gs_error_VMerror);
-                        memcpy(body, "{/DefaultGray /ColorSpace findresource} stopped",47);
-                        make_string(&stref, a_all | icurrent_space, 47, body);
+                        memcpy(body, "{/DefaultGray /ColorSpace systemdict /findresource get exec} systemdict /stopped get exec",89);
+                        make_string(&stref, a_all | icurrent_space, 89, body);
                         r_set_attrs(&stref, a_executable);
+                        check_estack(1);
                         esp++;
                         ref_assign(esp, &stref);
                         return o_push_estack;
@@ -1177,6 +1337,7 @@ static int grayvalidate(i_ctx_t *i_ctx_p, ref *space, float *values, int num_com
 {
     os_ptr op = osp;
 
+    check_op(1);
     if (!r_is_number(op))
         return_error(gs_error_typecheck);
 
@@ -1229,18 +1390,20 @@ static int setrgbspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int CIE
                         memcpy(body, "/DefaultRGB ..nosubstdevicetest",31);
                         make_string(&stref, a_all | icurrent_space, 31, body);
                         r_set_attrs(&stref, a_executable);
+                        check_estack(1);
                         esp++;
                         ref_assign(esp, &stref);
                         return o_push_estack;
                     } else {
                         *stage = 2;
                         *cont = 1;
-                        body = ialloc_string(46, "string");
+                        body = ialloc_string(88, "string");
                         if (body == 0)
                             return_error(gs_error_VMerror);
-                        memcpy(body, "{/DefaultRGB /ColorSpace findresource} stopped", 46);
-                        make_string(&stref, a_all | icurrent_space, 46, body);
+                        memcpy(body, "{/DefaultRGB /ColorSpace systemdict /findresource get exec} systemdict /stopped get exec", 88);
+                        make_string(&stref, a_all | icurrent_space, 88, body);
                         r_set_attrs(&stref, a_executable);
+                        check_estack(1);
                         esp++;
                         ref_assign(esp, &stref);
                         return o_push_estack;
@@ -1577,18 +1740,20 @@ static int setcmykspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int CI
                         memcpy(body, "/DefaultCMYK ..nosubstdevicetest",32);
                         make_string(&stref, a_all | icurrent_space, 32, body);
                         r_set_attrs(&stref, a_executable);
+                        check_estack(1);
                         esp++;
                         ref_assign(esp, &stref);
                         return o_push_estack;
                     } else {
                         *stage = 2;
                         *cont = 1;
-                        body = ialloc_string(47, "string");
+                        body = ialloc_string(89, "string");
                         if (body == 0)
                             return_error(gs_error_VMerror);
-                        memcpy(body, "{/DefaultCMYK /ColorSpace findresource} stopped", 47);
-                        make_string(&stref, a_all | icurrent_space, 47, body);
+                        memcpy(body, "{/DefaultCMYK /ColorSpace systemdict /findresource get exec} systemdict /stopped get exec", 89);
+                        make_string(&stref, a_all | icurrent_space, 89, body);
                         r_set_attrs(&stref, a_executable);
+                        check_estack(1);
                         esp++;
                         ref_assign(esp, &stref);
                         return o_push_estack;
@@ -1823,14 +1988,20 @@ static int cmykinitialproc(i_ctx_t *i_ctx_p, ref *space)
 /* A utility routine to check whether two arrays contain the same
  * contents. Used to check whether two color spaces are the same
  * Note that this can be recursive if the array contains arrays.
+ * Level is the level of recursion if that exceeds 10 we just assume
+ * they are different, otherwise we can potentially get into infinite
+ * recursion, or at least enough to trigger a C stack overflow.
  */
-static int comparearrays(i_ctx_t * i_ctx_p, ref *m1, ref *m2)
+static int comparearrays(i_ctx_t * i_ctx_p, ref *m1, ref *m2, int level)
 {
     int i, code;
     ref ref1, ref2;
 
     if (r_size(m1) != r_size(m2))
         return 0;
+
+    if (m1->value.refs == m2->value.refs)
+        return 1;
 
     for (i=0;i < r_size(m1);i++) {
         code = array_get(imemory, m1, i, &ref1);
@@ -1871,7 +2042,9 @@ static int comparearrays(i_ctx_t * i_ctx_p, ref *m1, ref *m2)
             case t_array:
             case t_mixedarray:
             case t_shortarray:
-                if (!comparearrays(i_ctx_p, &ref1, &ref2))
+                if (++level > 10)
+                    return 0;
+                if (!comparearrays(i_ctx_p, &ref1, &ref2, level))
                     return 0;
                 break;
             case t_oparray:
@@ -1924,7 +2097,7 @@ static int comparedictkey(i_ctx_t * i_ctx_p, ref *CIEdict1, ref *CIEdict2, char 
     if (r_type(tempref1) == t_null)
         return 1;
 
-    code = comparearrays(i_ctx_p, tempref1, tempref2);
+    code = comparearrays(i_ctx_p, tempref1, tempref2, 0);
 
     if (code > 0)
         return 1;
@@ -1932,7 +2105,9 @@ static int comparedictkey(i_ctx_t * i_ctx_p, ref *CIEdict1, ref *CIEdict2, char 
         return 0;
 }
 
-static int hasharray(i_ctx_t * i_ctx_p, ref *m1, gs_md5_state_t *md5)
+
+#define hasharray(a, b, c) hasharray_impl(a, b, c, 0)
+static int hasharray_impl(i_ctx_t * i_ctx_p, ref *m1, gs_md5_state_t *md5, int depth)
 {
     int i, code;
     ref ref1;
@@ -1963,8 +2138,11 @@ static int hasharray(i_ctx_t * i_ctx_p, ref *m1, gs_md5_state_t *md5)
             case t_array:
             case t_mixedarray:
             case t_shortarray:
-                if (!hasharray(i_ctx_p, &ref1, md5))
-                    return 0;
+                if (++depth > 32) {
+                    return_error(gs_error_rangecheck);
+                }
+                if ((code = hasharray_impl(i_ctx_p, &ref1, md5, depth)) <= 0)
+                    return code;
                 break;
             case t_oparray:
                 break;
@@ -3283,7 +3461,7 @@ static char const * const CIESpaces[] = {
  */
 static int ciebasecolor(i_ctx_t * i_ctx_p, ref *space, int base, int *stage, int *cont, int *stack_depth)
 {
-    os_ptr op;
+    os_ptr op = osp;
     ref *spacename, nref;
     int i, components=1, code;
 
@@ -3320,7 +3498,8 @@ static int ciebasecolor(i_ctx_t * i_ctx_p, ref *space, int base, int *stage, int
             components = 4;
             break;
     }
-    /* Remove teh requisite number of values */
+    /* Remove the requisite number of values */
+    check_op(components);
     ref_stack_pop(&o_stack, components);
     op = osp;
     /* Find out how many values we need to return, which
@@ -3402,6 +3581,8 @@ static int setseparationspace(i_ctx_t * i_ctx_p, ref *sepspace, int *stage, int 
     if (i_ctx_p->language_level < 2)
         return_error(gs_error_undefined);
 
+    check_op(1);
+
     *cont = 0;
     if ((*stage) == 0) {
         code = array_get(imemory, sepspace, 3, &proc);
@@ -3452,6 +3633,10 @@ static int setseparationspace(i_ctx_t * i_ctx_p, ref *sepspace, int *stage, int 
         if (code < 0)
             return code;
     }
+    if (!r_has_type(&sname, t_name)) {
+        return_error(gs_error_typecheck);
+    }
+
     sep_type = ( name_eq(&sname, &name_all) ? SEP_ALL :
                  name_eq(&sname, &name_none) ? SEP_NONE : SEP_OTHER);
 
@@ -3625,6 +3810,7 @@ static int septransform(i_ctx_t *i_ctx_p, ref *sepspace, int *usealternate, int 
 
     if (*usealternate && *stage == 0) {
         (*stage)++;
+        check_estack(1);
         esp++;
         code = array_get(imemory, sepspace, 3, &proc);
         if (code < 0)
@@ -3732,7 +3918,7 @@ static int sepcompareproc(i_ctx_t *i_ctx_p, ref *space, ref *testspace)
         return 0;
 
     if (r_is_array(&sname1)) {
-        if (!comparearrays(i_ctx_p, &sname1, &sname2))
+        if (!comparearrays(i_ctx_p, &sname1, &sname2, 0))
             return 0;
     } else {
         if (!r_has_type(&sname1, t_name))
@@ -3746,7 +3932,7 @@ static int sepcompareproc(i_ctx_t *i_ctx_p, ref *space, ref *testspace)
     code = array_get(imemory, testspace, 3, &sname2);
     if (code < 0)
         return 0;
-    return(comparearrays(i_ctx_p, &sname1, &sname2));
+    return(comparearrays(i_ctx_p, &sname1, &sname2, 0));
 }
 static int sepinitialproc(i_ctx_t *i_ctx_p, ref *space)
 {
@@ -3775,21 +3961,19 @@ static int devicencolorants_cont(i_ctx_t *i_ctx_p)
     do {
         index = dict_next(pdict, index, (ref *)&space);
         if (index == -1) {
-            esp -= 4;
+            ref_stack_pop(&e_stack, 4);
             return o_pop_estack;
         }
 
         if (stage == 0) {
             code = gs_gsave(igs);
             if (code < 0) {
-                esp -= 4;
                 return code;
             }
 
             code = validate_spaces(i_ctx_p, &space[1], &depth);
             if (code < 0) {
                 (void)gs_grestore(igs);
-                esp -= 4;
                 return code;
             }
 
@@ -3810,7 +3994,6 @@ static int devicencolorants_cont(i_ctx_t *i_ctx_p)
 
             if (code < 0) {
                 (void)gs_grestore(igs);
-                esp -= 4;
                 return code;
             } else
                 return code;
@@ -3828,7 +4011,6 @@ static int devicencolorants_cont(i_ctx_t *i_ctx_p)
              * colour space is the one we want.
              */
             if (!pgs->saved) {
-                esp -= 4;
                 return gs_note_error(gs_error_unknownerror);
             }
             devn_cs = gs_currentcolorspace_inline(pgs->saved);
@@ -3864,7 +4046,6 @@ static int devicencolorants_cont(i_ctx_t *i_ctx_p)
 
             code = gs_grestore(igs);
             if (code < 0) {
-                esp -= 4;
                 return code;
             }
         }
@@ -3888,7 +4069,6 @@ static int devicenprocess_cont(i_ctx_t *i_ctx_p)
     if (stage == 0) {
         code = gs_gsave(igs);
         if (code < 0) {
-            esp -= 4;
             return code;
         }
         /* If we get a continuation from a sub-procedure, we will want to come back
@@ -3908,7 +4088,6 @@ static int devicenprocess_cont(i_ctx_t *i_ctx_p)
 
         if (code < 0) {
             (void)gs_grestore(igs);
-            esp -= 4;
             return code;
         } else
             return code;
@@ -3925,20 +4104,19 @@ static int devicenprocess_cont(i_ctx_t *i_ctx_p)
 
         code = gs_grestore(igs);
         if (code < 0) {
-            esp -= 4;
             return code;
         }
         devn_cs = gs_currentcolorspace_inline(igs);
         devn_cs->params.device_n.devn_process_space = process;
     }
 
-    esp -= 4;
+    ref_stack_pop(&e_stack, 4);
     return o_pop_estack;
 }
 
 static int setdevicenspace(i_ctx_t * i_ctx_p, ref *devicenspace, int *stage, int *cont, int CIESubst)
 {
-    os_ptr  op = osp;   /* required by "push" macro */
+    os_ptr op = osp;   /* required by "push" macro */
     int code = 0, num_components, i;
     ref namesarray, proc, sname, tname, sref;
     ref_colorspace cspace_old;
@@ -4141,6 +4319,9 @@ static int setdevicenspace(i_ctx_t * i_ctx_p, ref *devicenspace, int *stage, int
         pop (1);
     }
 
+    if (pfn == NULL)
+        return_error(gs_error_typecheck);
+
     *stage = 2;
 
     code = array_get(imemory, devicenspace, 1, &namesarray);
@@ -4163,7 +4344,7 @@ static int setdevicenspace(i_ctx_t * i_ctx_p, ref *devicenspace, int *stage, int
                 return_error(gs_error_typecheck);
                 break;
         }
-        if (strncmp((const char *)tname.value.const_bytes, "All", 3) == 0 && r_size(&tname) == 3) {
+        if (r_size(&tname) == 3 && strncmp((const char *)tname.value.const_bytes, "All", 3) == 0) {
             separation_type sep_type;
 
             /* Sigh, Acrobat allows this, even though its contra the spec. Convert to
@@ -4284,7 +4465,7 @@ static int validatedevicenspace(i_ctx_t * i_ctx_p, ref **space)
     if (r_size(&namesarray) < 1)
         return_error(gs_error_typecheck);
     /* Make sure no more inks than we can cope with */
-    if (r_size(&namesarray) > MAX_COMPONENTS_IN_DEVN)    /* MUST match psi/icremap.h int_remap_color_info_s */
+    if (r_size(&namesarray) > GS_CLIENT_COLOR_MAX_COMPONENTS)    /* MUST match psi/icremap.h int_remap_color_info_s */
         return_error(gs_error_limitcheck);
     /* Check the tint transform is a procedure */
     code = array_get(imemory, devicenspace, 3, &proc);
@@ -4445,10 +4626,11 @@ static int devicentransform(i_ctx_t *i_ctx_p, ref *devicenspace, int *usealterna
     }
     if (*usealternate && *stage == 0) {
         (*stage)++;
-        esp++;
+        check_estack(1);
         code = array_get(imemory, devicenspace, 3, &proc);
         if (code < 0)
             return code;
+        esp++;
         *esp = proc;
         return o_push_estack;
     }
@@ -4552,10 +4734,10 @@ static int devicencompareproc(i_ctx_t *i_ctx_p, ref *space, ref *testspace)
     if (!r_is_array(&sname2))
         return 0;
 
-    if (!comparearrays(i_ctx_p, &sname1, &sname2))
+    if (!comparearrays(i_ctx_p, &sname1, &sname2, 0))
         return 0;
 
-    code = array_get(imemory, testspace, 2, &sname1);
+    code = array_get(imemory, space, 2, &sname1);
     if (code < 0)
         return 0;
     code = array_get(imemory, testspace, 2, &sname2);
@@ -4565,7 +4747,7 @@ static int devicencompareproc(i_ctx_t *i_ctx_p, ref *space, ref *testspace)
         return 0;
 
     if (r_is_array(&sname1)) {
-        if (!comparearrays(i_ctx_p, &sname1, &sname2))
+        if (!comparearrays(i_ctx_p, &sname1, &sname2, 0))
             return 0;
     } else {
         if (!r_has_type(&sname1, t_name))
@@ -4579,7 +4761,7 @@ static int devicencompareproc(i_ctx_t *i_ctx_p, ref *space, ref *testspace)
     code = array_get(imemory, testspace, 3, &sname2);
     if (code < 0)
         return 0;
-    return(comparearrays(i_ctx_p, &sname1, &sname2));
+    return(comparearrays(i_ctx_p, &sname1, &sname2, 0));
 }
 static int deviceninitialproc(i_ctx_t *i_ctx_p, ref *space)
 {
@@ -4609,23 +4791,28 @@ indexed_cont(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     es_ptr ep = esp;
     int i = (int)ep[csme_index].value.intval;
+    gs_color_space *pcs = r_ptr(&ep[csme_cspace], gs_color_space);
+    gs_indexed_map *map = pcs->params.indexed.lookup.map;
 
     if (i >= 0) {		/* i.e., not first time */
         int m = (int)ep[csme_num_components].value.intval;
-        int code = float_params(op, m, &r_ptr(&ep[csme_map], gs_indexed_map)->values[i * m]);
+        int code = float_params(op, m, &(map->values[i * m]));
 
         if (code < 0) {
-            esp -= num_csme;
             return code;
         }
         ref_stack_pop(&o_stack, m);
-        op -= m;
+        op = osp;
         if (i == (int)ep[csme_hival].value.intval) {	/* All done. */
-            esp -= num_csme;
+            code = gs_setcolorspace(igs, pcs);
+            rc_decrement_only_cs(pcs, "indexed_cont");
+            ref_stack_pop(&e_stack, num_csme);
             return o_pop_estack;
         }
     }
     push(1);
+    check_estack(2);
+    ep = esp;
     ep[csme_index].value.intval = ++i;
     make_int(op, i);
     make_op_estack(ep + 1, indexed_cont);
@@ -4706,21 +4893,20 @@ static int setindexedspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int
     } else {
         gs_indexed_map *map;
 
-        /*
-         * We have to call zcs_begin_map before moving the parameters,
-         * since if the color space is a DeviceN or Separation space,
-         * the memmove will overwrite its parameters.
-         */
-        code = zcs_begin_map(i_ctx_p, &map, &lookup, (hival.value.intval + 1),
-                             pcs_base, indexed_cont);
-        if (code < 0)
-            return code;
         if (igs->icc_manager->device_named != NULL &&
             (base_type == gs_color_space_index_Separation ||
              base_type == gs_color_space_index_DeviceN))
             pcs = gs_cspace_alloc(imemory, &gs_color_space_type_Indexed_Named);
         else
             pcs = gs_cspace_alloc(imemory, &gs_color_space_type_Indexed);
+
+        pcs->params.indexed.lookup.map = NULL;
+        code = zcs_begin_map(i_ctx_p, pcs, &map, &lookup, (hival.value.intval + 1),
+                             pcs_base, indexed_cont);
+        if (code < 0) {
+            rc_decrement_only_cs(pcs, "setindexedspace");
+            return code;
+        }
         pcs->base_space = pcs_base;
         rc_increment_cs(pcs_base);
         pcs->params.indexed.use_proc = 1;
@@ -4730,18 +4916,19 @@ static int setindexedspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int
     }
     pcs->params.indexed.hival = hival.value.intval;
     pcs->params.indexed.n_comps = cs_num_components(pcs_base);
-    code = gs_setcolorspace(igs, pcs);
-    /* release reference from construction */
-    rc_decrement_only_cs(pcs, "setindexedspace");
-    if (code < 0) {
-        istate->colorspace[0] = cspace_old;
-        ref_stack_pop_to(&e_stack, edepth);
-        return code;
-    }
-    *stage = 0;
     if (ref_stack_count(&e_stack) == edepth) {
+        code = gs_setcolorspace(igs, pcs);
+        /* release reference from construction */
+        rc_decrement_only_cs(pcs, "setindexedspace");
+        if (code < 0) {
+            istate->colorspace[0] = cspace_old;
+            return code;
+        }
+        *stage = 0;
         return 0;
     } else {
+        /* release reference from construction */
+        rc_decrement_only_cs(pcs, "setindexedspace");
         *cont = 1;
         *stage = 1;
         return o_push_estack; /* installation will load the caches */
@@ -4787,6 +4974,8 @@ static int validateindexedspace(i_ctx_t * i_ctx_p, ref **space)
         code = array_get(imemory, &altspace, 0, &nameref);
         if (code < 0)
             return code;
+        if (!r_has_type(&nameref, t_name))
+            return_error(gs_error_typecheck);
     }
     /* Convert alternate space name to string */
     name_string_ref(imemory, &nameref, &sref);
@@ -4861,6 +5050,7 @@ static int indexedbasecolor(i_ctx_t * i_ctx_p, ref *space, int base, int *stage,
              * lookup procedure. (The index is already on the operand stack)
              */
             check_estack(1);
+            ep = esp;
             code = array_get(imemory, space, 3, &proc);
             if (code < 0)
                 return code;
@@ -4988,7 +5178,6 @@ static int setpatternspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int
     /* release reference from construction */
     rc_decrement_only_cs(pcs, "zsetpatternspace");
     if (code < 0) {
-        ref_stack_pop_to(&e_stack, edepth);
         return code;
     }
     make_null(&istate->pattern[0]); /* PLRM: initial color value is a null object */
@@ -5449,6 +5638,7 @@ static int labvalidate(i_ctx_t *i_ctx_p, ref *space, float *values, int num_comp
 
     if (num_comps < 3)
         return_error(gs_error_stackunderflow);
+    check_op(3);
     op -= 2;
     for (i=0;i<3;i++) {
         if (!r_is_number(op))
@@ -6437,6 +6627,7 @@ setcolor_cont(i_ctx_t *i_ctx_p)
      * so that our continuation is ahead of the sub-proc's continuation.
      */
     check_estack(1);
+    ep = esp;
     push_op_estack(setcolor_cont);
 
     while (code == 0) {
@@ -6447,7 +6638,6 @@ setcolor_cont(i_ctx_t *i_ctx_p)
         for (i=0;i<=depth;i++) {
             code = get_space_object(i_ctx_p, parr, &obj);
             if (code < 0) {
-                esp -= 5;
                 return code;
             }
 
@@ -6460,7 +6650,6 @@ setcolor_cont(i_ctx_t *i_ctx_p)
                 }
                 code = obj->alternateproc(i_ctx_p, parr, &parr, &CIESubst);
                 if (code < 0) {
-                    esp -= 5;
                     return code;
                 }
             }
@@ -6470,7 +6659,6 @@ setcolor_cont(i_ctx_t *i_ctx_p)
             make_int(&ep[-3], stack_depth);
             make_int(&ep[-1], stage);
             if (code < 0) {
-                esp -= 5;
                 return code;
             }
             if (code != 0)
@@ -6490,7 +6678,6 @@ setcolor_cont(i_ctx_t *i_ctx_p)
     if (IsICC && depth == 0) {
         code = gx_set_dev_color(i_ctx_p->pgs);
         if (code < 0) {
-            esp -= 5;
             return code;
         }
     }
@@ -6500,7 +6687,7 @@ setcolor_cont(i_ctx_t *i_ctx_p)
     /* This would be better done sooner, but we need the color space object first */
     check_op(i);
     pop(i);
-    esp -= 5;
+    ref_stack_pop(&e_stack, 5);
     return o_pop_estack;
 }
 /*
@@ -6521,8 +6708,8 @@ static int
 setcolorspace_cont(i_ctx_t *i_ctx_p)
 {
     ref arr, *parr = &arr;
-    os_ptr op = osp;
     es_ptr ep = esp, pdepth, pstage, pCIESubst;
+    os_ptr op = osp;
     int i, code = 0, stage, cont, CIESubst = 0;
     unsigned int depth;
     PS_colour_space_t *obj;
@@ -6539,6 +6726,7 @@ setcolorspace_cont(i_ctx_t *i_ctx_p)
      * so that our continuation is ahead of the sub-proc's continuation.
      */
     check_estack(1);
+    ep = esp;
     push_op_estack(setcolorspace_cont);
 
     while (code == 0 && depth) {
@@ -6549,18 +6737,15 @@ setcolorspace_cont(i_ctx_t *i_ctx_p)
         for (i = 0;i < depth;i++) {
             code = get_space_object(i_ctx_p, parr, &obj);
             if (code < 0) {
-                esp -= 5;
                 return code;
             }
 
             if (i < (depth - 1)) {
                 if (!obj->alternateproc) {
-                    esp -= 5;
                     return_error(gs_error_typecheck);
                 }
                 code = obj->alternateproc(i_ctx_p, parr, &parr, &CIESubst);
                 if (code < 0) {
-                    esp -= 5;
                     return code;
                 }
             }
@@ -6569,8 +6754,13 @@ setcolorspace_cont(i_ctx_t *i_ctx_p)
         code = obj->setproc(i_ctx_p, parr, &stage, &cont, CIESubst);
         make_int(pstage, stage);
         if (code != 0) {
-            if (code < 0 && code != gs_error_stackoverflow)
-                esp -= 5;
+            /* The main loop handles growing the operand stack, so we want to
+             * return and let it deal with that, but we pushed an extra copy of
+             * this procedure on the exec stack, in case we ran a sub-procedure,
+             * so we need to remove that first.
+             */
+            if (code == gs_error_stackoverflow)
+                esp--;
             return code;
         }
         if (!cont) {
@@ -6580,11 +6770,12 @@ setcolorspace_cont(i_ctx_t *i_ctx_p)
         }
     }
     if (code == 0) {
-        /* Remove our next continuation and our data */
-        esp -= 5;
         op = osp;
-        istate->colorspace[0].array = *op;
-        /* Remove the colorspace array form the operand stack */
+        /* Remove our next continuation and our data */
+        istate->colorspace[0].array = *ep;
+        ref_stack_pop(&e_stack, 5);
+        /* Remove the colorspace array from the operand stack */
+        check_op(1);
         pop(1);
         code = o_pop_estack;
     }
@@ -6618,6 +6809,7 @@ setdevicecolor_cont(i_ctx_t *i_ctx_p)
      * so that our continuation is ahead of the sub-proc's continuation.
      */
     check_estack(1);
+    ep = esp;
     /* May need to push a /Device... name on the stack so make sure we have space */
     check_ostack(1);
     /* The push_op_estack macro increments esp before use, so we don't need to */
@@ -6640,12 +6832,10 @@ setdevicecolor_cont(i_ctx_t *i_ctx_p)
                         break;
                 }
                 if (code < 0) {
-                    esp -= 3;
                     return code;
                 }
                 code = absolute_setcolorspace(i_ctx_p);
                 if (code < 0) {
-                    esp -= 3;
                     return code;
                 }
                 if (code != 0)
@@ -6655,14 +6845,13 @@ setdevicecolor_cont(i_ctx_t *i_ctx_p)
                 make_int(pstage, ++stage);
                 code = zsetcolor(i_ctx_p);
                 if (code < 0) {
-                    esp -= 3;
                     return code;
                 }
                 if (code != 0)
                     return code;
                 break;
             case 2:
-                esp -= 3;
+                ref_stack_pop(&e_stack, 3);
                 return o_pop_estack;
                 break;
         }
@@ -6859,7 +7048,6 @@ currentbasecolor_cont(i_ctx_t *i_ctx_p)
      * set the depth to at *least* 1.
      */
     if (depth < 1) {
-        esp -= 7;
         return_error(gs_error_unknownerror);
     }
 
@@ -6868,6 +7056,7 @@ currentbasecolor_cont(i_ctx_t *i_ctx_p)
      * so that our continuation is ahead of the sub-proc's continuation.
      */
     check_estack(1);
+    ep = esp;
     /* The push_op_estack macro increments esp before use, so we don't need to */
     push_op_estack(currentbasecolor_cont);
 
@@ -6880,18 +7069,15 @@ currentbasecolor_cont(i_ctx_t *i_ctx_p)
         for (i = 0;i < depth;i++) {
             code = get_space_object(i_ctx_p, parr, &obj);
             if (code < 0) {
-                esp -= 7;
                 return code;
             }
 
             if (i < (depth - 1)) {
                 if (!obj->alternateproc) {
-                    esp -= 7;
                     return_error(gs_error_typecheck);
                 }
                 code = obj->alternateproc(i_ctx_p, parr, &parr, &CIESubst);
                 if (code < 0) {
-                    esp -= 7;
                     return code;
                 }
             }
@@ -6906,7 +7092,7 @@ currentbasecolor_cont(i_ctx_t *i_ctx_p)
         make_int(&ep[-2], ++depth);
     }
     /* Remove our next continuation and our data */
-    esp -= 7;
+    ref_stack_pop(&e_stack, 7);
     code = o_pop_estack;
     return code;
 }
@@ -7047,6 +7233,10 @@ zcurrentcmykcolor(i_ctx_t * i_ctx_p)
     return o_push_estack;
 }
 
+/* We need this for the PScript5.DLL Idiom recognition, when outputting
+ * to pdfwrite. This is used to turn the 'fake bold' text into text
+ * rendering mode 2 (fill and then stroke).
+ */
 static int
 zswapcolors(i_ctx_t * i_ctx_p)
 {
@@ -7063,78 +7253,6 @@ zswapcolors(i_ctx_t * i_ctx_p)
 
     gs_swapcolors_quick(igs);
     return 0;
-}
-
-static int
-zsetfillcolor(i_ctx_t * i_ctx_p)
-{
-    return zsetcolor(i_ctx_p);
-}
-static int
-zsetfillcolorspace(i_ctx_t * i_ctx_p)
-{
-    return zsetcolorspace(i_ctx_p);
-}
-static int
-setstrokecolor_cont(i_ctx_t * i_ctx_p)
-{
-    return zswapcolors(i_ctx_p);
-}
-static int
-zsetstrokecolor(i_ctx_t * i_ctx_p)
-{
-    int code;
-    es_ptr iesp = esp;  /* preserve exec stack in case of error */
-
-    code = zswapcolors(i_ctx_p);
-    if (code < 0)
-        return code;
-
-    /* Set up for the continuation procedure which will finish by restoring the fill colour space */
-    /* Make sure the exec stack has enough space */
-    check_estack(1);
-    /* Now, the actual continuation routine */
-    push_op_estack(setstrokecolor_cont);
-
-    code = zsetcolor(i_ctx_p);
-
-    if (code >= 0)
-        return o_push_estack;
-
-    /* Something went wrong, swap back to the non-stroking colour and restore the exec stack */
-    esp = iesp;
-    (void)zswapcolors(i_ctx_p);
-    return code;
-}
-static int
-setstrokecolorspace_cont(i_ctx_t * i_ctx_p)
-{
-    return zswapcolors(i_ctx_p);
-}
-static int
-zsetstrokecolorspace(i_ctx_t * i_ctx_p)
-{
-    int code;
-    es_ptr iesp = esp;  /* preserve exec stack in case of error */
-
-    code = zswapcolors(i_ctx_p);
-    if (code < 0)
-        return code;
-
-    /* Set up for the continuation procedure which will finish by restoring the fill colour space */
-    /* Make sure the exec stack has enough space */
-    check_estack(1);
-    /* Now, the actual continuation routine */
-    push_op_estack(setstrokecolorspace_cont);
-
-    code = zsetcolorspace(i_ctx_p);
-    if (code >= 0)
-        return o_push_estack;
-
-    /* Something went wrong, swap back to the non-stroking space and restore the exec stack */
-    esp = iesp;
-    (void)zswapcolors(i_ctx_p);
-    return code;
 }
 
 /* ------ Initialization procedure ------ */
@@ -7186,14 +7304,5 @@ const op_def    zcolor_ext_op_defs[] =
     { "0%indexed_cont", indexed_cont },
     { "0%setdevicecolor_cont", setdevicecolor_cont },
     { "0%currentbasecolor_cont", currentbasecolor_cont },
-op_def_end(0)
-};
-
-const op_def    zcolor_pdf_op_defs[] =
-{
-    { "1.setfillcolor", zsetfillcolor },
-    { "1.setfillcolorspace", zsetfillcolorspace },
-    { "1.setstrokecolor", zsetstrokecolor },
-    { "1.setstrokecolorspace", zsetstrokecolorspace },
 op_def_end(0)
 };

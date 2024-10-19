@@ -127,6 +127,7 @@ int pdfi_ET(pdf_context *ctx)
     if (ctx->text.BlockDepth == 0 && gs_currenttextrenderingmode(ctx->pgs) >= 4 /*&& !ctx->device_state.preserve_tr_mode*/) {
         gs_point initial_point;
 
+        ctx->text.TextClip = false;
         /* Capture the current position */
         code = gs_currentpoint(ctx->pgs, &initial_point);
         if (code >= 0) {
@@ -471,6 +472,8 @@ static int pdfi_show_Tr_1(pdf_context *ctx, gs_text_params_t *text)
     int code;
     gs_text_enum_t *penum=NULL, *saved_penum=NULL;
     gs_point end_point, initial_point;
+    gx_device *dev = ctx->pgs->device;
+    int galphabits = dev->color_info.anti_alias.graphics_bits, talphabits = dev->color_info.anti_alias.text_bits;
 
     end_point.x = end_point.y = initial_point.x = initial_point.y = 0;
 
@@ -520,12 +523,19 @@ static int pdfi_show_Tr_1(pdf_context *ctx, gs_text_params_t *text)
     code = gs_currentpoint(ctx->pgs, &end_point);
     if (code < 0)
         goto Tr1_error;
+
+    if (talphabits != galphabits)
+        dev->color_info.anti_alias.graphics_bits = talphabits;
+
     /* Change to the current stroking colour */
     gs_swapcolors_quick(ctx->pgs);
     /* Finally, stroke the actual path */
     code = gs_stroke(ctx->pgs);
     /* Switch back to the non-stroke colour */
     gs_swapcolors_quick(ctx->pgs);
+
+    if (talphabits != galphabits)
+        dev->color_info.anti_alias.graphics_bits = galphabits;
 
 Tr1_error:
     /* And grestore back to where we started */
@@ -545,6 +555,8 @@ static int pdfi_show_Tr_2(pdf_context *ctx, gs_text_params_t *text)
     int code, restart = 0;
     gs_text_enum_t *penum=NULL, *saved_penum=NULL;
     gs_point end_point, initial_point;
+    gx_device *dev = ctx->pgs->device;
+    int galphabits = dev->color_info.anti_alias.graphics_bits, talphabits = dev->color_info.anti_alias.text_bits;
 
     end_point.x = end_point.y = initial_point.x = initial_point.y = 0;
 
@@ -594,7 +606,11 @@ static int pdfi_show_Tr_2(pdf_context *ctx, gs_text_params_t *text)
     code = gs_currentpoint(ctx->pgs, &end_point);
     if (code < 0)
         goto Tr1_error;
+    if (talphabits != galphabits)
+        dev->color_info.anti_alias.graphics_bits = talphabits;
     code = gs_fillstroke(ctx->pgs, &restart);
+    if (talphabits != galphabits)
+        dev->color_info.anti_alias.graphics_bits = galphabits;
 
 Tr1_error:
     /* And grestore back to where we started */
@@ -644,6 +660,7 @@ static int pdfi_show_Tr_4(pdf_context *ctx, gs_text_params_t *text)
     if (code < 0)
         return code;
 
+    ctx->text.TextClip = true;
     /* First fill the text */
     code = pdfi_show_Tr_0(ctx, text);
     if (code < 0)
@@ -668,6 +685,7 @@ static int pdfi_show_Tr_5(pdf_context *ctx, gs_text_params_t *text)
     if (code < 0)
         return code;
 
+    ctx->text.TextClip = true;
     /* First stroke the text */
     code = pdfi_show_Tr_1(ctx, text);
     if (code < 0)
@@ -692,6 +710,7 @@ static int pdfi_show_Tr_6(pdf_context *ctx, gs_text_params_t *text)
     if (code < 0)
         return code;
 
+    ctx->text.TextClip = true;
     /* First fill and stroke the text */
     code = pdfi_show_Tr_2(ctx, text);
     if (code < 0)
@@ -711,6 +730,7 @@ static int pdfi_show_Tr_7(pdf_context *ctx, gs_text_params_t *text)
     int code;
     gs_text_enum_t *penum=NULL, *saved_penum=NULL;
 
+    ctx->text.TextClip = true;
     /* Don't draw the text, create a path suitable for filling */
     text->operation |= TEXT_DO_TRUE_CHARPATH;
 
@@ -1332,9 +1352,10 @@ int pdfi_Tr(pdf_context *ctx)
         gs_point initial_point;
 
         /* Detect attempts to switch from a clipping mode to a non-clipping
-         * mode, this is defined as invalid in the spec.
+         * mode, this is defined as invalid in the spec. (We don't warn if we haven't yet
+         * drawn any text in the clipping mode).
          */
-        if (gs_currenttextrenderingmode(ctx->pgs) > 3 && mode < 4 && ctx->text.BlockDepth != 0)
+        if (gs_currenttextrenderingmode(ctx->pgs) > 3 && mode < 4 && ctx->text.BlockDepth != 0 && ctx->text.TextClip)
             pdfi_set_warning(ctx, 0, NULL, W_PDF_BADTRSWITCH, "pdfi_Tr", NULL);
 
         if (gs_currenttextrenderingmode(ctx->pgs) < 4 && mode >= 4 && ctx->text.BlockDepth != 0) {

@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2023 Artifex Software, Inc.
+/* Copyright (C) 2019-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -471,8 +471,8 @@ pdfi_alloc_t1_font(pdf_context *ctx, pdf_font_type1 **font, uint32_t obj_num)
     pfont->id = gs_next_ids(ctx->memory, 1);
     uid_set_UniqueID(&pfont->UID, pfont->id);
 
-    pfont->encoding_index = 1;          /****** WRONG ******/
-    pfont->nearest_encoding_index = 1;          /****** WRONG ******/
+    pfont->encoding_index = ENCODING_INDEX_UNKNOWN;
+    pfont->nearest_encoding_index = ENCODING_INDEX_UNKNOWN;
 
     pfont->client_data = (void *)t1font;
 
@@ -494,7 +494,10 @@ pdfi_t1_font_set_procs(pdf_context *ctx, pdf_font_type1 *font)
     pfont->procs.decode_glyph = pdfi_decode_glyph;
     pfont->procs.define_font = gs_no_define_font;
     pfont->procs.make_font = gs_no_make_font;
-    pfont->procs.font_info = gs_default_font_info;
+
+    font->default_font_info = gs_default_font_info;
+    pfont->procs.font_info = pdfi_default_font_info;
+
     pfont->procs.glyph_info = pdfi_t1_glyph_info;
     pfont->procs.glyph_outline = pdfi_t1_glyph_outline;
     pfont->procs.same_font = gs_default_same_font;
@@ -569,7 +572,13 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
             if (fpriv.gsu.gst1.UID.id != 0)
                 memcpy(&pfont1->UID, &fpriv.gsu.gst1.UID, sizeof(pfont1->UID));
             fpriv.gsu.gst1.UID.xvalues = NULL; /* In case of error */
-            pfont1->WMode = fpriv.gsu.gst1.WMode;
+            if (fpriv.gsu.gst1.WMode != 0) {
+                if (fpriv.gsu.gst1.WMode != 1)
+                    pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_WMODE, "pdfi_read_type1_font", NULL);
+                pfont1->WMode = 1;
+            }
+            else
+                pfont1->WMode = 0;
             pfont1->PaintType = fpriv.gsu.gst1.PaintType;
             pfont1->StrokeWidth = fpriv.gsu.gst1.StrokeWidth;
 
@@ -652,12 +661,12 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
                     pdfi_countup(t1f->Encoding);
                 }
                 else if (pdfi_type_of(tmp) == PDF_DICT && (t1f->descflags & 4) != 0) {
-                    code = pdfi_create_Encoding(ctx, tmp, (pdf_obj *)fpriv.u.t1.Encoding, (pdf_obj **) & t1f->Encoding);
+                    code = pdfi_create_Encoding(ctx, (pdf_font *)t1f, tmp, (pdf_obj *)fpriv.u.t1.Encoding, (pdf_obj **) & t1f->Encoding);
                     if (code >= 0)
                         code = 1;
                 }
                 else {
-                    code = pdfi_create_Encoding(ctx, tmp, NULL, (pdf_obj **) & t1f->Encoding);
+                    code = pdfi_create_Encoding(ctx, (pdf_font *)t1f, tmp, NULL, (pdf_obj **) & t1f->Encoding);
                     if (code >= 0)
                         code = 1;
                 }
@@ -720,6 +729,7 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
             }
             t1f->pfont->is_resource = (key_known == false);
 
+            pdfi_font_set_orig_fonttype(ctx, (pdf_font *)t1f);
             code = gs_definefont(ctx->font_dir, (gs_font *) t1f->pfont);
             if (code < 0) {
                 goto error;
@@ -755,6 +765,26 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
     }
 
     if (code < 0) {
+        tmp = NULL;
+        if (font_dict != NULL) {
+            if (pdfi_dict_get(ctx, font_dict, ".Path", &tmp) >= 0)
+            {
+                char fname[gp_file_name_sizeof + 1];
+                pdf_string *fobj = (pdf_string *)tmp;
+
+                memcpy(fname, fobj->data, fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length);
+                fname[fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length] = '\0';
+
+                pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_type1_font", "Error reading Type 1 font file %s\n", fname);
+            }
+            else {
+                pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_type1_font", "Error reading embedded Type 1 font object %u\n", font_dict->object_num);
+            }
+        }
+        else {
+            pdfi_set_error(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_truetype_font", "Error reading font\n");
+        }
+        pdfi_countdown(tmp);
         pdfi_countdown(t1f);
     }
     return code;
@@ -863,12 +893,12 @@ pdfi_copy_type1_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, 
             pdfi_countup(font->Encoding);
         }
         else if (pdfi_type_of(tmp) == PDF_DICT && (font->descflags & 4) != 0) {
-            code = pdfi_create_Encoding(ctx, tmp, (pdf_obj *)spdffont->Encoding, (pdf_obj **) &font->Encoding);
+            code = pdfi_create_Encoding(ctx, (pdf_font *)font, tmp, (pdf_obj *)spdffont->Encoding, (pdf_obj **) &font->Encoding);
             if (code >= 0)
                 code = 1;
         }
         else {
-            code = pdfi_create_Encoding(ctx, tmp, NULL, (pdf_obj **) & font->Encoding);
+            code = pdfi_create_Encoding(ctx, (pdf_font *)font, tmp, NULL, (pdf_obj **) & font->Encoding);
             if (code >= 0)
                 code = 1;
         }
@@ -889,8 +919,6 @@ pdfi_copy_type1_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, 
     /* Since various aspects of the font may differ (widths, encoding, etc)
        we cannot reliably use the UniqueID/XUID for copied fonts.
      */
-    if (uid_is_XUID(&font->pfont->UID))
-        uid_free(&font->pfont->UID, font->pfont->memory, "pdfi_read_type1_font");
     uid_set_invalid(&font->pfont->UID);
 
     if (ctx->args.ignoretounicode != true) {
@@ -912,6 +940,7 @@ pdfi_copy_type1_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, 
     }
     font->ToUnicode = tmp;
 
+    pdfi_font_set_orig_fonttype(ctx, (pdf_font *)font);
     code = gs_definefont(ctx->font_dir, (gs_font *) font->pfont);
     if (code < 0) {
         goto error;

@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2023 Artifex Software, Inc.
+# Copyright (C) 2001-2024 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -486,7 +486,7 @@ $(PSOBJ)zcolor.$(OBJ) : $(PSSRC)zcolor.c $(OP)\
  $(gxcspace_h) $(gxcolor2_h) $(gxpcolor_h)\
  $(idict_h) $(icolor_h) $(idparam_h) $(iname_h) $(iutil_h) $(icsmap_h)\
  $(ifunc_h) $(zht2_h) $(zcolor_h) $(zcie_h) $(zicc_h) $(gscspace_h)\
- $(zfrsd_h) $(INT_MAK) $(MAKEDIRS)
+ $(zfrsd_h) $(gxhttype_h) $(gzht_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zcolor.$(OBJ) $(C_) $(PSSRC)zcolor.c
 
 $(PSOBJ)zdevice.$(OBJ) : $(PSSRC)zdevice.c $(OP) $(string__h)\
@@ -499,7 +499,7 @@ $(PSOBJ)zfont.$(OBJ) : $(PSSRC)zfont.c $(OP)\
  $(gsstruct_h) $(gxdevice_h) $(gxfont_h) $(gxfcache_h)\
  $(gzstate_h)\
  $(ialloc_h) $(iddict_h) $(igstate_h) $(iname_h) $(isave_h) $(ivmspace_h)\
- $(bfont_h) $(store_h) $(gscencs_h) $(INT_MAK) $(MAKEDIRS)
+ $(bfont_h) $(store_h) $(gscencs_h) $(ichar_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zfont.$(OBJ) $(C_) $(PSSRC)zfont.c
 
 $(PSOBJ)zfontenum.$(OBJ) : $(PSSRC)zfontenum.c $(OP)\
@@ -572,9 +572,9 @@ Z2OPS=zdict1 zdict2 zfile zfile1 zfileio1 zfileio2
 Z3_4OPS=zfilter zfproc zgeneric ziodev zmath zalg
 Z5_6OPS=zmisc_a zmisc_b zpacked zrelbit zstack zstring zsysvm
 Z7_8OPS=ztoken ztype zvmem zbfont zchar_a zchar_b zcolor zcolor_ext
-Z9OPS=zdevice zdevice_ext zfont zfontenum zgstate1 zgstate2 zgstate3 zgstate4
+Z9OPS=zdevice zdevice_ext zfont zfontenum zgstate1 zgstate2 zgstate3
 Z10OPS=zht zimage zmatrix zmatrix2
-Z11OPS=zpaint zpath pantone zcolor_pdf
+Z11OPS=zpaint zpath pantone
 # We have to be a little underhanded with *config.$(OBJ) so as to avoid
 # circular definitions.
 INT_MAIN=$(PSOBJ)imain.$(OBJ) $(PSOBJ)imainarg.$(OBJ) $(GLOBJ)gsargs.$(OBJ) $(PSOBJ)idisp.$(OBJ) $(PSOBJ)splitargs.$(OBJ) $(PSOBJ)substr.$(OBJ) $(PSOBJ)chop_extension.$(OBJ) $(PSOBJ)zcasper.$(OBJ) $(PSOBJ)gsprintf.$(OBJ)
@@ -667,8 +667,8 @@ $(PSD)cmykread.dev : $(ECHOGS_XE) $(cmykread_) $(INT_MAK) $(MAKEDIRS)
 $(PSOBJ)zcolor1.$(OBJ) : $(PSSRC)zcolor1.c $(OP)\
  $(gscolor1_h) $(gscssub_h)\
  $(gxcmap_h) $(gxcspace_h) $(gxdevice_h) $(gxfixed_h) $(gxmatrix_h)\
- $(gzstate_h)\
- $(ialloc_h) $(icolor_h) $(iimage_h) $(estack_h) $(iutil_h) $(igstate_h) $(store_h)\
+ $(gzstate_h) $(ialloc_h) $(icolor_h) $(iimage_h) $(estack_h) $(iutil_h)\
+ $(igstate_h) $(store_h) $(gxhttype_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zcolor1.$(OBJ) $(C_) $(PSSRC)zcolor1.c
 
@@ -1047,7 +1047,7 @@ $(PSOBJ)zusparam.$(OBJ) : $(PSSRC)zusparam.c $(OP) $(memory__h) $(string__h)\
  $(gscdefs_h) $(gsfont_h) $(gsstruct_h) $(gsutil_h) $(gxht_h)\
  $(ialloc_h) $(icontext_h) $(idict_h) $(idparam_h) $(iparam_h)\
  $(iname_h) $(itoken_h) $(iutil2_h) $(ivmem2_h)\
- $(dstack_h) $(estack_h) $(store_h) $(gsnamecl_h) $(gslibctx_h)\
+ $(dstack_h) $(estack_h) $(store_h) $(gsnamecl_h) $(gslibctx_h) $(ichar_h) \
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zusparam.$(OBJ) $(C_) $(PSSRC)zusparam.c
 
@@ -1356,7 +1356,7 @@ $(PSOBJ)ibnum.$(OBJ) : $(PSSRC)ibnum.c $(GH) $(math__h) $(memory__h)\
 
 $(PSOBJ)zcharx.$(OBJ) : $(PSSRC)zcharx.c $(OP)\
  $(gsmatrix_h) $(gstext_h) $(gxfixed_h) $(gxfont_h) $(gxtext_h)\
- $(ialloc_h) $(ibnum_h) $(ichar_h) $(iname_h) $(igstate_h) $(memory__h)\
+ $(ialloc_h) $(ibnum_h) $(ichar_h) $(iname_h) $(igstate_h) $(estack_h) $(memory__h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zcharx.$(OBJ) $(C_) $(PSSRC)zcharx.c
 
@@ -1768,6 +1768,8 @@ $(PSD)pdf.dev : $(ECHOGS_XE)\
 	$(ADDMOD) $(PSD)pdf -include $(PSD)type2
 	$(ADDMOD) $(PSD)pdf -include $(PSD)pdfops
 	$(ADDMOD) $(PSD)pdf -include $(PSD)pdf_r6
+	$(ADDMOD) $(PSD)pdf -include $(PSD)cff
+	$(ADDMOD) $(PSD)pdf -include $(PSD)ttfont
 	$(ADDMOD) $(PSD)pdf -functiontype 4
 	$(ADDMOD) $(PSD)pdf -emulator PDF
 
@@ -1781,12 +1783,7 @@ $(PSD)pdfread.dev : $(ECHOGS_XE) \
  $(PSD)ttfont.dev $(INT_MAK) $(MAKEDIRS)
 	$(SETMOD) $(PSD)pdfread -include $(PSD)frsd $(PSD)func4 $(PSD)fzlib
 	$(ADDMOD) $(PSD)pdfread -include $(PSD)transpar
-	$(ADDMOD) $(PSD)pdfread -ps pdf_ops
-	$(ADDMOD) $(PSD)pdfread -ps pdf_rbld
-	$(ADDMOD) $(PSD)pdfread -ps pdf_base pdf_draw
-	$(ADDMOD) $(PSD)pdfread -include $(PSD)cff
-	$(ADDMOD) $(PSD)pdfread -include $(PSD)ttfont
-	$(ADDMOD) $(PSD)pdfread -ps pdf_font pdf_main pdf_sec
+	$(ADDMOD) $(PSD)pdfread -ps pdf_main
 
 # ---------------- PS Support for Font API ---------------- #
 $(PSD)fapi_ps.dev : $(LIB_MAK) $(ECHOGS_XE) $(PSOBJ)zfapi.$(OBJ)\
@@ -1823,7 +1820,7 @@ $(PSD)pdfops.dev : $(ECHOGS_XE) $(zpdfops_) $(INT_MAK) $(MAKEDIRS)
 $(PSOBJ)zpdfops.$(OBJ) : $(PSSRC)zpdfops.c $(OP) $(MAKEFILE)\
  $(ghost_h) $(gsmchunk_h) $(oper_h) \
  $(igstate_h) $(istack_h) $(iutil_h) $(gspath_h) $(math__h) $(ialloc_h)\
- $(string__h) $(store_h) $(iminst_h) $(idstack_h) $(INT_MAK) $(MAKEDIRS)
+ $(igc_h) $(string__h) $(store_h) $(iminst_h) $(idstack_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zpdfops.$(OBJ) $(C_) $(PSSRC)zpdfops.c
 
 zutf8_=$(PSOBJ)zutf8.$(OBJ)
@@ -1921,7 +1918,7 @@ $(PSOBJ)imainarg.$(OBJ) : $(PSSRC)imainarg.c $(GH)\
  $(ostack_h) $(sfilter_h) $(splitargs_h) $(chop_extension_h) $(zcasper_h)\
  $(gsprintf_h) $(store_h) $(stream_h) $(strimpl_h) \
  $(substr_h) $(vdtrace_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)imainarg.$(OBJ) $(C_) $(PSSRC)imainarg.c
+	$(PSCC) $(D_)GS_DOT_VERSION=$(GS_DOT_VERSION)$(_D) $(PSO_)imainarg.$(OBJ) $(C_) $(PSSRC)imainarg.c
 
 $(PSOBJ)imain.$(OBJ) : $(PSSRC)imain.c $(GH) $(memory__h) $(string__h)\
  $(gp_h) $(gscdefs_h) $(gslib_h) $(gsmatrix_h) $(gsutil_h)\
@@ -1942,7 +1939,7 @@ $(PSOBJ)interp.$(OBJ) : $(PSSRC)interp.c $(GH) $(memory__h) $(string__h)\
  $(iname_h) $(inamedef_h) $(interp_h) $(ipacked_h)\
  $(isave_h) $(iscan_h) $(istack_h) $(itoken_h) $(iutil_h) $(ivmspace_h)\
  $(oper_h) $(ostack_h) $(sfilter_h) $(store_h) $(stream_h) $(strimpl_h)\
- $(substr_h) $(gpcheck_h) $(INT_MAK) $(MAKEDIRS)
+ $(substr_h) $(gpcheck_h) $(assert__h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)interp.$(OBJ) $(C_) $(PSSRC)interp.c
 
 $(PSOBJ)ireclaim.$(OBJ) : $(PSSRC)ireclaim.c $(GH)\

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -349,7 +349,7 @@ int pdfi_obj_dict_to_stream(pdf_context *ctx, pdf_dict *dict, pdf_stream **strea
     return code;
 }
 
-int pdfi_stream_to_dict(pdf_context *ctx, pdf_stream *stream, pdf_dict **dict)
+int pdfi_get_stream_dict(pdf_context *ctx, pdf_stream *stream, pdf_dict **dict)
 {
     *dict = stream->stream_dict;
 
@@ -360,8 +360,6 @@ int pdfi_stream_to_dict(pdf_context *ctx, pdf_stream *stream, pdf_dict **dict)
         (*dict)->generation_num = stream->generation_num;
     }
 
-    /* This will countdown the dictionary */
-    pdfi_countdown(stream);
     return 0;
 }
 
@@ -612,12 +610,16 @@ static int pdfi_obj_indirect_str(pdf_context *ctx, pdf_obj *obj, byte **data, in
     pdf_obj *object = NULL;
     bool use_label = true;
 
+    code = pdfi_loop_detector_mark(ctx);
+    if (code < 0)
+        return code;
+
     if (ref->is_highlevelform) {
         code = pdfi_obj_getrefstr(ctx, ref->highlevel_object_num, 0, data, len);
         ref->is_highlevelform = false;
     } else {
         if (!ref->is_marking) {
-            code = pdfi_deref_loop_detect(ctx, ref->ref_object_num, ref->ref_generation_num, &object);
+            code = pdfi_dereference(ctx, ref->ref_object_num, ref->ref_generation_num, &object);
             if (code == gs_error_undefined) {
                 /* Do something sensible for undefined reference (this would be a broken file) */
                 /* TODO: Flag an error? */
@@ -649,6 +651,7 @@ static int pdfi_obj_indirect_str(pdf_context *ctx, pdf_obj *obj, byte **data, in
     }
 
  exit:
+    (void)pdfi_loop_detector_cleartomark(ctx);
     pdfi_countdown(object);
     return code;
 }

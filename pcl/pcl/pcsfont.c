@@ -914,7 +914,7 @@ pcl_find_resource(pcl_state_t * pcs,
 
     size = pjl_proc_get_named_resource_size(pcs->pjls, alphaname);
     /* resource not found */
-    if (size == 0)
+    if (size <= 0)
         return 0;
 
     /* for a macro we need enough room for the macro header plus the
@@ -932,7 +932,7 @@ pcl_find_resource(pcl_state_t * pcs,
     if (pjl_proc_get_named_resource(pcs->pjls, alphaname,
                                         (byte *) value +
                                         (resource_type == macro_resource ?
-                                         sizeof(pcl_macro_t) : 0)) < 0) {
+                                         sizeof(pcl_macro_t) : 0), size) < 0) {
         gs_free_object(pcs->memory, value, "resource");
         return_error(gs_error_Fatal);
     }
@@ -1030,9 +1030,10 @@ pcl_alphanumeric_id_data(pcl_args_t * pargs, pcl_state_t * pcs)
                 void *value;
                 /* simple case the font is in the dictionary */
                 if (pl_dict_find_no_stack(&pcs->soft_fonts, alpha_data->string_id, string_id_size, &value)) {
-                    return pl_dict_put_synonym(&pcs->soft_fonts, alpha_data->string_id,
+                    (void)pl_dict_put_synonym(&pcs->soft_fonts, alpha_data->string_id,
                                                string_id_size, CURRENT_FONT_ID,
                                                CURRENT_FONT_ID_SIZE);
+                    return 0;
                 } else {
                     /* search the PJL file system for a font resource */
                     return pcl_find_resource(pcs, alpha_data->string_id,
@@ -1101,9 +1102,10 @@ pcl_alphanumeric_id_data(pcl_args_t * pargs, pcl_state_t * pcs)
                 void *value;
                 /* simple case - the macro is in the dictionary */
                 if (pl_dict_find_no_stack(&pcs->macros, alpha_data->string_id, string_id_size, &value)) {
-                    return pl_dict_put_synonym(&pcs->macros, alpha_data->string_id,
+                    (void)pl_dict_put_synonym(&pcs->macros, alpha_data->string_id,
                                                string_id_size, CURRENT_MACRO_ID,
                                                CURRENT_MACRO_ID_SIZE);
+                    return 0;
                 } else {
                     /* search the PJL file system for a macro resource */
                     return pcl_find_resource(pcs, alpha_data->string_id,

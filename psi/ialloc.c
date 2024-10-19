@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -225,8 +225,13 @@ gs_alloc_ref_array(gs_ref_memory_t * mem, ref * parr, uint attrs,
         }
         obj = gs_alloc_struct_array((gs_memory_t *) mem, num_refs + 1,
                                     ref, &st_refs, cname);
-        if (obj == 0)
+        if (obj == 0) {
+            /* We don't have to alloc_save_remove() because the change
+               object hasn't been attached to the allocator yet.
+             */
+            gs_free_object((gs_memory_t *) mem, cp, "gs_alloc_ref_array");
             return_error(gs_error_VMerror);
+        }
         /* Set the terminating ref now. */
         end = (ref *) obj + num_refs;
         make_mark(end);
@@ -386,7 +391,7 @@ gs_free_ref_array(gs_ref_memory_t * mem, ref * parr, client_name_t cname)
                 size = num_refs * sizeof(ref);
                 break;
             default:
-                lprintf3("Unknown type 0x%x in free_ref_array(%u,"PRI_INTPTR")!",
+                if_debug3('A', "Unknown type 0x%x in free_ref_array(%u,"PRI_INTPTR")!",
                          r_type(parr), num_refs, (intptr_t)obj);
                 return;
         }

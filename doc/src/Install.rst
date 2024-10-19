@@ -1,4 +1,4 @@
-.. Copyright (C) 2001-2022 Artifex Software, Inc.
+.. Copyright (C) 2001-2023 Artifex Software, Inc.
 .. All Rights Reserved.
 
 .. title:: How to Install Ghostscript
@@ -6,14 +6,18 @@
 
 .. include:: header.rst
 
-.. _Install.htm:
+.. _Install.html:
 .. _HowToInstallGhostscript:
 
 
-How to Install Ghostscript
+Installing
 ===================================
 
 
+Downloading
+----------------------
+
+See `Ghostscript releases`_ if you need to download a Ghostscript release.
 
 
 Overview of how to install Ghostscript
@@ -25,18 +29,18 @@ You must have four things to run Ghostscript:
 
 #. Initialization files that Ghostscript reads in when it starts up; these are the same on all platforms.
 
-#.
+#. Check the following:
 
-   - ``gs_*.ps`` unless Ghostscript was compiled using the "compiled initialization files" option. See the documentation of :ref:`PostScript files distributed with Ghostscript<PsFiles.htm>`.
+   - ``gs_*.ps`` unless Ghostscript was compiled using the "compiled initialization files" option. See the documentation of :ref:`PostScript files distributed with Ghostscript<PsFiles.html>`.
 
    - ``pdf_*.ps`` if Ghostscript was compiled with the ability to interpret Adobe Portable Document Format (PDF) files, that is, ``pdf.dev`` was included in ``FEATURE_DEVS`` when Ghostscript was built.
 
    - ``Fontmap`` and ``Fontmap.GS`` (or the appropriate ``Fontmap.xxx`` for your platform), unless you plan always to invoke Ghostscript with the :ref:`-dNOFONTMAP switch<UseDNoFontMap>`.
 
-#. Fonts, for rendering text. These are platform-independent, but if you already have fonts of the right kind on your platform, you may be able to use those. See below for details. Also see the :ref:`documentation on fonts<Fonts.htm>`.
+#. Fonts, for rendering text. These are platform-independent, but if you already have fonts of the right kind on your platform, you may be able to use those. See below for details. Also see the :ref:`documentation on fonts<Fonts.html>`.
 
 
-The :ref:`usage documentation<Use.htm>` describes the search algorithms used to find initialization files and font files. The per-platform descriptions that follow tell you where to install these files.
+The :ref:`usage documentation<Use.html>` describes the search algorithms used to find initialization files and font files. The per-platform descriptions that follow tell you where to install these files.
 
 
 
@@ -79,7 +83,7 @@ If you have Adobe Acrobat installed, you can use the Acrobat fonts in place of t
 
 
 
-Similarly, you can have Ghostscript use other fonts on your system by adding entries to the ``fontmap`` or adding the directories to the ``GS_FONTMAP`` environment variable. See the :ref:`usage documentation<Use.htm>` for more information.
+Similarly, you can have Ghostscript use other fonts on your system by adding entries to the ``fontmap`` or adding the directories to the ``GS_FONTMAP`` environment variable. See the :ref:`usage documentation<Use.html>` for more information.
 
 For example, many linux distributions place fonts under ``/usr/share/fonts``.
 
@@ -265,10 +269,29 @@ The following installation steps assume that the Ghostscript directory is ``DISK
 If you have ``DECWindows/Motif`` installed, you may wish to replace the ``FONTMAP.GS`` file with ``FONTMAP.VMS``. Read the comment at the beginning of the latter file for more information.
 
 
+Installing Ghostscript on MacOS
+------------------------------------
+
+The simplest way to install :title:`Ghostscript` on a Mac would be to use MacPorts_ or Homebrew_.
+
+The installation on MacPorts would be as follows:
+
+- Install MacPorts - https://www.macports.org/install.php
+- Goto https://ports.macports.org/port/ghostscript/ & follow the instructions there.
+   - If your MacPorts is out of date and cannot find the latest verison of Ghostscript be sure to `update MacPorts`_.
+- At the end of the install, run ``gs --version`` in a new Terminal window to validate your installation.
+
+
+
+
 
 .. External links
 
 .. _RPM: http://www.rpm.org/
+.. _Ghostscript releases: https://ghostscript.com/releases
+.. _Homebrew: https://formulae.brew.sh/formula/ghostscript
+.. _MacPorts: https://ports.macports.org/port/ghostscript/
+.. _update MacPorts: https://guide.macports.org/chunked/using.html
 
 
 .. include:: footer.rst

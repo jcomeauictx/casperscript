@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -100,6 +100,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  0 /*false*/,			/* fill_overprint */
  0 /*false*/,			/* stroke_overprint */
  1 /* Absolute Colorimetric */, /* rendering intent */
+ 0 /*false */,                  /* user_icc */
  0 /*false*/,                   /* remap_fill_coilor */
  0 /*false*/,                   /* remap_stroke_coilor */
  gs_no_id,			/* halftone_id */
@@ -112,7 +113,11 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  {{0}},				/* xref */
  {{0}},				/* asides */
  {{0}},				/* streams */
- {{0}},				/* pictures */
+ {{0}},				/* ObjStm */
+ gs_no_id,          /* ObjStm_id */
+ NULL,              /* ObjStmOffsets */
+ 0,                 /* NumObjstmObjects */
+ true,             /* doubleXref */
  0,				/* next_id */
  0,				/* Catalog */
  0,				/* Info */
@@ -242,7 +247,10 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  false,                 /* OmitXMP */
  false,                 /* OmitID */
  false,                 /* ModifiesPageSize */
- false                  /* ModifiesPageOrder */
+ false,                 /* ModifiesPageOrder */
+ true,                  /* WriteXRefStm */
+ true,                  /* WriteObjStms */
+ 0                      /* PendingOC */
 };
 
 #else

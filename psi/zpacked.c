@@ -68,6 +68,7 @@ zsetpacking(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
     ref cont;
+    check_op(1);
     check_type(*op, t_boolean);
     make_struct(&cont, avm_local, ref_array_packing_container);
     ref_assign_old(&cont, &ref_array_packing, op, "setpacking");
@@ -102,6 +103,9 @@ make_packed_array(ref * parr, ref_stack_t * pstack, uint size,
 
     for (i = size; i != 0; i--) {
         pref = ref_stack_index(pstack, i - 1);
+        if (pref == NULL)
+            return_error(gs_error_stackunderflow);
+
         switch (r_btype(pref)) {	/* not r_type, opers are special */
             case t_name:
               if (name_index(imem, pref) >= packed_name_max_index)
@@ -170,6 +174,9 @@ make_packed_array(ref * parr, ref_stack_t * pstack, uint size,
 
     for (i = size; i != 0; i--) {
         pref = ref_stack_index(pstack, i - 1);
+        if (pref == NULL)
+            return_error(gs_error_stackunderflow);
+
         switch (r_btype(pref)) {	/* not r_type, opers are special */
             case t_name:
                 {

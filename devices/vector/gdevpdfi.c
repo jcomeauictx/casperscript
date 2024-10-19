@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -409,7 +409,7 @@ static int convert_type4_image(gx_device_pdf *pdev, const gs_gstate * pgs,
 {
     /* Try to convert the image to a plain masked image. */
     gx_drawing_color icolor;
-    int code;
+    int code = 1;
 
     pdev->image_mask_is_SMask = false;
     if (pdf_convert_image4_to_image1(pdev, pgs, pdcolor,
@@ -436,9 +436,11 @@ static int convert_type4_image(gx_device_pdf *pdev, const gs_gstate * pgs,
                                      pinfo, context);
         if (code < 0)
             return code;
-        return gs_grestore((gs_gstate *)pgs);
+        code = gs_grestore((gs_gstate *)pgs);
+        /* To account for the above pdf_begin_typed_image() being with a gsave/grestore */
+        (*pinfo)->pgs_level = pgs->level;
     }
-    return 1;
+    return code;
 }
 
 static int convert_type4_to_masked_image(gx_device_pdf *pdev, const gs_gstate * pgs,
@@ -1132,21 +1134,27 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
         goto exit;
 
     case IMAGE3X_IMAGETYPE:
-        pdev->JPEG_PassThrough = 0;
-        pdev->JPX_PassThrough = 0;
-        if (pdev->CompatibilityLevel < 1.4 ||
-            (prect && !(prect->p.x == 0 && prect->p.y == 0 &&
-                       prect->q.x == ((const gs_image3x_t *)pic)->Width &&
-                       prect->q.y == ((const gs_image3x_t *)pic)->Height))) {
-            use_fallback = 1;
+        {
+            int64_t OC = pdev->PendingOC;
+
+            pdev->JPEG_PassThrough = 0;
+            pdev->JPX_PassThrough = 0;
+            if (pdev->CompatibilityLevel < 1.4 ||
+                (prect && !(prect->p.x == 0 && prect->p.y == 0 &&
+                           prect->q.x == ((const gs_image3x_t *)pic)->Width &&
+                           prect->q.y == ((const gs_image3x_t *)pic)->Height))) {
+                use_fallback = 1;
+                goto exit;
+            }
+            pdev->image_mask_is_SMask = true;
+
+            pdev->PendingOC = 0;
+            code = gx_begin_image3x_generic((gx_device *)pdev, pgs, pmat, pic,
+                                            prect, pdcolor, pcpath, mem,
+                                            pdf_image3x_make_mid,
+                                            pdf_image3x_make_mcde, pinfo, OC);
             goto exit;
         }
-        pdev->image_mask_is_SMask = true;
-        code = gx_begin_image3x_generic((gx_device *)pdev, pgs, pmat, pic,
-                                        prect, pdcolor, pcpath, mem,
-                                        pdf_image3x_make_mid,
-                                        pdf_image3x_make_mcde, pinfo);
-        goto exit;
 
     case 4:
         /* If we are colour converting then we may not be able to preserve the
@@ -1335,16 +1343,19 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
                             &pdf_image_enum_procs),
                         (gx_device *)pdev, num_components, format);
     pie->memory = mem;
+    pie->pgs = pgs;
+    if (pgs != NULL)
+        pie->pgs_level = pgs->level;
     width = rect.q.x - rect.p.x;
     pie->width = width;
     height = rect.q.y - rect.p.y;
     pie->bits_per_pixel =
         pim->BitsPerComponent * num_components / pie->num_planes;
     pie->rows_left = height;
-    if (pnamed != 0) /* Don't in-line the image if it is named. */
+    if (pnamed != 0 || pdev->PendingOC) /* Don't in-line the image if it is named. Or has Optional Content */
         in_line = false;
     else {
-        double nbytes = (double)(((ulong) pie->width * pie->bits_per_pixel + 7) >> 3) *
+        int64_t nbytes = (int64_t)(((int64_t) pie->width * pie->bits_per_pixel + 7) >> 3) *
             pie->num_planes * pie->rows_left;
 
         in_line &= (nbytes < pdev->MaxInlineImageSize);
@@ -1401,8 +1412,22 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
 
     /* We don't want to change the colour space of a mask, or an SMask (both of which are Gray) */
     if (!is_mask) {
-        if (image[0].pixel.ColorSpace != NULL && !(context == PDF_IMAGE_TYPE3_MASK))
-            convert_to_process_colors = setup_image_colorspace(pdev, &image[0], pcs, &pcs_orig, names, &cs_value);
+        if (image[0].pixel.ColorSpace != NULL) {
+            if (context != PDF_IMAGE_TYPE3_MASK)
+                convert_to_process_colors = setup_image_colorspace(pdev, &image[0], pcs, &pcs_orig, names, &cs_value);
+            else {
+                if (pdev->PDFA != 0 && pdev->params.ColorConversionStrategy != ccs_Gray)
+                {
+                    /* A SMask *must* be in DeviceGray (PDF 1.7 reference, page 555), but if we're producing a PDF/A
+                     * and not creating a Gray output then we can't write the SMask as DeviceGray!
+                     */
+                    emprintf(pdev->memory,
+                         "\nDetected SMask which must be in DeviceGray, but we are not converting to DeviceGray, reverting to normal PDF output\n");
+                    pdev->AbortPDFAX = true;
+                    pdev->PDFA = 0;
+                }
+            }
+        }
 
         if (pim->BitsPerComponent > 8 && convert_to_process_colors) {
             use_fallback = 1;
@@ -1422,7 +1447,6 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
             code = make_device_color_space(pdev, pdev->pcm_color_info_index, &pcs_device);
             if (code < 0)
                 goto fail_and_fallback;
-            rc_decrement(image[0].pixel.ColorSpace, "pdf_begin_typed_image(pixel.ColorSpace)");
             image[0].pixel.ColorSpace = pcs_device;
             image[0].pixel.BitsPerComponent = 8;
             code = pdf_color_space_named(pdev, pgs, &cs_value, &pranges, pcs_device, names,
@@ -1772,8 +1796,10 @@ pdf_image_plane_data_alt(gx_image_enum_common_t * info,
                     if (flipped_count == 0)
                         flipped_count = block_bytes * nplanes;
                 }
-                image_flip_planes(row, bit_planes, offset, flip_count,
-                                  nplanes, pie->plane_depths[0]);
+                status = image_flip_planes(row, bit_planes, offset, flip_count,
+                                           nplanes, pie->plane_depths[0]);
+                if (status < 0)
+                    break;
                 status = sputs(pie->writer.binary[alt_writer_index].strm, row,
                                flipped_count, &ignore);
                 if (status < 0)
@@ -1803,6 +1829,9 @@ pdf_image_plane_data(gx_image_enum_common_t * info,
 {
     pdf_image_enum *pie = (pdf_image_enum *) info;
     int i;
+
+    if (info->pgs != NULL && info->pgs->level < info->pgs_level)
+        return_error(gs_error_undefinedresult);
 
     if (pie->JPEG_PassThrough || pie->JPX_PassThrough) {
         pie->rows_left -= height;
@@ -2174,8 +2203,13 @@ pdf_image3_make_mcde(gx_device *dev, const gs_gstate *pgs,
         code = pdf_begin_typed_image
             ((gx_device_pdf *)dev, pgs, pmat, pic, prect, pdcolor, pcpath, mem,
             pinfo, PDF_IMAGE_TYPE3_DATA);
-        if (code < 0)
+        if (code < 0) {
+            gx_device_set_target((gx_device_forward *)(*pmcdev), NULL);
+            gs_closedevice((*pmcdev));
+            gs_free_object(mem, (*pmcdev), "pdf_image3_make_mcde(*pmcdev)");
+            *pmcdev = NULL;
             return code;
+        }
     }
     /* Due to equal image merging, we delay the adding of the "Mask" entry into
        a type 3 image dictionary until the mask is completed.
@@ -2215,6 +2249,7 @@ pdf_image3x_make_mcde(gx_device *dev, const gs_gstate *pgs,
     pdf_image_enum *pmie;
     int i;
     const gs_image3x_mask_t *pixm;
+    gx_device_pdf *pdf_dev = (gx_device_pdf *)dev;
 
     if (midev[0]) {
         if (midev[1])
@@ -2227,9 +2262,16 @@ pdf_image3x_make_mcde(gx_device *dev, const gs_gstate *pgs,
     code = pdf_make_mxd(pmcdev, midev[i], mem);
     if (code < 0)
         return code;
+
+    if (pminfo[0] != NULL)
+        pdf_dev->PendingOC = pminfo[0]->OC;
+    else
+        pdf_dev->PendingOC = 0;
+
     code = pdf_begin_typed_image
         ((gx_device_pdf *)dev, pgs, pmat, pic, prect, pdcolor, pcpath, mem,
          pinfo, PDF_IMAGE_TYPE3_DATA);
+    pdf_dev->PendingOC = 0;
     if (code < 0) {
         rc_decrement(*pmcdev, "pdf_image3x_make_mcde");
         return code;
@@ -2411,6 +2453,8 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
     gx_bitmap_id id = (gx_bitmap_id)size;
 
     switch (dev_spec_op) {
+        case gxdso_skip_icc_component_validation:
+            return 1;
         case gxdso_supports_pattern_transparency:
             return 1;
         case gxdso_pattern_can_accum:
@@ -2960,6 +3004,12 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
             break;
         case gxdso_in_smask_construction:
             return pdev->smask_construction;
+        case gxdso_pending_optional_content:
+            {
+                int64_t *object = data;
+                pdev->PendingOC = *object;
+            }
+            break;
         case gxdso_get_dev_param:
             {
                 int code;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -295,7 +295,6 @@ typedef struct clist_image_enum_s {
     gs_pixel_image_t image;     /* only uses Width, Height, Interpolate */
     gx_drawing_color dcolor;    /* only pure right now */
     gs_int_rect rect;
-    const gs_gstate *pgs;
     const gx_clip_path *pcpath;
     /* Set at creation time */
     gs_image_format_t format;
@@ -329,10 +328,10 @@ typedef struct clist_image_enum_s {
     image_decode_t decode;
     byte *buffer;  /* needed for unpacking during monitoring */
 } clist_image_enum;
-gs_private_st_suffix_add4(st_clist_image_enum, clist_image_enum,
+gs_private_st_suffix_add3(st_clist_image_enum, clist_image_enum,
                           "clist_image_enum", clist_image_enum_enum_ptrs,
                           clist_image_enum_reloc_ptrs, st_gx_image_enum_common,
-                          pgs, pcpath, color_space.space, buffer);
+                          pcpath, color_space.space, buffer);
 
 static image_enum_proc_plane_data(clist_image_plane_data);
 static image_enum_proc_end_image(clist_image_end_image);
@@ -467,8 +466,8 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
     clist_icc_color_t icc_zero_init = { 0 };
     cmm_profile_t *src_profile;
     cmm_srcgtag_profile_t *srcgtag_profile;
-    gsicc_rendering_intents_t renderingintent = pgs->renderingintent;
-    gsicc_blackptcomp_t blackptcomp = pgs->blackptcomp;
+    gsicc_rendering_intents_t renderingintent;
+    gsicc_blackptcomp_t blackptcomp;
     gsicc_rendering_param_t stored_rendering_cond;
     gsicc_rendering_param_t dev_render_cond;
     gs_gstate *pgs_nonconst = (gs_gstate*) pgs;
@@ -476,10 +475,19 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
     bool bp_changed = false;
     cmm_dev_profile_t *dev_profile = NULL;
     cmm_profile_t *gs_output_profile;
-    bool is_planar_dev = dev->is_planar;
+    bool is_planar_dev = !!dev->num_planar_planes;
     bool render_is_valid;
     int csi;
     gx_clip_path *lpcpath = NULL;
+
+    if (pgs == NULL) {
+        /* At this time, this cannot/should not ever happen,
+           so it's fatal if it does.
+         */
+        return_error(gs_error_Fatal);
+    }
+    renderingintent = pgs->renderingintent;
+    blackptcomp = pgs->blackptcomp;
 
     /* We can only handle a limited set of image types. */
     switch ((gs_debug_c('`') ? -1 : pic->type->index)) {
@@ -603,6 +611,7 @@ clist_begin_typed_image(gx_device * dev, const gs_gstate * pgs,
             pie->rect.q.x = pim->Width, pie->rect.q.y = pim->Height;
         }
         pie->pgs = pgs;
+        pie->pgs_level = pgs->level;
 
         if (pcpath) {
             lpcpath = gx_cpath_alloc(mem, "clist_begin_typed_image(lpcpath)");
@@ -1006,6 +1015,10 @@ clist_image_plane_data(gx_image_enum_common_t * info,
         return_error(gs_error_Fatal);
     }
 #endif
+
+    if (info->pgs != NULL && info->pgs->level < info->pgs_level)
+        return_error(gs_error_undefinedresult);
+
     /****** CAN'T HANDLE VARYING data_x VALUES YET ******/
     {
         int i;
@@ -1035,7 +1048,7 @@ clist_image_plane_data(gx_image_enum_common_t * info,
     {
         int ry0 = (int)floor(dbox.p.y) - 2;
         int ry1 = (int)ceil(dbox.q.y) + 2;
-        int band_height0 = cdev->page_band_height;
+        int band_height0 = cdev->page_info.band_params.BandHeight;
 
         /*
          * Make sure we don't go into any bands beyond the Y range

@@ -73,9 +73,6 @@ static byte const ver20[4] = {0x00, 0x02, 0x00, 0x00};
 
 /* ---------------- Font level ---------------- */
 
-GS_NOTIFY_PROC(gs_len_glyphs_release);
-GS_NOTIFY_PROC(gs_gsub_release);
-
 /* Read data from sfnts. */
 int
 gs_type42_read_data(gs_font_type42 * pfont, ulong pos, uint length, byte *buf)
@@ -1385,6 +1382,9 @@ gs_type42_glyph_info_by_gid(gs_font *font, gs_glyph glyph, const gs_matrix *pmat
 
     outline.memory = pfont->memory;
     if (default_members) {
+        if (pmat == NULL)
+            return gs_note_error(gs_error_undefinedresult);
+
         code = gs_default_glyph_info(font, glyph, pmat, default_members, info);
 
         if (code < 0)

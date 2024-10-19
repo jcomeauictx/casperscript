@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -81,7 +81,7 @@ color_halftone_callback(cal_halftone_data_t *ht, void *arg)
     gx_color_index dev_white = gx_device_white(dev);
     gx_color_index dev_black = gx_device_black(dev);
 
-    if (dev->is_planar) {
+    if (dev->num_planar_planes) {
         (*dev_proc(dev, copy_planes)) (dev, ht->data, ht->x + (ht->offset_x<<3), ht->raster,
             gx_no_bitmap_id, ht->x, ht->y, ht->w, ht->h,
             ht->plane_raster);
@@ -289,7 +289,7 @@ gs_image_class_4_color(gx_image_enum * penum, irender_proc_t *render_fn)
            then we will may use the thresholding if it is a halftone
            device IFF we have one bit per component */
         if ((bpc == 1) && transfer_is_monotonic &&
-            (penum->dev->color_info.num_components == 1 || penum->dev->is_planar) &&
+            (penum->dev->color_info.num_components == 1 || penum->dev->num_planar_planes > 1) &&
             penum->bps == 8) {
 #ifdef WITH_CAL
             penum->cal_ht = color_halftone_init(penum);
@@ -1138,13 +1138,7 @@ image_render_color_DeviceN(gx_image_enum *penum_orig, const byte *buffer, int da
     bits32 test = penum->mask_color.test;
     bool lab_case = false;
 
-    if (device_encodes_tags(dev)) {
-        devc1.tag = (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
-        devc2.tag = (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
-    } else {
-        devc1.tag = 0;
-        devc2.tag = 0;
-    }
+    devc1.tag = devc2.tag = device_current_tag(dev);
 
     if (h == 0)
         return 0;

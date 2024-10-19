@@ -659,7 +659,7 @@ gx_device_init_on_stack(gx_device * dev, const gx_device * proto,
     dev->retained = 0;
     dev->pad = proto->pad;
     dev->log2_align_mod = proto->log2_align_mod;
-    dev->is_planar = proto->is_planar;
+    dev->num_planar_planes = proto->num_planar_planes;
     rc_init(dev, NULL, 0);
 }
 
@@ -706,8 +706,13 @@ gs_make_null_device(gx_device_null *dev_null, gx_device *dev,
 /* Is a null device ? */
 bool gs_is_null_device(gx_device *dev)
 {
+    gx_device ldev;
+
+    ldev.initialize_device_procs = gs_null_device.initialize_device_procs;
+    ldev.initialize_device_procs(&ldev);
+
     /* Assuming null_fill_path isn't used elswhere. */
-    return dev->procs.fill_path == gs_null_device.procs.fill_path;
+    return dev->procs.fill_path == ldev.procs.fill_path;
 }
 
 /* Mark a device as retained or not retained. */
@@ -813,8 +818,8 @@ gx_device_raster(const gx_device * dev, bool pad)
     ulong raster;
     int l2align;
 
-    if (dev->is_planar) {
-        int num_components = dev->color_info.num_components;
+    if (dev->num_planar_planes) {
+        int num_components = dev->num_planar_planes;
         /* bpc accounts for unused bits, e.g. depth==4, num_comp==3, or depth==8, num_comps==5 */
         int bpc = depth / num_components;
 
@@ -854,7 +859,7 @@ uint
 gx_device_raster_plane(const gx_device * dev, const gx_render_plane_t *render_plane)
 {
     ulong bpc = (render_plane && render_plane->index >= 0 ?
-        render_plane->depth : dev->color_info.depth/(dev->is_planar ? dev->color_info.num_components : 1));
+        render_plane->depth : dev->color_info.depth/(dev->num_planar_planes ? dev->num_planar_planes : 1));
     ulong bits = (ulong) dev->width * bpc;
     int l2align;
 

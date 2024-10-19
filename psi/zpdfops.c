@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -42,6 +42,7 @@
 #include "gspath.h"
 #include "math_.h"
 #include "ialloc.h"
+#include "igc.h" /* needed for definition of gc_state for the ref_struct_clear_marks call */
 #include "malloc_.h"
 #include "string_.h"
 #include "store.h"
@@ -50,231 +51,6 @@
 #include "idict.h"
 #include "iname.h"
 #include "bfont.h"
-
-#ifdef HAVE_LIBIDN
-#  include <stringprep.h>
-#endif
-
-/* ------ Graphics state ------ */
-
-/* <screen_index> <x> <y> .setscreenphase - */
-static int
-zsetscreenphase(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    int code;
-    int x, y;
-
-    check_type(op[-2], t_integer);
-    check_type(op[-1], t_integer);
-    check_type(*op, t_integer);
-    x = op[-1].value.intval;
-    y = op->value.intval;
-    if (op[-2].value.intval < -1 ||
-        op[-2].value.intval >= gs_color_select_count
-        )
-        return_error(gs_error_rangecheck);
-    code = gs_setscreenphase(igs, x, y,
-                             (gs_color_select_t) op[-2].value.intval);
-    if (code >= 0)
-        pop(3);
-    return code;
-}
-
-/* Construct a smooth path passing though a number of points  on the stack */
-/* for PDF ink annotations. The program is based on a very simple method of */
-/* smoothing polygons by Maxim Shemanarev. */
-/* http://www.antigrain.com/research/bezier_interpolation/ */
-/* <mark> <x0> <y0> ... <xn> <yn> .pdfinkpath - */
-static int
-zpdfinkpath(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    uint i, count;
-    int code;
-    double x0, y0, x1, y1, x2, y2, x3, y3, xc1, yc1, xc2, yc2, xc3, yc3;
-    double len1, len2, len3, k1, k2, xm1, ym1, xm2, ym2;
-    double ctrl1_x, ctrl1_y, ctrl2_x, ctrl2_y;
-    const double smooth_value = 1; /* from 0..1 range */
-    ref lval;
-
-    check_read_type(*op, t_array);
-    count = r_size(op);
-
-    if ((count & 1) != 0 || count < 2)
-        return_error(gs_error_rangecheck);
-
-    if ((code = array_get(imemory, op, 0, &lval)) < 0)
-        return code;
-    if ((code = real_param(&lval, &x1)) < 0)
-        return code;
-
-    if ((code = array_get(imemory, op, 1, &lval)) < 0)
-        return code;
-    if ((code = real_param(&lval, &y1)) < 0)
-        return code;
-
-    if ((code = gs_moveto(igs, x1, y1)) < 0)
-        return code;
-    if (count == 2)
-          goto pop;
-
-    if ((code = array_get(imemory, op, 2, &lval)) < 0)
-        return code;
-    if ((code = real_param(&lval, &x2)) < 0)
-        return code;
-
-    if ((code = array_get(imemory, op, 3, &lval)) < 0)
-        return code;
-    if ((code = real_param(&lval, &y2)) < 0)
-        return code;
-
-    if (count == 4) {
-        if((code = gs_lineto(igs, x2, y2)) < 0)
-            return code;
-        goto pop;
-    }
-    x0 = 2*x1 - x2;
-    y0 = 2*y1 - y2;
-
-    for (i = 4; i <= count; i += 2) {
-        if (i < count) {
-            if ((code = array_get(imemory, op, i, &lval)) < 0)
-                return code;
-            if ((code = real_param(&lval, &x3)) < 0)
-                return code;
-            if ((code = array_get(imemory, op, i + 1, &lval)) < 0)
-                return code;
-            if ((code = real_param(&lval, &y3)) < 0)
-                return code;
-        } else {
-            x3 = 2*x2 - x1;
-            y3 = 2*y2 - y1;
-        }
-
-        xc1 = (x0 + x1) / 2.0;
-        yc1 = (y0 + y1) / 2.0;
-        xc2 = (x1 + x2) / 2.0;
-        yc2 = (y1 + y2) / 2.0;
-        xc3 = (x2 + x3) / 2.0;
-        yc3 = (y2 + y3) / 2.0;
-
-        len1 = hypot(x1 - x0, y1 - y0);
-        len2 = hypot(x2 - x1, y2 - y1);
-        len3 = hypot(x3 - x2, y3 - y2);
-
-        k1 = len1 / (len1 + len2);
-        k2 = len2 / (len2 + len3);
-
-        xm1 = xc1 + (xc2 - xc1) * k1;
-        ym1 = yc1 + (yc2 - yc1) * k1;
-
-        xm2 = xc2 + (xc3 - xc2) * k2;
-        ym2 = yc2 + (yc3 - yc2) * k2;
-
-        ctrl1_x = xm1 + (xc2 - xm1) * smooth_value + x1 - xm1;
-        ctrl1_y = ym1 + (yc2 - ym1) * smooth_value + y1 - ym1;
-
-        ctrl2_x = xm2 + (xc2 - xm2) * smooth_value + x2 - xm2;
-        ctrl2_y = ym2 + (yc2 - ym2) * smooth_value + y2 - ym2;
-
-        code = gs_curveto(igs, ctrl1_x, ctrl1_y, ctrl2_x, ctrl2_y, x2, y2);
-        if (code < 0)
-            return code;
-        x0 = x1, x1 = x2, x2 = x3;
-        y0 = y1, y1 = y2, y2 = y3;
-    }
-  pop:
-    pop(1);
-    return 0;
-}
-
-static int
-zpdfFormName(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    uint count = ref_stack_count(&o_stack);
-    int code;
-
-    if (count == 0)
-        return_error(gs_error_stackunderflow);
-    check_read_type(*op, t_string);
-
-    code = (*dev_proc(i_ctx_p->pgs->device, dev_spec_op))((gx_device *)i_ctx_p->pgs->device,
-        gxdso_pdf_form_name, (void *)op->value.const_bytes, r_size(op));
-
-    if (code < 0)
-        return code;
-
-    pop(1);
-    return 0;
-}
-
-#ifdef HAVE_LIBIDN
-/* Given a UTF-8 password string, convert it to the canonical form
- * defined by SASLprep (RFC 4013).  This is a permissive implementation,
- * suitable for verifying existing passwords but not for creating new
- * ones -- if you want to create a new password, you'll need to add a
- * strict mode that returns stringprep errors to the user, and uses the
- * STRINGPREP_NO_UNASSIGNED flag to disallow unassigned characters.
- * <string> .saslprep <string> */
-static int
-zsaslprep(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    uint input_size = r_size(op);
-    byte *buffer;
-    uint buffer_size;
-    uint output_size;
-    Stringprep_rc err;
-
-    check_read_type(*op, t_string);
-
-    /* According to http://unicode.org/faq/normalization.html, converting
-     * a UTF-8 string to normalization form KC has a worst-case expansion
-     * factor of 11, so we allocate 11 times the length of the string plus
-     * 1 for the NUL terminator.  If somehow that's still not big enough,
-     * stringprep will return STRINGPREP_TOO_SMALL_BUFFER; there's no
-     * danger of corrupting memory. */
-    buffer_size = input_size * 11 + 1;
-    buffer = ialloc_string(buffer_size, "saslprep result");
-    if (buffer == 0)
-        return_error(gs_error_VMerror);
-
-    memcpy(buffer, op->value.bytes, input_size);
-    buffer[input_size] = '\0';
-
-    err = stringprep((char *)buffer, buffer_size, 0, stringprep_saslprep);
-    if (err != STRINGPREP_OK) {
-        ifree_string(buffer, buffer_size, "saslprep result");
-
-        /* Since we're just verifying the password to an existing
-         * document here, we don't care about "invalid input" errors
-         * like STRINGPREP_CONTAINS_PROHIBITED.  In these cases, we
-         * ignore the error and return the original string unchanged --
-         * chances are it's not the right password anyway, and if it
-         * is we shouldn't gratuitously fail to decrypt the document.
-         *
-         * On the other hand, errors like STRINGPREP_NFKC_FAILED are
-         * real errors, and should be returned to the user.
-         *
-         * Fortunately, the stringprep error codes are sorted to make
-         * this easy: the errors we want to ignore are the ones with
-         * codes less than 100. */
-        if ((int)err < 100)
-            return 0;
-
-        return_error(gs_error_ioerror);
-    }
-
-    output_size = strlen((char *)buffer);
-    buffer = iresize_string(buffer, buffer_size, output_size,
-        "saslprep result");	/* can't fail */
-    make_string(op, a_all | icurrent_space, output_size, buffer);
-
-    return 0;
-}
-#endif
 
 #if defined(BUILD_PDF) && BUILD_PDF == 1
 
@@ -409,6 +185,7 @@ typedef struct pdfctx_s {
     stream *pdf_stream;
     bool UsingPDFFile;
     gsicc_profile_cache_t *profile_cache;
+    ref names_dict;
     gs_memory_t *cache_memory;      /* The memory allocator used to allocate the working (GC'ed) profile cache */
 } pdfctx_t;
 
@@ -454,10 +231,14 @@ gs_private_st_composite_final(st_pdfctx_t, pdfctx_t, "pdfctx_struct",\
 
 static
 ENUM_PTRS_BEGIN(pdfctx_enum_ptrs) return 0;
-ENUM_PTR3(0, pdfctx_t, ps_stream, pdf_stream, profile_cache);
+  ENUM_PTR3(0, pdfctx_t, ps_stream, pdf_stream, profile_cache);
+  case 3:
+    ENUM_RETURN_REF(&((pdfctx_t *)vptr)->names_dict);
 ENUM_PTRS_END
 
 static RELOC_PTRS_BEGIN(pdfctx_reloc_ptrs);
+RELOC_REF_VAR(((pdfctx_t *)vptr)->names_dict);
+ref_struct_clear_marks(gcst->cur_mem, &(((pdfctx_t *)vptr)->names_dict), 1, pstype);
 RELOC_PTR3(pdfctx_t, ps_stream, pdf_stream, profile_cache);
 RELOC_PTRS_END
 
@@ -469,6 +250,7 @@ pdfctx_finalize(const gs_memory_t *cmem, void *vptr)
      *  on the same object - hence we null the entries.
      */
 
+    make_null(&pdfctx->names_dict);
     if (pdfctx->profile_cache != NULL) {
         rc_decrement(pdfctx->profile_cache, "free the working profile cache");
         pdfctx->profile_cache = NULL;
@@ -537,6 +319,7 @@ static int zPDFstream(i_ctx_t *i_ctx_p)
     if (code < 0) {
         memset(pdfctx->pdf_stream, 0x00, sizeof(stream));
         gs_free_object(imemory, pdfctx->pdf_stream, "PDFstream copy of PS stream");
+        pdfctx->ctx->main_stream->s = NULL;
         pdfctx->pdf_stream = NULL;
         pdfctx->ps_stream = NULL;
         return code;
@@ -608,12 +391,31 @@ static int zPDFclose(i_ctx_t *i_ctx_p)
     }
 
     if (pdfctx->ctx != NULL) {
-        pdfi_report_errors(pdfctx->ctx);
+        if (pdfctx->pdf_stream != NULL || pdfctx->ps_stream != NULL) {
+            pdfi_switch_t i_switch;
+
+            code = gs_gsave(igs);
+            if (code < 0)
+                return code;
+
+            code = pdfi_gstate_from_PS(pdfctx->ctx, igs, &i_switch, pdfctx->profile_cache);
+
+            if (code >= 0) {
+                pdfi_finish_pdf_file(pdfctx->ctx);
+                pdfi_report_errors(pdfctx->ctx);
+
+                pdfi_gstate_to_PS(pdfctx->ctx, igs, &i_switch);
+            }
+            code = gs_grestore(igs);
+            if (code < 0)
+                return code;
+        }
         if (pdfctx->ps_stream) {
             /* Detach the PostScript stream from the PDF context, otherwise the
              * close code will close the main stream
              */
-            pdfctx->ctx->main_stream->s = NULL;
+            if (pdfctx->ctx->main_stream)
+                pdfctx->ctx->main_stream->s = NULL;
         }
         code = pdfi_free_context(pdfctx->ctx);
         pdfctx->ctx = NULL;
@@ -1188,9 +990,21 @@ static int zpdfi_glyph_index(gs_font *pfont, byte *str, uint size, uint *glyph)
 {
     int code = 0;
     ref nref;
+    i_ctx_t *i_ctx_p = get_minst_from_memory(pfont->memory)->i_ctx_p;
+    os_ptr op = osp;
+    pdfctx_t *pdfctx;
+
+    check_type(*op - 1, t_pdfctx);
+    pdfctx = r_ptr(op - 1, pdfctx_t);
+
     code = name_ref(pfont->memory, str, size, &nref, true);
     if (code < 0)
         return code;
+
+    code = dict_put(&pdfctx->names_dict, &nref, &nref, &i_ctx_p->dict_stack);
+    if (code < 0)
+        return code;
+
     *glyph = name_index(pfont->memory, &nref);
     return 0;
 }
@@ -1232,10 +1046,308 @@ static int param_value_get_namelist(gs_memory_t *ps_mem, pdf_context *ctx, ref *
     return 0;
 }
 
+static int apply_interpreter_params(i_ctx_t *i_ctx_p, pdfctx_t *pdfctx, ref *pdictref)
+{
+    int code = gs_error_typecheck;
+    ref *pvalueref;
+
+    if (dict_find_string(pdictref, "PDFDEBUG", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.pdfdebug = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PDFSTOPONERROR", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.pdfstoponerror = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PDFSTOPONWARNING", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.pdfstoponwarning = pvalueref->value.boolval;
+        if (pvalueref->value.boolval)
+            pdfctx->ctx->args.pdfstoponerror = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "NOTRANSPARENCY", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.notransparency = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "QUIET", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.QUIET = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "VerboseErrors", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.verbose_errors = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "VerboseWarnings", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.verbose_warnings = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PDFPassword", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_string))
+            goto error;
+        pdfctx->ctx->encryption.Password = (char *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(pvalueref) + 1, "PDF Password from zpdfops");
+        memset(pdfctx->ctx->encryption.Password, 0x00, r_size(pvalueref) + 1);
+        memcpy(pdfctx->ctx->encryption.Password, pvalueref->value.const_bytes, r_size(pvalueref));
+        pdfctx->ctx->encryption.PasswordLen = r_size(pvalueref);
+    }
+
+    if (dict_find_string(pdictref, "FirstPage", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_integer))
+            goto error;
+        pdfctx->ctx->args.first_page = pvalueref->value.intval;
+    }
+
+    if (dict_find_string(pdictref, "LastPage", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_integer))
+            goto error;
+        pdfctx->ctx->args.last_page = pvalueref->value.intval;
+    }
+
+    if (dict_find_string(pdictref, "PDFNOCIDFALLBACK", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.nocidfallback = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "NO_PDFMARK_OUTLINES", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.no_pdfmark_outlines = pvalueref->value.boolval;
+    }
+
+    /* This one can be a boolean OR an integer */
+    if (dict_find_string(pdictref, "UsePDFX3Profile", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean)) {
+            if (!r_has_type(pvalueref, t_integer))
+                goto error;
+            else {
+                pdfctx->ctx->args.UsePDFX3Profile = true;
+                pdfctx->ctx->args.PDFX3Profile_num = pvalueref->value.intval;
+            }
+        } else {
+            pdfctx->ctx->args.UsePDFX3Profile = pvalueref->value.boolval;
+            pdfctx->ctx->args.PDFX3Profile_num = 0;
+        }
+    }
+
+    if (dict_find_string(pdictref, "NO_PDFMARK_DESTS", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.no_pdfmark_dests = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PDFFitPage", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.pdffitpage = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "OutputFile", &pvalueref) > 0)
+        pdfctx->ctx->args.printed = true;
+    else
+        pdfctx->ctx->args.printed = false;
+
+    if (dict_find_string(pdictref, "Printed", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.printed = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "UseBleedBox", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.usebleedbox = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "UseCropBox", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.usecropbox = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "UseArtBox", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.useartbox = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "UseTrimBox", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.usetrimbox = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "ShowAcroForm", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.showacroform = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "ShowAnnots", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.showannots = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PreserveAnnots", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.preserveannots = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PreserveMarkedContent", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.preservemarkedcontent = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PreserveEmbeddedFiles", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.preserveembeddedfiles = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PreserveDocView", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.preservedocview = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "NoUserUnit", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.nouserunit = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "RENDERTTNOTDEF", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.renderttnotdef = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "DOPDFMARKS", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.dopdfmarks = pvalueref->value.boolval;
+    }
+
+    if (dict_find_string(pdictref, "PDFINFO", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.pdfinfo = pvalueref->value.boolval;
+    }
+    if (dict_find_string(pdictref, "ShowAnnotTypes", &pvalueref) > 0) {
+        code = param_value_get_namelist(imemory, pdfctx->ctx, pvalueref,
+                                        &pdfctx->ctx->args.showannottypes);
+        if (code < 0)
+            goto error;
+    }
+    if (dict_find_string(pdictref, "PreserveAnnotTypes", &pvalueref) > 0) {
+        code = param_value_get_namelist(imemory, pdfctx->ctx, pvalueref,
+                                        &pdfctx->ctx->args.preserveannottypes);
+        if (code < 0)
+            goto error;
+    }
+    if (dict_find_string(pdictref, "CIDFSubstPath", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_string))
+            goto error;
+        pdfctx->ctx->args.cidfsubstpath.data = (byte *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(pvalueref) + 1, "PDF cidfsubstpath from zpdfops");
+        if (pdfctx->ctx->args.cidfsubstpath.data == NULL) {
+            code = gs_note_error(gs_error_VMerror);
+            goto error;
+        }
+        memcpy(pdfctx->ctx->args.cidfsubstpath.data, pvalueref->value.const_bytes, r_size(pvalueref));
+        pdfctx->ctx->args.cidfsubstpath.size = r_size(pvalueref);
+    }
+    if (dict_find_string(pdictref, "CIDFSubstFont", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_string))
+            goto error;
+        pdfctx->ctx->args.cidfsubstfont.data = (byte *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(pvalueref) + 1, "PDF cidfsubstfont from zpdfops");
+        if (pdfctx->ctx->args.cidfsubstfont.data == NULL) {
+            code = gs_note_error(gs_error_VMerror);
+            goto error;
+        }
+        memcpy(pdfctx->ctx->args.cidfsubstfont.data, pvalueref->value.const_bytes, r_size(pvalueref));
+        pdfctx->ctx->args.cidfsubstfont.size = r_size(pvalueref);
+    }
+    if (dict_find_string(pdictref, "SUBSTFONT", &pvalueref) > 0) {
+        ref nmstr, *namstrp;
+        if (r_has_type(pvalueref, t_string)) {
+            namstrp = pvalueref;
+            pdfctx->ctx->args.defaultfont_is_name = false;
+        } else if (r_has_type(pvalueref, t_name)) {
+            name_string_ref(imemory, pvalueref, &nmstr);
+            namstrp = &nmstr;
+            pdfctx->ctx->args.defaultfont_is_name = true;
+        }
+        else {
+            code = gs_note_error(gs_error_typecheck);
+            goto error;
+        }
+        pdfctx->ctx->args.defaultfont.data = (byte *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(namstrp) + 1, "PDF defaultfontname from zpdfops");
+        if (pdfctx->ctx->args.defaultfont.data == NULL) {
+            code = gs_note_error(gs_error_VMerror);
+            goto error;
+        }
+        memcpy(pdfctx->ctx->args.defaultfont.data, pvalueref->value.const_bytes, r_size(namstrp));
+        pdfctx->ctx->args.defaultfont.size = r_size(namstrp);
+    }
+    if (dict_find_string(pdictref, "IgnoreToUnicode", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.ignoretounicode = pvalueref->value.boolval;
+    }
+    if (dict_find_string(pdictref, "NONATIVEFONTMAP", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_boolean))
+            goto error;
+        pdfctx->ctx->args.nonativefontmap = pvalueref->value.boolval;
+    }
+    if (dict_find_string(pdictref, "PageCount", &pvalueref) > 0) {
+        if (!r_has_type(pvalueref, t_integer))
+            goto error;
+        pdfctx->ctx->Pdfmark_InitialPage = pvalueref->value.intval;
+    }
+    code = 0;
+
+error:
+    return code;
+}
+
+static int zPDFSetParams(i_ctx_t *i_ctx_p)
+{
+    os_ptr op = osp;
+    int code = 0;
+    pdfctx_t *pdfctx = NULL;
+
+    check_op(2);
+
+    check_type(*(op - 1), t_pdfctx);
+    pdfctx = r_ptr(op - 1, pdfctx_t);
+
+    check_type(*op, t_dictionary);
+
+    code = apply_interpreter_params(i_ctx_p, pdfctx, op);
+
+    pop(2);
+    return code;
+}
+
 static int zPDFInit(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
-    ref *pdictref = NULL, *pvalueref;
     pdfctx_t *pdfctx = NULL;
     pdf_context *ctx = NULL;
     int code = 0;
@@ -1262,6 +1374,10 @@ static int zPDFInit(i_ctx_t *i_ctx_p)
         goto error;
     }
     pdfctx->cache_memory = imemory;
+    /* The size is arbitrary */
+    code = dict_alloc(iimemory, 1, &pdfctx->names_dict);
+    if (code < 0)
+        goto error;
 
     ctx = pdfi_create_context(cmem);
     if (ctx == NULL) {
@@ -1273,269 +1389,12 @@ static int zPDFInit(i_ctx_t *i_ctx_p)
     get_zfont_glyph_name(&pdfctx->ctx->get_glyph_name);
     pdfctx->ctx->get_glyph_index = zpdfi_glyph_index;
 
-    if (ref_stack_count(&o_stack) > 0 && r_has_type(op, t_dictionary)) {
-        pdictref = op;
-
-        code = gs_error_typecheck;
-        if (dict_find_string(pdictref, "PDFDEBUG", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.pdfdebug = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "PDFSTOPONERROR", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.pdfstoponerror = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "PDFSTOPONWARNING", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.pdfstoponwarning = pvalueref->value.boolval;
-            if (pvalueref->value.boolval)
-                pdfctx->ctx->args.pdfstoponerror = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "NOTRANSPARENCY", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.notransparency = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "QUIET", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.QUIET = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "VerboseErrors", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.verbose_errors = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "VerboseWarnings", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.verbose_warnings = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "PDFPassword", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_string))
-                goto error;
-            pdfctx->ctx->encryption.Password = (char *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(pvalueref) + 1, "PDF Password from zpdfops");
-            memset(pdfctx->ctx->encryption.Password, 0x00, r_size(pvalueref) + 1);
-            memcpy(pdfctx->ctx->encryption.Password, pvalueref->value.const_bytes, r_size(pvalueref));
-            pdfctx->ctx->encryption.PasswordLen = r_size(pvalueref);
-        }
-
-        if (dict_find_string(pdictref, "FirstPage", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_integer))
-                goto error;
-            pdfctx->ctx->args.first_page = pvalueref->value.intval;
-        }
-
-        if (dict_find_string(pdictref, "LastPage", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_integer))
-                goto error;
-            pdfctx->ctx->args.last_page = pvalueref->value.intval;
-        }
-
-        if (dict_find_string(pdictref, "PDFNOCIDFALLBACK", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.nocidfallback = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "NO_PDFMARK_OUTLINES", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.no_pdfmark_outlines = pvalueref->value.boolval;
-        }
-
-        /* This one can be a boolean OR an integer */
-        if (dict_find_string(pdictref, "UsePDFX3Profile", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean)) {
-                if (!r_has_type(pvalueref, t_integer))
-                    goto error;
-                else {
-                    pdfctx->ctx->args.UsePDFX3Profile = true;
-                    pdfctx->ctx->args.PDFX3Profile_num = pvalueref->value.intval;
-                }
-            } else {
-                pdfctx->ctx->args.UsePDFX3Profile = pvalueref->value.boolval;
-                pdfctx->ctx->args.PDFX3Profile_num = 0;
-            }
-        }
-
-        if (dict_find_string(pdictref, "NO_PDFMARK_DESTS", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.no_pdfmark_dests = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "PDFFitPage", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.pdffitpage = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "OutputFile", &pvalueref) > 0)
-            pdfctx->ctx->args.printed = true;
-        else
-            pdfctx->ctx->args.printed = false;
-
-        if (dict_find_string(pdictref, "Printed", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.printed = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "UseBleedBox", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.usebleedbox = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "UseCropBox", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.usecropbox = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "UseArtBox", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.useartbox = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "UseTrimBox", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.usetrimbox = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "ShowAcroForm", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.showacroform = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "ShowAnnots", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.showannots = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "PreserveAnnots", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.preserveannots = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "PreserveMarkedContent", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.preservemarkedcontent = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "NoUserUnit", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.nouserunit = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "RENDERTTNOTDEF", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.renderttnotdef = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "DOPDFMARKS", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.dopdfmarks = pvalueref->value.boolval;
-        }
-
-        if (dict_find_string(pdictref, "PDFINFO", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.pdfinfo = pvalueref->value.boolval;
-        }
-        if (dict_find_string(pdictref, "ShowAnnotTypes", &pvalueref) > 0) {
-            code = param_value_get_namelist(imemory, pdfctx->ctx, pvalueref,
-                                            &pdfctx->ctx->args.showannottypes);
-            if (code < 0)
-                goto error;
-        }
-        if (dict_find_string(pdictref, "PreserveAnnotTypes", &pvalueref) > 0) {
-            code = param_value_get_namelist(imemory, pdfctx->ctx, pvalueref,
-                                            &pdfctx->ctx->args.preserveannottypes);
-            if (code < 0)
-                goto error;
-        }
-        if (dict_find_string(pdictref, "CIDFSubstPath", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_string))
-                goto error;
-            pdfctx->ctx->args.cidfsubstpath.data = (byte *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(pvalueref) + 1, "PDF cidfsubstpath from zpdfops");
-            if (pdfctx->ctx->args.cidfsubstpath.data == NULL) {
-                code = gs_note_error(gs_error_VMerror);
-                goto error;
-            }
-            memcpy(pdfctx->ctx->args.cidfsubstpath.data, pvalueref->value.const_bytes, r_size(pvalueref));
-            pdfctx->ctx->args.cidfsubstpath.size = r_size(pvalueref);
-        }
-        if (dict_find_string(pdictref, "CIDFSubstFont", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_string))
-                goto error;
-            pdfctx->ctx->args.cidfsubstfont.data = (byte *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(pvalueref) + 1, "PDF cidfsubstfont from zpdfops");
-            if (pdfctx->ctx->args.cidfsubstfont.data == NULL) {
-                code = gs_note_error(gs_error_VMerror);
-                goto error;
-            }
-            memcpy(pdfctx->ctx->args.cidfsubstfont.data, pvalueref->value.const_bytes, r_size(pvalueref));
-            pdfctx->ctx->args.cidfsubstfont.size = r_size(pvalueref);
-        }
-        if (dict_find_string(pdictref, "SUBSTFONT", &pvalueref) > 0) {
-            ref nmstr, *namstrp;
-            if (r_has_type(pvalueref, t_string)) {
-                namstrp = pvalueref;
-                pdfctx->ctx->args.defaultfont_is_name = false;
-            } else if (r_has_type(pvalueref, t_name)) {
-                name_string_ref(imemory, pvalueref, &nmstr);
-                namstrp = &nmstr;
-                pdfctx->ctx->args.defaultfont_is_name = true;
-            }
-            else {
-                code = gs_note_error(gs_error_typecheck);
-                goto error;
-            }
-            pdfctx->ctx->args.defaultfont.data = (byte *)gs_alloc_bytes(pdfctx->ctx->memory, r_size(namstrp) + 1, "PDF defaultfontname from zpdfops");
-            if (pdfctx->ctx->args.defaultfont.data == NULL) {
-                code = gs_note_error(gs_error_VMerror);
-                goto error;
-            }
-            memcpy(pdfctx->ctx->args.defaultfont.data, pvalueref->value.const_bytes, r_size(namstrp));
-            pdfctx->ctx->args.defaultfont.size = r_size(namstrp);
-        }
-        if (dict_find_string(pdictref, "IgnoreToUnicode", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.ignoretounicode = pvalueref->value.boolval;
-        }
-        if (dict_find_string(pdictref, "NONATIVEFONTMAP", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_boolean))
-                goto error;
-            pdfctx->ctx->args.nonativefontmap = pvalueref->value.boolval;
-        }
-        if (dict_find_string(pdictref, "PageCount", &pvalueref) > 0) {
-            if (!r_has_type(pvalueref, t_integer))
-                goto error;
-            pdfctx->ctx->Pdfmark_InitialPage = pvalueref->value.intval;
-        }
-        code = 0;
+    if (ref_stack_count(&o_stack) > 0) {
+        if (r_has_type(op, t_dictionary))
+            code = apply_interpreter_params(i_ctx_p, pdfctx, op);
         pop(1);
+        if (code < 0)
+            goto error;
     }
     code = zpdfi_populate_search_paths(i_ctx_p, ctx);
     if (code < 0)
@@ -1575,6 +1434,8 @@ static int zPDFparsePageList(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     int *page_range_array;
     int num_pages;
+    ref *o;
+    char *PageString = NULL;
 
     check_op(2);
 
@@ -1584,7 +1445,14 @@ static int zPDFparsePageList(i_ctx_t *i_ctx_p)
 
     check_type_only(*(op - 1), t_string);
 
-    code = pagelist_parse_to_array((char *)((op - 1)->value.const_bytes), imemory, num_pages, &page_range_array);
+    PageString = (char *)gs_alloc_bytes(imemory, r_size(op - 1) + 1, "zPDFparsePageList");
+    if (PageString == NULL)
+        return_error(gs_error_VMerror);
+    memcpy(PageString, (op - 1)->value.const_bytes, r_size(op - 1));
+    PageString[r_size(op - 1)] = 0x00;
+    code = pagelist_parse_to_array(PageString, imemory, num_pages, &page_range_array);
+    gs_free_object(imemory, PageString, "zPDFparsePageList");
+
     make_int(op, 0);				/* default return 0 */
     if (code < 0) {
         return code;
@@ -1597,10 +1465,16 @@ static int zPDFparsePageList(i_ctx_t *i_ctx_p)
     }
     /* push the even/odd, start, end triples on the stack */
     for (i=0; i < size;  i++) {
+        o = ref_stack_index(&o_stack, size - i);
+        if (o == NULL)
+            return_error(gs_error_stackunderflow);
         /* skip the initial "ordered" flag */
-        make_int(ref_stack_index(&o_stack, size - i), page_range_array[i+1]);
+        make_int(o, page_range_array[i+1]);
     }
-    make_int(ref_stack_index(&o_stack, 0), size);
+    o = ref_stack_index(&o_stack, 0);
+    if (o == NULL)
+        return_error(gs_error_stackunderflow);
+    make_int(o, size);
     pagelist_free_range_array(imemory, page_range_array);		/* all done with C array */
     return 0;
 }
@@ -1651,6 +1525,11 @@ static int zPDFdrawannots(i_ctx_t *i_ctx_p)
     return_error(gs_error_undefined);
 }
 
+static int zPDFSetParams(i_ctx_t *i_ctx_p)
+{
+    return_error(gs_error_undefined);
+}
+
 static int zPDFInit(i_ctx_t *i_ctx_p)
 {
     return_error(gs_error_undefined);
@@ -1679,9 +1558,6 @@ static int zPDFAvailable(i_ctx_t *i_ctx_p)
 
 const op_def zpdfops_op_defs[] =
 {
-    {"0.pdfinkpath", zpdfinkpath},
-    {"1.pdfFormName", zpdfFormName},
-    {"3.setscreenphase", zsetscreenphase},
     {"0.PDFFile", zPDFfile},
     {"1.PDFStream", zPDFstream},
     {"1.PDFClose", zPDFclose},
@@ -1694,8 +1570,6 @@ const op_def zpdfops_op_defs[] =
     {"1.PDFInit", zPDFInit},
     {"1.PDFparsePageList", zPDFparsePageList},
     {"0.PDFAvailable", zPDFAvailable},
-#ifdef HAVE_LIBIDN
-    {"1.saslprep", zsaslprep},
-#endif
+    {"2.PDFSetParams", zPDFSetParams},
     op_def_end(0)
 };

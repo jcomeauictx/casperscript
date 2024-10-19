@@ -290,6 +290,14 @@ pdfi_pattern_paintproc(const gs_client_color *pcc, gs_gstate *pgs)
 {
     const gs_client_pattern *pinst = gs_getpattern(pcc);
     int code = 0;
+    pdf_context *ctx = ((pdf_pattern_context_t *)((gs_pattern1_instance_t *)pcc->pattern)->client_data)->ctx;
+    text_state_t ts;
+
+    /* We want to start running the pattern PaintProc with a "clean slate"
+       so store, clear......."
+     */
+    memcpy(&ts, &ctx->text, sizeof(ctx->text));
+    memset(&ctx->text, 0x00, sizeof(ctx->text));
 
     /* pgs->device is the newly created pattern accumulator, but we want to test the device
      * that is 'behind' that, the actual output device, so we use the one from
@@ -301,10 +309,14 @@ pdfi_pattern_paintproc(const gs_client_color *pcc, gs_gstate *pgs)
     }
 
     if (code == 1) {
-        return pdfi_pattern_paint_high_level(pcc, pgs);
+        code = pdfi_pattern_paint_high_level(pcc, pgs);
     } else {
-        return pdfi_pattern_paint(pcc, pgs);
+        code =  pdfi_pattern_paint(pcc, pgs);
     }
+
+    /* .... and restore the text state in the context */
+    memcpy(&ctx->text, &ts, sizeof(ctx->text));
+    return code;
 }
 
 
@@ -385,7 +397,7 @@ pdfi_setpattern_type1(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_di
     double XStep, YStep;
     pdf_dict *Resources = NULL, *pdict = NULL;
     pdf_array *Matrix = NULL;
-    bool transparency = false;
+    bool transparency = false, BM_Not_Normal = false;
     pdf_pattern_context_t *context = NULL;
 
 #if DEBUG_PATTERN
@@ -471,13 +483,13 @@ pdfi_setpattern_type1(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_di
 
     /* See if pattern uses transparency, or if we are in an overprint
        simulation situation */
-    if (ctx->page.simulate_op)
+    if (ctx->page.has_transparency) {
+        code = pdfi_check_Pattern_transparency(ctx, pdict, page_dict, &transparency, &BM_Not_Normal);
+        if (code < 0)
+            goto exit;
+    }
+    if (ctx->page.simulate_op) {
         transparency = true;
-    else
-        if (ctx->page.has_transparency) {
-            code = pdfi_check_Pattern_transparency(ctx, pdict, page_dict, &transparency);
-            if (code < 0)
-                goto exit;
     }
 
     /* TODO: Resources?  Maybe I should check that they are all valid before proceeding, or something? */
@@ -490,6 +502,7 @@ pdfi_setpattern_type1(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_di
     templat.XStep = XStep;
     templat.YStep = YStep;
     templat.uses_transparency = transparency;
+    templat.BM_Not_Normal = BM_Not_Normal;
     //templat.uses_transparency = false; /* disable */
 
     code = pdfi_gsave(ctx);
@@ -514,17 +527,52 @@ pdfi_setpattern_type1(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_di
     {
         unsigned long hash = 5381;
         unsigned int i;
-        const char *str = (const char *)&ctx->pgs->ctm;
+        const byte *str;
 
         gs_pattern1_instance_t *pinst = (gs_pattern1_instance_t *)cc->pattern;
 
 
-        for (i = 0; i < 4 * sizeof(float); i++)
+        str = (const byte *)&ctx->pgs->ctm.xx;
+        for (i = 0; i < sizeof(ctx->pgs->ctm.xx); i++) {
+#if ARCH_IS_BIG_ENDIAN
+            hash = ((hash << 5) + hash) + str[sizeof(ctx->pgs->ctm.xx) - 1 - i]; /* hash * 33 + c */
+#else
             hash = ((hash << 5) + hash) + str[i]; /* hash * 33 + c */
+#endif
+        }
+        str = (const byte *)&ctx->pgs->ctm.xy;
+        for (i = 0; i < sizeof(ctx->pgs->ctm.xy); i++) {
+#if ARCH_IS_BIG_ENDIAN
+            hash = ((hash << 5) + hash) + str[sizeof(ctx->pgs->ctm.xy) - 1 - i]; /* hash * 33 + c */
+#else
+            hash = ((hash << 5) + hash) + str[i]; /* hash * 33 + c */
+#endif
+        }
+        str = (const byte *)&ctx->pgs->ctm.yx;
+        for (i = 0; i < sizeof(ctx->pgs->ctm.yx); i++) {
+#if ARCH_IS_BIG_ENDIAN
+            hash = ((hash << 5) + hash) + str[sizeof(ctx->pgs->ctm.yx) - 1 - i]; /* hash * 33 + c */
+#else
+            hash = ((hash << 5) + hash) + str[i]; /* hash * 33 + c */
+#endif
+        }
+        str = (const byte *)&ctx->pgs->ctm.yy;
+        for (i = 0; i < sizeof(ctx->pgs->ctm.yy); i++) {
+#if ARCH_IS_BIG_ENDIAN
+            hash = ((hash << 5) + hash) + str[sizeof(ctx->pgs->ctm.yy) - 1 - i]; /* hash * 33 + c */
+#else
+            hash = ((hash << 5) + hash) + str[i]; /* hash * 33 + c */
+#endif
+        }
 
-        str = (const char *)&pdict->object_num;
-        for (i = 0; i < sizeof(uint32_t); i++)
+        str = (const byte *)&pdict->object_num;
+        for (i = 0; i < sizeof(pdict->object_num); i++) {
+#if ARCH_IS_BIG_ENDIAN
+            hash = ((hash << 5) + hash) + str[sizeof(pdict->object_num) - 1 - i]; /* hash * 33 + c */
+#else
             hash = ((hash << 5) + hash) + str[i]; /* hash * 33 + c */
+#endif
+        }
 
         hash = ((hash << 5) + hash) + ctx->pgs->device->color_info.num_components; /* hash * 33 + c */
 

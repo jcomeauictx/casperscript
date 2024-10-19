@@ -57,6 +57,13 @@ typedef struct image_enum_plane_s {
   - A (retained) source string, which may be empty (size = 0).
 */
     gs_const_string source;
+    /* The gs_string 'orig' is only set if the 'txfer_control' flag was set when
+     * the 'source' string data was initally passed in. In this case we now control the lifetime
+     * of the string. So when we empty the source string, free it. We need to know the actual
+     * address of the string, and that gets modified in the peunum->planes->source and size
+     * members, so we use 'orig' as both a marker for the control and the original size and location.
+     */
+    gs_const_string orig;
 } image_enum_plane_t;
 /*
   The possible states for each plane do not depend on the state of any other
@@ -514,7 +521,7 @@ gs_image_next(gs_image_enum * penum, const byte * dbytes, uint dsize,
     plane_data[px].data = dbytes;
     plane_data[px].size = dsize;
     penum->error = false;
-    code = gs_image_next_planes(penum, plane_data, used);
+    code = gs_image_next_planes(penum, plane_data, used, false);
     *pused = used[px];
     if (code >= 0)
         next_plane(penum);
@@ -524,7 +531,7 @@ gs_image_next(gs_image_enum * penum, const byte * dbytes, uint dsize,
 int
 gs_image_next_planes(gs_image_enum * penum,
                      gs_const_string *plane_data /*[num_planes]*/,
-                     uint *used /*[num_planes]*/)
+                     uint *used /*[num_planes]*/, bool txfer_control)
 {
     const int num_planes = penum->num_planes;
     int i;
@@ -546,6 +553,18 @@ gs_image_next_planes(gs_image_enum * penum,
         if (penum->wanted[i] && plane_data[i].size != 0) {
             penum->planes[i].source.size = plane_data[i].size;
             penum->planes[i].source.data = plane_data[i].data;
+            /* The gs_string 'orig' in penum->planes is set here if the 'txfer_control' flag is set.
+             * In this case we now control the lifetime of the string. We need to know the actual
+             * address of the string, and that gets modified in the peunum->planes->source and size
+             * members, so we use 'orig' as both a marker for the control and the originalsize and location.
+             */
+            if (txfer_control) {
+                penum->planes[i].orig.data = plane_data[i].data;
+                penum->planes[i].orig.size = plane_data[i].size;
+            } else {
+                penum->planes[i].orig.data = NULL;
+                penum->planes[i].orig.size = 0;
+            }
         }
     }
     for (;;) {
@@ -567,10 +586,10 @@ gs_image_next_planes(gs_image_enum * penum,
                     /* Buffer a partial row. */
                     int copy = min(size, raster - pos);
                     uint old_size = penum->planes[i].row.size;
+                    gs_memory_t *mem = gs_image_row_memory(penum);
 
                     /* Make sure the row buffer is fully allocated. */
                     if (raster > old_size) {
-                        gs_memory_t *mem = gs_image_row_memory(penum);
                         byte *old_data = penum->planes[i].row.data;
                         byte *row =
                             (old_data == 0 ?
@@ -594,6 +613,17 @@ gs_image_next_planes(gs_image_enum * penum,
                            penum->planes[i].source.data, copy);
                     penum->planes[i].source.data += copy;
                     penum->planes[i].source.size = size -= copy;
+                    /* The gs_string 'orig' is only set if the 'txfer_control' flag was set when
+                     * the 'source' string data was initally passed in. In this case we now control the lifetime
+                     * of the string. So when we empty the source string, free it. We need to know the actual
+                     * address of the string, and that gets modified in the peunum->planes->source and size
+                     * members, so we use 'orig' as both a marker for the control and the originalsize and location.
+                     */
+                    if (penum->planes[i].source.size == 0 && penum->planes[i].orig.size != 0) {
+                        gs_free_string(mem, (byte *)penum->planes[i].orig.data, penum->planes[i].orig.size, "gs_image_next_planes");
+                        penum->planes[i].orig.size = 0;
+                        penum->planes[i].orig.data = NULL;
+                    }
                     penum->planes[i].pos = pos += copy;
                     used[i] += copy;
                 }
@@ -655,11 +685,22 @@ gs_image_next_planes(gs_image_enum * penum,
                 /* We transferred the row(s) from the source. */
                 penum->planes[i].source.data += count;
                 penum->planes[i].source.size -= count;
+                /* The gs_string 'orig' is only set if the 'txfer_control' flag was set when
+                 * the 'source' string data was initally passed in. In this case we now control the lifetime
+                 * of the string. So when we empty the source string, free it. We need to know the actual
+                 * address of the string, and that gets modified in the peunum->planes->source and size
+                 * members, so we use 'orig' as both a marker for the control and the originalsize and location.
+                 */
+                if (penum->planes[i].source.size == 0 && penum->planes[i].orig.size != 0) {
+                    gs_free_string(gs_image_row_memory(penum), (byte *)penum->planes[i].orig.data, penum->planes[i].orig.size, "gs_image_next_planes");
+                    penum->planes[i].orig.size = 0;
+                    penum->planes[i].orig.data = NULL;
+                }
                 used[i] += count;
             }
         }
         cache_planes(penum);
-        if (code > 0)
+        if (code != 0)
             break;
     }
     /* Return the retained data pointers. */

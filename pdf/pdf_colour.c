@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1671,25 +1671,34 @@ static int pdfi_create_Lab(pdf_context *ctx, pdf_array *color_array, int index, 
     pdf_array *Range = NULL;
     float RangeBuf[4];
     double f;
+    bool known = false;
 
     code = pdfi_array_get_type(ctx, color_array, index + 1, PDF_DICT, (pdf_obj **)&Lab_dict);
     if (code < 0)
         return code;
 
-    code = pdfi_dict_get_type(ctx, Lab_dict, "Range", PDF_ARRAY, (pdf_obj **)&Range);
-    if (code < 0) {
+    code = pdfi_dict_known(ctx, Lab_dict, "Range", &known);
+    if (code < 0)
         goto exit;
-    }
-    if (pdfi_array_size(Range) != 4){
-        code = gs_note_error(gs_error_rangecheck);
-        goto exit;
-    }
-
-    for (i=0; i < 4; i++) {
-        code = pdfi_array_get_number(ctx, Range, (uint64_t)i, &f);
-        if (code < 0)
+    if (known) {
+        code = pdfi_dict_get_type(ctx, Lab_dict, "Range", PDF_ARRAY, (pdf_obj **)&Range);
+        if (code < 0) {
             goto exit;
-        RangeBuf[i] = (float)f;
+        }
+        if (pdfi_array_size(Range) != 4){
+            code = gs_note_error(gs_error_rangecheck);
+            goto exit;
+        }
+
+        for (i=0; i < 4; i++) {
+            code = pdfi_array_get_number(ctx, Range, (uint64_t)i, &f);
+            if (code < 0)
+                goto exit;
+            RangeBuf[i] = (float)f;
+        }
+    } else {
+        RangeBuf[0] = RangeBuf[2] = -100.0;
+        RangeBuf[1] = RangeBuf[3] = 100.0;
     }
 
     code = pdfi_seticc_lab(ctx, RangeBuf, ppcs);
@@ -2611,7 +2620,6 @@ static int pdfi_create_DeviceRGB(pdf_context *ctx, gs_color_space **ppcs)
         }
     } else {
         code = pdfi_gs_setrgbcolor(ctx, 0, 0, 0);
-        pdfi_set_colour_callback(ctx->pgs->color[0].color_space, ctx, pdfi_cspace_free_callback);
     }
     return code;
 }
@@ -2801,6 +2809,10 @@ pdfi_create_colorspace_by_name(pdf_context *ctx, pdf_name *name,
             if (((pdf_name *)ref_space)->length <= 0) {
                 pdfi_countdown(ref_space);
                 return_error(gs_error_syntaxerror);
+            }
+            if (((pdf_name *)ref_space)->length == name->length && memcmp(((pdf_name *)ref_space)->data, name->data, name->length) == 0) {
+                pdfi_countdown(ref_space);
+                return_error(gs_error_circular_reference);
             }
         }
 

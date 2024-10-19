@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2023 Artifex Software, Inc.
+/* Copyright (C) 2019-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -35,6 +35,7 @@
 #include "pdf_dict.h"
 #include "pdf_array.h"
 #include "pdf_font.h"
+#include "pdf_fontTT.h"
 #include "gscencs.h"
 #include "gsagl.h"
 #include "gxfont1.h"        /* for gs_font_type1_s */
@@ -873,7 +874,7 @@ pdfi_fapi_get_glyphname_or_cid(gs_text_enum_t *penum, gs_font_base * pbfont, gs_
             }
 
             l = penum->orig_font->procs.decode_glyph((gs_font *)penum->orig_font, ccode, (gs_char)cc, (ushort *)uc, 4);
-            if (l > 0 && l < sizeof(uc)) {
+            if (l > 0 && l <= sizeof(uc)) {
                 cc = 0;
                 for (i = 0; i < l; i++) {
                     cc |= uc[l - 1 - i] << (i * 8);
@@ -1027,22 +1028,14 @@ pdfi_fapi_get_glyphname_or_cid(gs_text_enum_t *penum, gs_font_base * pbfont, gs_
 
                 if (code < 0 || cc == 0) {
                     gs_font_type42 *pfonttt = (gs_font_type42 *)pbfont;
-                    gs_string gname = {0};
+                    gs_string gname;
+                    gname.data = GlyphName->data;
+                    gname.size = GlyphName->length;
 
-                    /* This is a very slow implementation, we may benefit from creating a
-                     * a reverse post table upfront */
-                    for (i = 0; i < pfonttt->data.numGlyphs; i++) {
-                        code = gs_type42_find_post_name(pfonttt, (gs_glyph)i, &gname);
-                        if (code >= 0) {
-                            if (gname.data[0] == GlyphName->data[0]
-                                && gname.size == GlyphName->length
-                                && !strncmp((char *)gname.data, (char *)GlyphName->data, GlyphName->length))
-                            {
-                                cr->char_codes[0] = i;
-                                cr->is_glyph_index = true;
-                                break;
-                            }
-                        }
+                    code = pdfi_find_post_entry(pfonttt, (gs_const_string *)&gname, &cc);
+                    if (code >= 0) {
+                        cr->char_codes[0] = cc;
+                        cr->is_glyph_index = true;
                     }
                 }
                 else {
@@ -1088,22 +1081,14 @@ pdfi_fapi_get_glyphname_or_cid(gs_text_enum_t *penum, gs_font_base * pbfont, gs_
 
                         if (cc == 0) {
                             gs_font_type42 *pfonttt = (gs_font_type42 *)pbfont;
-                            gs_string gname = {0};
+                            gs_string gname;
+                            gname.data = GlyphName->data;
+                            gname.size = GlyphName->length;
 
-                            /* This is a very slow implementation, we may benefit from creating a
-                             * a reverse post table upfront */
-                            for (i = 0; i < pfonttt->data.numGlyphs; i++) {
-                                code = gs_type42_find_post_name(pfonttt, (gs_glyph)i, &gname);
-                                if (code >= 0) {
-                                    if (gname.data[0] == GlyphName->data[0]
-                                        && gname.size == GlyphName->length
-                                        && !strncmp((char *)gname.data, (char *)GlyphName->data, GlyphName->length))
-                                    {
-                                        cr->char_codes[0] = i;
-                                        cr->is_glyph_index = true;
-                                        break;
-                                    }
-                                }
+                            code = pdfi_find_post_entry(pfonttt, (gs_const_string *)&gname, &cc);
+                            if (code >= 0) {
+                                cr->char_codes[0] = cc;
+                                cr->is_glyph_index = true;
                             }
                         }
                         else {
@@ -1541,6 +1526,20 @@ pdfi_fapi_passfont(pdf_font *font, int subfont, char *fapi_request,
         }
         else if (plat == 3 && enc == 10) { /* Currently shouldn't arise */
             ttfont->cmap = pdfi_truetype_cmap_310;
+        }
+        /* Officially only 3,1 in PDF, but 0,x is Unicode, too */
+        else if (plat == 0) {
+            pdfi_set_warning(OBJ_CTX(font), 0, NULL, W_PDF_INVALID_TTF_CMAP, "pdfi_fapi_passfont", NULL);
+            if (OBJ_CTX(font)->args.pdfstoponwarning){
+                code = gs_note_error(gs_error_invalidfont);
+            }
+            ttfont->cmap = pdfi_truetype_cmap_31;
+        }
+        else {
+            pdfi_set_warning(OBJ_CTX(font), 0, NULL, W_PDF_INVALID_TTF_CMAP, "pdfi_fapi_passfont", NULL);
+            if (OBJ_CTX(font)->args.pdfstoponwarning){
+                code = gs_note_error(gs_error_invalidfont);
+            }
         }
     }
 

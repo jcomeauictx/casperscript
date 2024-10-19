@@ -43,6 +43,7 @@ ztoken(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(1);
     switch (r_type(op)) {
         default:
             return_op_typecheck(op);
@@ -65,6 +66,11 @@ ztoken(i_ctx_t *i_ctx_p)
             if (!r_has_attr(op, a_read))
                 return_error(gs_error_invalidaccess);
             code = gs_scan_string_token(i_ctx_p, op, &token);
+            /* gs_scan_string_token() can relocate the operand stack if a
+             * stack overflow occurs. If that happens then 'op' is no
+             * longer valid, so reload it now just in case.
+             */
+            op = osp;
             switch (code) {
             case scan_EOF:      /* no tokens */
                 make_false(op);
@@ -95,6 +101,7 @@ ztoken_continue(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     scanner_state *pstate;
 
+    check_op(1);
     check_stype(*op, st_scanner_state_dynamic);
     pstate = r_ptr(op, scanner_state);
     return token_continue(i_ctx_p, pstate, false);
@@ -106,6 +113,14 @@ token_continue(i_ctx_t *i_ctx_p, scanner_state * pstate, bool save)
     os_ptr op = osp;
     int code;
     ref token;
+    avm_space usevm, currentvm = ialloc_space(idmemory);
+    check_op(1);
+
+    /* If we're going to reuse an existing scanner_state object in gs_scan_handle_refill()
+       we need to make sure the ref (and anything else associated with it) is marked with
+       the vm mode of that scanner_state's allocation, *not* currentglobal.
+     */
+    usevm = save ? ialloc_space(idmemory) : r_space(op);
 
     /* Since we might free pstate below, and we're dealing with
      * gc memory referenced by the stack, we need to explicitly
@@ -138,8 +153,10 @@ again:
             code = 0;
             break;
         case scan_Refill:       /* need more data */
+            ialloc_set_space(idmemory, usevm);
             code = gs_scan_handle_refill(i_ctx_p, pstate, save,
                                       ztoken_continue);
+            ialloc_set_space(idmemory, currentvm);
             switch (code) {
                 case 0: /* state is not copied to the heap */
                     goto again;
@@ -169,6 +186,7 @@ ztokenexec(i_ctx_t *i_ctx_p)
     stream *s;
     scanner_state state;
 
+    check_op(1);
     check_read_file(i_ctx_p, s, op);
     check_estack(1);
     gs_scanner_init(&state, op);
@@ -184,6 +202,7 @@ ztokenexec_continue(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     scanner_state *pstate;
 
+    check_op(1);
     check_stype(*op, st_scanner_state_dynamic);
     pstate = r_ptr(op, scanner_state);
     return tokenexec_continue(i_ctx_p, pstate, false);
@@ -194,6 +213,15 @@ tokenexec_continue(i_ctx_t *i_ctx_p, scanner_state * pstate, bool save)
 {
     os_ptr op = osp;
     int code;
+    avm_space usevm, currentvm = ialloc_space(idmemory);
+    check_op(1);
+
+    /* If we're going to reuse an existing scanner_state object in gs_scan_handle_refill()
+       we need to make sure the ref (and anything else associated with it) is marked with
+       the vm mode of that scanner_state's allocation, *not* currentglobal.
+     */
+    usevm = save ? ialloc_space(idmemory) : r_space(op);
+
     /* Since we might free pstate below, and we're dealing with
      * gc memory referenced by the stack, we need to explicitly
      * remove the reference to pstate from the stack, otherwise
@@ -223,8 +251,10 @@ again:
             code = 0;
             break;
         case scan_Refill:       /* need more data */
+            ialloc_set_space(idmemory, usevm);
             code = gs_scan_handle_refill(i_ctx_p, pstate, save,
                                       ztokenexec_continue);
+            ialloc_set_space(idmemory, currentvm);
             switch (code) {
                 case 0: /* state is not copied to the heap */
                     goto again;

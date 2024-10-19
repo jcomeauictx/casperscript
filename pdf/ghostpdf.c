@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -39,12 +39,17 @@
 #include "pdf_repair.h"
 #include "pdf_xref.h"
 #include "pdf_device.h"
+#include "pdf_mark.h"
 
 #include "gsstate.h"        /* For gs_gstate */
 #include "gsicc_manage.h"  /* For gsicc_init_iccmanager() */
 
 #if PDFI_LEAK_CHECK
 #include "gsmchunk.h"
+#endif
+
+#ifndef USE_PDF_PERMISSIONS
+#define USE_PDF_PERMISSIONS 0
 #endif
 
 extern const char gp_file_name_list_separator;
@@ -823,12 +828,44 @@ int pdfi_separation_name_from_index(gs_gstate *pgs, gs_separation_name index, un
     return_error(gs_error_undefined);
 }
 
-/* These functions are used by the 'PL' implementation, eventually we will */
-/* need to have custom PostScript operators to process the file or at      */
-/* (least pages from it).                                                  */
+int pdfi_finish_pdf_file(pdf_context *ctx)
+{
+    if (ctx->Root) {
+        if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent) {
+            pdf_obj *o = NULL;
+            int code = 0;
+
+            code = pdfi_dict_knownget_type(ctx, ctx->Root, "OCProperties", PDF_DICT, &o);
+            if (code > 0) {
+                // Build and send the OCProperties structure
+                code = pdfi_pdfmark_from_objarray(ctx, &o, 1, NULL, "OCProperties");
+                pdfi_countdown(o);
+                if (code < 0)
+                    /* Error message ? */
+                ;
+            }
+        }
+    }
+    return 0;
+}
 
 int pdfi_close_pdf_file(pdf_context *ctx)
 {
+    if (ctx->Root) {
+        pdf_obj *o = NULL;
+        int code = 0;
+
+        code = pdfi_dict_knownget(ctx, ctx->Root, "OCProperties", &o);
+        if (code > 0) {
+            // Build and send the OCProperties structure
+            code = pdfi_pdfmark_from_objarray(ctx, &o, 1, NULL, "OCProperties");
+            pdfi_countdown(o);
+            if (code < 0)
+                /* Error message ? */
+                ;
+        }
+    }
+
     if (ctx->main_stream) {
         if (ctx->main_stream->s) {
             sfclose(ctx->main_stream->s);
@@ -1171,6 +1208,8 @@ static int pdfi_init_file(pdf_context *ctx)
         }
     }
 
+    pdfi_device_set_flags(ctx);
+
     if (ctx->Trailer) {
         /* See comment in pdfi_read_Root() (pdf_doc.c) for details */
         pdf_dict *d = ctx->Trailer;
@@ -1185,6 +1224,35 @@ static int pdfi_init_file(pdf_context *ctx)
                 code = pdfi_initialise_Decryption(ctx);
                 if (code < 0)
                     goto exit;
+
+                /* This section is commetned out but deliberately retained. This code
+                 * prevents us from processing any PDF file where the 'print' permission
+                 * is not set. Additionally, if the 'print' permission is set, but bit 12
+                 * 'faitful digital copy' is not set, *and* we are writing to a high level
+                 * device, then we will throw an error..
+                 */
+#if USE_PDF_PERMISSIONS
+                code = pdfi_dict_knownget_number(ctx, (pdf_dict *)o, "P", &Permissions);
+                if (code < 0)
+                    goto exit;
+                if (Permissions > ((unsigned long)1 << 31)) {
+                    code = gs_note_error(gs_error_rangecheck);
+                    goto exit;
+                }
+                P = (uint32_t)Permissions;
+                if ((P & 0x04) == 0) {
+                    dmprintf(ctx->memory, "   ****The owner of this file has requested you do not print it.\n");
+                    code = gs_note_error(gs_error_invalidfileaccess);
+                    goto exit;
+                }
+                if (ctx->device_state.HighLevelDevice) {
+                    if ((P & 0x800) == 0) {
+                        dmprintf(ctx->memory, "   ****The owner of this file has requested you do not make a digital copy of it.\n");
+                        code = gs_note_error(gs_error_invalidfileaccess);
+                        goto exit;
+                    }
+                }
+#endif
             } else {
                 if (pdfi_type_of(o) != PDF_NULL)
                     pdfi_set_error(ctx, code, NULL, E_PDF_BADENCRYPT, "pdfi_init_file", NULL);
@@ -1245,8 +1313,6 @@ read_root:
 
     if (ctx->num_pages == 0)
         dmprintf(ctx->memory, "\n   **** Warning: PDF document has no pages.\n");
-
-    pdfi_device_set_flags(ctx);
 
     code = pdfi_doc_trailer(ctx);
     if (code < 0)
@@ -1375,7 +1441,7 @@ int pdfi_set_input_stream(pdf_context *ctx, stream *stm)
     pdfi_seek(ctx, ctx->main_stream, 0, SEEK_END);
 
     if (ctx->args.pdfdebug)
-        dmprintf(ctx->memory, "%% Searching for 'startxerf' keyword\n");
+        dmprintf(ctx->memory, "%% Searching for 'startxref' keyword\n");
 
     /* Initially read min(BUF_SIZE, file_length) bytes of data to the buffer */
     bytes = Offset;
@@ -1463,8 +1529,13 @@ int pdfi_set_input_stream(pdf_context *ctx, stream *stm)
         Offset += bytes;
     } while(Offset < ctx->main_stream_length);
 
-    if (!found)
+    if (!found) {
         pdfi_set_error(ctx, 0, NULL, E_PDF_NOSTARTXREF, "pdfi_set_input_stream", NULL);
+        if (ctx->args.pdfstoponerror) {
+            code = gs_note_error(gs_error_undefined);
+            goto error;
+        }
+    }
 
     code = pdfi_init_file(ctx);
 
@@ -1820,6 +1891,9 @@ pdf_context *pdfi_create_context(gs_memory_t *mem)
     /* Setup some flags that don't default to 'false' */
     ctx->args.showannots = true;
     ctx->args.preserveannots = true;
+    ctx->args.preservemarkedcontent = true;
+    ctx->args.preserveembeddedfiles = true;
+    ctx->args.preservedocview = true;
     /* NOTE: For testing certain annotations on cluster, might want to set this to false */
     ctx->args.printed = false; /* True if OutputFile is set, false otherwise see pdftop.c, pdf_impl_set_param() */
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1098,9 +1098,9 @@ write_mask(gx_device_pdf *pdev, gx_device_memory *mdev, gs_matrix *m)
 }
 
 static void
-max_subimage_width(int width, byte *base, int x0, long count1, int *x1, long *count)
+max_subimage_width(int width, byte *base, int x0, int64_t count1, int *x1, int64_t *count)
 {
-    long c = 0, c1 = count1 - 1;
+    int64_t c = 0, c1 = count1 - 1;
     int x = x0;
     byte p = 1; /* The inverse of the previous bit. */
     byte r;     /* The inverse of the current  bit. */
@@ -1147,18 +1147,18 @@ cmpbits(const byte *base, const byte *base2, int w)
 
 static void
 compute_subimage(int width, int height, int raster, byte *base,
-                 int x0, int y0, long MaxClipPathSize, int *x1, int *y1)
+                 int x0, int y0, int64_t MaxClipPathSize, int *x1, int *y1)
 {
     /* Returns a semiopen range : [x0:x1)*[y0:y1). */
     if (x0 != 0) {
-        long count;
+        int64_t count;
 
         /* A partial single scanline. */
         max_subimage_width(width, base + y0 * raster, x0, MaxClipPathSize / 4, x1, &count);
         *y1 = y0;
     } else {
         int xx, y = y0, yy;
-        long count, count1 = MaxClipPathSize / 4;
+        int64_t count, count1 = MaxClipPathSize / 4;
 
         for(; y < height && count1 > 0; ) {
             max_subimage_width(width, base + y * raster, 0, count1, &xx, &count);
@@ -1191,7 +1191,7 @@ image_line_to_clip(gx_device_pdf *pdev, byte *base, int x0, int x1, int y0, int 
 {   /* returns the number of segments or error code. */
     int x = x0, xx;
     byte *q = base + (x / 8), m = 0x80 >> (x % 8);
-    long c = 0;
+    int64_t c = 0;
 
     for (;;) {
         /* Look for upgrade : */
@@ -1418,7 +1418,6 @@ lcvd_fill_trapezoid(gx_device * dev, const gs_fixed_edge * left,
     const gs_fixed_edge * right, fixed ybot, fixed ytop, bool swap_axes,
     const gx_device_color * pdevc, gs_logical_operation_t lop)
 {
-    int code = 0;
     pdf_lcvd_t *cvd = (pdf_lcvd_t *)dev;
 
     if (cvd->mask != NULL)
@@ -1572,7 +1571,7 @@ pdf_setup_masked_image_converter(gx_device_pdf *pdev, gs_memory_t *mem, const gs
     if (code < 0)
         return code; /* FIXME: free cvd? */
     if (need_mask) {
-        mask = gs_alloc_struct(mem, gx_device_memory, &st_device_memory, "pdf_setup_masked_image_converter");
+        mask = gs_alloc_struct_immovable(mem, gx_device_memory, &st_device_memory, "pdf_setup_masked_image_converter");
         if (mask == NULL)
             return_error(gs_error_VMerror); /* FIXME: free cvd? */
         cvd->mask = mask;
@@ -1790,26 +1789,30 @@ gdev_pdf_fill_path(gx_device * dev, const gs_gstate * pgs, gx_path * ppath,
                 cvd.path_offset.x = sx; /* m.tx / scalex */
                 cvd.path_offset.y = sy;
             }
+            if (sx < 0 || sy < 0)
+                return 0;
+
             code = pdf_setup_masked_image_converter(pdev, pdev->memory, &m, &pcvd, need_mask, sx, sy,
                             rect_size.x, rect_size.y, false);
-            pcvd->has_background = gx_dc_pattern2_has_background(pdcolor);
-            stream_puts(pdev->strm, "q\n");
             if (code >= 0) {
                 gs_path_enum cenum;
                 gdev_vector_dopath_state_t state;
+
+                pcvd->has_background = gx_dc_pattern2_has_background(pdcolor);
+                stream_puts(pdev->strm, "q\n");
                 code = pdf_write_path(pdev, (gs_path_enum *)&cenum, &state, (gx_path *)ppath, 0, gx_path_type_clip | gx_path_type_optimize, NULL);
-                if (code >= 0)
+                if (code >= 0) {
                     stream_puts(pdev->strm, (params->rule < 0 ? "W n\n" : "W* n\n"));
+                    pdf_put_matrix(pdev, NULL, &cvd.m, " cm q\n");
+                    cvd.write_matrix = false;
+                    code = gs_shading_do_fill_rectangle(pi.templat.Shading,
+                         NULL, (gx_device *)&cvd.mdev, pgs2, !pi.shfill);
+                    if (code >= 0)
+                        code = pdf_dump_converted_image(pdev, &cvd, 2);
+                }
+                stream_puts(pdev->strm, "Q Q\n");
+                pdf_remove_masked_image_converter(pdev, &cvd, need_mask);
             }
-            pdf_put_matrix(pdev, NULL, &cvd.m, " cm q\n");
-            cvd.write_matrix = false;
-            if (code >= 0)
-                code = gs_shading_do_fill_rectangle(pi.templat.Shading,
-                     NULL, (gx_device *)&cvd.mdev, pgs2, !pi.shfill);
-            if (code >= 0)
-                code = pdf_dump_converted_image(pdev, &cvd, 2);
-            stream_puts(pdev->strm, "Q Q\n");
-            pdf_remove_masked_image_converter(pdev, &cvd, need_mask);
             gs_setmatrix((gs_gstate *)pgs, &save_ctm);
 image_exit:
             gs_gstate_free(pgs2);

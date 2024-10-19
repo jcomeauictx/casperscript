@@ -126,7 +126,10 @@ gs_image_class_2_fracs(gx_image_enum * penum, irender_proc_t *render_fn)
            the color spaces for CUPs */
         std_cmap_procs = gx_device_uses_std_cmap_procs(penum->dev, penum->pgs);
         if ( (gs_color_space_get_index(penum->pcs) == gs_color_space_index_DeviceN &&
-            penum->pcs->cmm_icc_profile_data == NULL) || penum->use_mask_color ||
+            penum->pcs->cmm_icc_profile_data == NULL) ||
+            (gs_color_space_get_index(penum->pcs) == gs_color_space_index_Separation &&
+            penum->pcs->cmm_icc_profile_data == NULL) ||
+            penum->use_mask_color ||
             penum->bps != 16 || !std_cmap_procs ||
             gs_color_space_get_index(penum->pcs) == gs_color_space_index_DevicePixel ||
             gs_color_space_get_index(penum->pcs) == gs_color_space_index_Indexed) {
@@ -170,7 +173,8 @@ gs_image_class_2_fracs(gx_image_enum * penum, irender_proc_t *render_fn)
             } else {
                 pcs = penum->pcs;
             }
-            penum->icc_setup.is_lab = pcs->cmm_icc_profile_data->islab;
+            if (pcs->cmm_icc_profile_data != NULL)
+                penum->icc_setup.is_lab = pcs->cmm_icc_profile_data->islab;
             penum->icc_setup.must_halftone = gx_device_must_halftone(penum->dev);
             penum->icc_setup.has_transfer =
                 gx_has_transfer(penum->pgs, num_des_comps);
@@ -655,7 +659,7 @@ image_render_icc16(gx_image_enum * penum, const byte * buffer, int data_x,
             if (need_decode) {
                 /* Need decode and CM.  This is slow but does not happen that often */
                 psrc_decode = (unsigned short*) gs_alloc_bytes(pgs->memory,
-                                sizeof(unsigned short) * w * spp_cm/spp,
+                                sizeof(unsigned short) * w * spp,
                                 "image_render_icc16");
                 if (!penum->use_cie_range) {
                     decode_row16(penum, psrc, spp, psrc_decode,

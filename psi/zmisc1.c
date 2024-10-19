@@ -48,6 +48,7 @@ type1crypt(i_ctx_t *i_ctx_p,
     crypt_state state;
     uint ssize;
 
+    check_op(3);
     check_type(op[-2], t_integer);
     state = op[-2].value.intval;
     if (op[-2].value.intval != state)
@@ -93,6 +94,9 @@ zexE(i_ctx_t *i_ctx_p)
 
     if (code < 0)
         return code;
+    if (gs_is_path_control_active(imemory) != 0 && state.cstate != 55665) {
+        return_error(gs_error_rangecheck);
+    }
     return filter_write(i_ctx_p, code, &s_exE_template, (stream_state *)&state, 0);
 }
 
@@ -105,6 +109,7 @@ zexD(i_ctx_t *i_ctx_p)
     stream_exD_state state = {0};
     int code = 0;
 
+    check_op(2);
     (*s_exD_template.set_defaults)((stream_state *)&state);
     if (r_has_type(op, t_dictionary)) {
         uint cstate = 0;
@@ -130,6 +135,11 @@ zexD(i_ctx_t *i_ctx_p)
     }
     if (code < 0)
         return code;
+
+    if (gs_is_path_control_active(imemory) != 0 && state.cstate != 55665) {
+        return_error(gs_error_rangecheck);
+    }
+
     /*
      * If we're reading a .PFB file, let the filter know about it,
      * so it can read recklessly to the end of the binary section.

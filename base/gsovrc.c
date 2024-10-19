@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -491,7 +491,7 @@ generic_overprint_initialize_device_procs(gx_device *dev)
     set_dev_proc(dev, fill_rectangle_hl_color, overprint_fill_rectangle_hl_color);
     set_dev_proc(dev, dev_spec_op, overprint_dev_spec_op);
     set_dev_proc(dev, copy_planes, gx_forward_copy_planes);
-    set_dev_proc(dev, copy_alpha_hl_color, dev->is_planar ?
+    set_dev_proc(dev, copy_alpha_hl_color, dev->num_planar_planes ?
                                                overprint_copy_alpha_hl_color :
                                                gx_forward_copy_alpha_hl_color);
     set_dev_proc(dev, fill_stroke_path, overprint_fill_stroke_path);
@@ -1047,7 +1047,7 @@ overprint_fill_rectangle_hl_color(gx_device *dev,
     int                     x, y, w, h;
     uchar                   k, j;
     gs_memory_t *           mem = dev->memory;
-    gx_color_index          comps;
+    gx_color_index          comps, comps2;
     gx_color_index          mask;
     int                     shift;
     int                     deep;
@@ -1101,10 +1101,15 @@ overprint_fill_rectangle_hl_color(gx_device *dev,
     gb_rect.q.x = x + w;
 
     /* step through the height */
+    comps2 = opdev->op_state == OP_STATE_FILL ? opdev->drawn_comps_fill : opdev->drawn_comps_stroke;
+    /* If we are dealing with tags, and we are writing ANY components, then we want to write the
+     * tag plane too. */
+    if (comps2 != 0 && device_encodes_tags(dev))
+        comps2 |= 1<<(tdev->color_info.num_components-1);
     while (h-- > 0 && code >= 0) {
         gb_rect.p.y = y++;
         gb_rect.q.y = y;
-        comps = opdev->op_state == OP_STATE_FILL ? opdev->drawn_comps_fill : opdev->drawn_comps_stroke;
+        comps = comps2;
         /* And now through each plane */
         for (k = 0; k < tdev->color_info.num_components; k++) {
             /* First set the params to zero for all planes except the one we want */
@@ -1345,7 +1350,7 @@ overprint_dev_spec_op(gx_device* pdev, int dev_spec_op,
 static int
 fill_in_procs(gx_device_procs * pprocs,
               dev_proc_initialize_device_procs(initialize_device_procs),
-              int is_planar)
+              int num_planar_planes)
 {
     gx_device_forward tmpdev;
 
@@ -1358,7 +1363,7 @@ fill_in_procs(gx_device_procs * pprocs,
     memcpy( &tmpdev.color_info,
             &gs_overprint_device.color_info,
             sizeof(tmpdev.color_info) );
-    tmpdev.is_planar = is_planar;
+    tmpdev.num_planar_planes = num_planar_planes;
 
     /*
      * Prevent the check_device_separable routine from executing while we
@@ -1420,17 +1425,17 @@ c_overprint_create_default_compositor(
         return code;
     code = fill_in_procs(&opdev->no_overprint_procs,
                          nooverprint_initialize_device_procs,
-                         tdev->is_planar);
+                         tdev->num_planar_planes);
     if (code < 0)
         return code;
     code = fill_in_procs(&opdev->generic_overprint_procs,
                          generic_overprint_initialize_device_procs,
-                         tdev->is_planar);
+                         tdev->num_planar_planes);
     if (code < 0)
         return code;
     code = fill_in_procs(&opdev->sep_overprint_procs,
                          sep_overprint_initialize_device_procs,
-                         tdev->is_planar);
+                         tdev->num_planar_planes);
     if (code < 0)
         return code;
 
@@ -1438,7 +1443,7 @@ c_overprint_create_default_compositor(
     gx_device_set_target((gx_device_forward *)opdev, tdev);
     opdev->pad = tdev->pad;
     opdev->log2_align_mod = tdev->log2_align_mod;
-    opdev->is_planar = tdev->is_planar;
+    opdev->num_planar_planes = tdev->num_planar_planes;
 
     params = ovrpct->params;
     params.idle = ovrpct->idle;

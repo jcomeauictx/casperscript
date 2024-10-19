@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -217,11 +217,11 @@ clist_init_io_procs(gx_device_clist *pclist_dev, bool in_memory)
 /*
  * Calculate the desired size for the tile cache.
  */
-static uint
-clist_tile_cache_size(const gx_device * target, uint data_size)
+static size_t
+clist_tile_cache_size(const gx_device * target, size_t data_size)
 {
-    uint bits_size =
-    (data_size / 5) & -align_cached_bits_mod;   /* arbitrary */
+    size_t bits_size =
+    (data_size / 5) & ~(align_cached_bits_mod-1);   /* arbitrary */
 
     if (!gx_device_must_halftone(target)) {     /* No halftones -- cache holds only Patterns & characters. */
         bits_size -= bits_size >> 2;
@@ -238,12 +238,12 @@ clist_tile_cache_size(const gx_device * target, uint data_size)
  * tile_max_count, tile_table, chunk (structure), bits (structure).
  */
 static int
-clist_init_tile_cache(gx_device * dev, byte * init_data, ulong data_size)
+clist_init_tile_cache(gx_device * dev, byte * init_data, size_t data_size)
 {
     gx_device_clist_writer * const cdev =
         &((gx_device_clist *)dev)->writer;
     byte *data = init_data;
-    uint bits_size = data_size;
+    size_t bits_size = data_size;
     /*
      * Partition the bits area between the hash table and the actual
      * bitmaps.  The per-bitmap overhead is about 24 bytes; if the
@@ -253,11 +253,11 @@ clist_init_tile_cache(gx_device * dev, byte * init_data, ulong data_size)
      * are tall), which gives us a guideline for the size of the hash
      * table.
      */
-    uint avg_char_size =
-        (uint)(dev->HWResolution[0] * dev->HWResolution[1] *
+    size_t avg_char_size =
+        (size_t)(dev->HWResolution[0] * dev->HWResolution[1] *
                (0.5 * 10 / 72 * 10 / 72 / 8)) + 24;
-    uint hc = bits_size / avg_char_size;
-    uint hsize;
+    size_t hc = bits_size / avg_char_size;
+    size_t hsize;
 
     while ((hc + 1) & hc)
         hc |= hc >> 1;          /* make mask (power of 2 - 1) */
@@ -282,27 +282,27 @@ clist_init_tile_cache(gx_device * dev, byte * init_data, ulong data_size)
 
 /*
  * Initialize the allocation for the bands.  Requires: target.  Sets:
- * page_band_height (=page_info.band_params.BandHeight), nbands.
+ * page_info.band_params.BandHeight (=page_info.band_params.BandHeight), nbands.
  */
 static int
-clist_init_bands(gx_device * dev, gx_device_memory *bdev, uint data_size,
+clist_init_bands(gx_device * dev, gx_device_memory *bdev, size_t data_size,
                  int band_width, int band_height)
 {
     gx_device_clist_writer * const cdev =
         &((gx_device_clist *)dev)->writer;
     int nbands;
-    ulong space;
+    size_t space;
 
     if (dev_proc(dev, open_device) == pattern_clist_open_device) {
         /* We don't need bands really. */
-        cdev->page_band_height = dev->height;
+        cdev->page_info.band_params.BandHeight = dev->height;
         cdev->nbands = 1;
         return 0;
     }
     if (gdev_mem_data_size(bdev, band_width, band_height, &space) < 0 ||
         space > data_size)
         return_error(gs_error_rangecheck);
-    cdev->page_band_height = band_height;
+    cdev->page_info.band_params.BandHeight = band_height;
     nbands = (cdev->target->height + band_height - 1) / band_height;
     cdev->nbands = nbands;
 #ifdef DEBUG
@@ -335,11 +335,11 @@ clist_minimum_buffer(int nbands) {
  * when writing.  Requires: nbands.  Sets: states, cbuf, cend, band_range_list.
  */
 static int
-clist_init_states(gx_device * dev, byte * init_data, uint data_size)
+clist_init_states(gx_device * dev, byte * init_data, size_t data_size)
 {
     gx_device_clist_writer * const cdev =
         &((gx_device_clist *)dev)->writer;
-    ulong state_size = cdev->nbands * (ulong) sizeof(gx_clist_state);
+    size_t state_size = cdev->nbands * sizeof(gx_clist_state);
     /* Align to the natural boundary for ARM processors, bug 689600 */
     intptr_t alignment = (-(intptr_t)init_data) & (sizeof(init_data) - 1);
 
@@ -356,11 +356,11 @@ clist_init_states(gx_device * dev, byte * init_data, uint data_size)
 
 /*
  * Initialize all the data allocations.  Requires: target.  Sets:
- * page_tile_cache_size, page_info.band_params.BandWidth,
+ * page_info.tile_cache_size, page_info.band_params.BandWidth,
  * page_info.band_params.BandBufferSpace, + see above.
  */
 static int
-clist_init_data(gx_device * dev, byte * init_data, uint data_size)
+clist_init_data(gx_device * dev, byte * init_data, size_t data_size)
 {
     gx_device_clist_writer * const cdev =
         &((gx_device_clist *)dev)->writer;
@@ -370,13 +370,13 @@ clist_init_data(gx_device * dev, byte * init_data, uint data_size)
         cdev->page_info.band_params.BandWidth = max(target->width, cdev->band_params.BandWidth);
     int band_height = cdev->band_params.BandHeight;
     bool page_uses_transparency = cdev->page_uses_transparency;
-    const uint band_space =
+    const size_t band_space =
     cdev->page_info.band_params.BandBufferSpace =
         (cdev->band_params.BandBufferSpace ?
          cdev->band_params.BandBufferSpace : data_size);
     byte *data = init_data;
-    uint size = band_space;
-    uint bits_size;
+    size_t size = band_space;
+    size_t bits_size;
     gx_device_memory bdev;
     gx_device *pbdev = (gx_device *)&bdev;
     int code;
@@ -405,14 +405,14 @@ clist_init_data(gx_device * dev, byte * init_data, uint data_size)
         cdev->disable_mask |= clist_disable_copy_alpha;
     if (dev_proc(cdev, open_device) == pattern_clist_open_device) {
         bits_size = data_size / 2;
-        cdev->page_line_ptrs_offset = 0;
+        cdev->page_info.line_ptrs_offset = 0;
     } else {
         if (band_height) {
             /*
              * The band height is fixed, so the band buffer requirement
              * is completely determined.
              */
-            ulong band_data_size;
+            size_t band_data_size;
             int adjusted;
 
             adjusted = (dev_proc(dev, dev_spec_op)(dev, gxdso_adjust_bandheight, NULL, band_height));
@@ -466,7 +466,7 @@ clist_init_data(gx_device * dev, byte * init_data, uint data_size)
         }
         /* The above calculated bits_size's include space for line ptrs. What is
          * the offset for the line_ptrs within the buffer? */
-        if (gdev_mem_bits_size(&bdev, band_width, band_height, &cdev->page_line_ptrs_offset) < 0)
+        if (gdev_mem_bits_size(&bdev, band_width, band_height, &cdev->page_info.line_ptrs_offset) < 0)
             return_error(gs_error_VMerror);
     }
     cdev->pdf14_trans_group_level = -1;	/* to prevent any initial op except PUSH_DEVICE */
@@ -477,7 +477,7 @@ clist_init_data(gx_device * dev, byte * init_data, uint data_size)
             pbdev->finalize(pbdev);
         return code;
     }
-    cdev->page_tile_cache_size = bits_size;
+    cdev->page_info.tile_cache_size = bits_size;
     data += bits_size;
     size -= bits_size;
     code = clist_init_bands(dev, &bdev, size, band_width, band_height);
@@ -609,7 +609,7 @@ clist_emit_page_header(gx_device *dev)
 static void
 clist_reset_page(gx_device_clist_writer *cwdev)
 {
-    cwdev->page_bfile_end_pos = 0;
+    cwdev->page_info.bfile_end_pos = 0;
 }
 
 /* Open the device's bandfiles */
@@ -623,19 +623,19 @@ clist_open_output_file(gx_device *dev)
 
     if (cdev->do_not_open_or_close_bandfiles)
         return 0; /* external bandfile open/close managed externally */
-    cdev->page_cfile = 0;       /* in case of failure */
-    cdev->page_bfile = 0;       /* ditto */
+    cdev->page_info.cfile = 0;       /* in case of failure */
+    cdev->page_info.bfile = 0;       /* ditto */
     code = clist_init(dev);
     if (code < 0)
         return code;
     snprintf(fmode, sizeof(fmode), "w+%s", gp_fmode_binary_suffix);
-    cdev->page_cfname[0] = 0;   /* create a new file */
-    cdev->page_bfname[0] = 0;   /* ditto */
+    cdev->page_info.cfname[0] = 0;   /* create a new file */
+    cdev->page_info.bfname[0] = 0;   /* ditto */
     clist_reset_page(cdev);
-    if ((code = cdev->page_info.io_procs->fopen(cdev->page_cfname, fmode, &cdev->page_cfile,
+    if ((code = cdev->page_info.io_procs->fopen(cdev->page_info.cfname, fmode, &cdev->page_info.cfile,
                             cdev->bandlist_memory, cdev->bandlist_memory,
                             true)) < 0 ||
-        (code = cdev->page_info.io_procs->fopen(cdev->page_bfname, fmode, &cdev->page_bfile,
+        (code = cdev->page_info.io_procs->fopen(cdev->page_info.bfname, fmode, &cdev->page_info.bfile,
                             cdev->bandlist_memory, cdev->bandlist_memory,
                             false)) < 0
         ) {
@@ -788,21 +788,21 @@ clist_finish_page(gx_device *dev, bool flush)
         crdev->icc_table = NULL;
     }
     if (flush) {
-        if (cdev->page_cfile != 0) {
-            code = cdev->page_info.io_procs->rewind(cdev->page_cfile, true, cdev->page_cfname);
+        if (cdev->page_info.cfile != 0) {
+            code = cdev->page_info.io_procs->rewind(cdev->page_info.cfile, true, cdev->page_info.cfname);
             if (code < 0) return code;
         }
-        if (cdev->page_bfile != 0) {
-            code = cdev->page_info.io_procs->rewind(cdev->page_bfile, true, cdev->page_bfname);
+        if (cdev->page_info.bfile != 0) {
+            code = cdev->page_info.io_procs->rewind(cdev->page_info.bfile, true, cdev->page_info.bfname);
             if (code < 0) return code;
         }
         cdev->page_info.bfile_end_pos = 0;
         clist_reset_page(cdev);
     } else {
-        if (cdev->page_cfile != 0)
-            cdev->page_info.io_procs->fseek(cdev->page_cfile, 0L, SEEK_END, cdev->page_cfname);
-        if (cdev->page_bfile != 0)
-            cdev->page_info.io_procs->fseek(cdev->page_bfile, 0L, SEEK_END, cdev->page_bfname);
+        if (cdev->page_info.cfile != 0)
+            cdev->page_info.io_procs->fseek(cdev->page_info.cfile, 0L, SEEK_END, cdev->page_info.cfname);
+        if (cdev->page_info.bfile != 0)
+            cdev->page_info.io_procs->fseek(cdev->page_info.bfile, 0L, SEEK_END, cdev->page_info.bfname);
     }
     code = clist_init(dev);             /* reinitialize */
     if (code >= 0)
@@ -847,35 +847,35 @@ clist_end_page(gx_device_clist_writer * cldev)
              */
             memset(&cb, 0, sizeof(cb)); /* Zero the block, including any padding */
             cb.band_min = cb.band_max = cmd_band_end;
-            cb.pos = (cldev->page_cfile == 0 ? 0 : cldev->page_info.io_procs->ftell(cldev->page_cfile));
+            cb.pos = (cldev->page_info.cfile == 0 ? 0 : cldev->page_info.io_procs->ftell(cldev->page_info.cfile));
             if_debug3m('l', cldev->memory, "[l]writing end for bands (%d,%d) at %"PRId64"\n",
                        cb.band_min, cb.band_max, cb.pos);
-            code = cldev->page_info.io_procs->fwrite_chars(&cb, sizeof(cb), cldev->page_bfile);
+            code = cldev->page_info.io_procs->fwrite_chars(&cb, sizeof(cb), cldev->page_info.bfile);
             if (code > 0)
                 code = 0;
         }
     }
     if (code >= 0) {
         ecode |= code;
-        cldev->page_bfile_end_pos = cldev->page_info.io_procs->ftell(cldev->page_bfile);
+        cldev->page_info.bfile_end_pos = cldev->page_info.io_procs->ftell(cldev->page_info.bfile);
     } else
         ecode = code;
 
     /* Reset warning margin to 0 to release reserve memory if mem files */
-    if (cldev->page_bfile != 0)
-        cldev->page_info.io_procs->set_memory_warning(cldev->page_bfile, 0);
-    if (cldev->page_cfile != 0)
-        cldev->page_info.io_procs->set_memory_warning(cldev->page_cfile, 0);
+    if (cldev->page_info.bfile != 0)
+        cldev->page_info.io_procs->set_memory_warning(cldev->page_info.bfile, 0);
+    if (cldev->page_info.cfile != 0)
+        cldev->page_info.io_procs->set_memory_warning(cldev->page_info.cfile, 0);
 
 #ifdef DEBUG
     if (gs_debug_c('l') | gs_debug_c(':')) {
         if (cb.pos <= 0xFFFFFFFF)
             dmlprintf2(cldev->memory, "[:]clist_end_page at cfile=%lu, bfile=%lu\n",
-                  (unsigned long)cb.pos, (unsigned long)cldev->page_bfile_end_pos);
+                  (unsigned long)cb.pos, (unsigned long)cldev->page_info.bfile_end_pos);
         else
             dmlprintf3(cldev->memory, "[:]clist_end_page at cfile=%lu%0lu, bfile=%lu\n",
                 (unsigned long) (cb.pos >> 32), (unsigned long) (cb.pos & 0xFFFFFFFF),
-                (unsigned long)cldev->page_bfile_end_pos);
+                (unsigned long)cldev->page_info.bfile_end_pos);
     }
 #endif
     if (cldev->page_uses_transparency && gs_debug[':']) {
@@ -1049,7 +1049,7 @@ int64_t
 clist_icc_addprofile(gx_device_clist_writer *cldev, cmm_profile_t *iccprofile, int *size)
 {
 
-    clist_file_ptr cfile = cldev->page_cfile;
+    clist_file_ptr cfile = cldev->page_info.cfile;
     int64_t fileposit;
 #if defined(DEBUG) || defined(PACIFY_VALGRIND)
     gsicc_serialized_profile_t profile_data = { 0 };
@@ -1201,7 +1201,7 @@ clist_writer_color_usage(gx_device_clist_writer *cldev, int y, int height,
 {
         gx_color_usage_bits or = 0;
         bool slow_rop = false;
-        int i, band_height = cldev->page_band_height;
+        int i, band_height = cldev->page_info.band_params.BandHeight;
         int start = y / band_height, end = (y + height) / band_height;
 
         for (i = start; i < end; ++i) {
@@ -1365,7 +1365,7 @@ clist_make_accum_device(gs_memory_t *mem, gx_device *target, const char *dname, 
             cwdev->height = target->height;
         }
         cwdev->LeadingEdge = target->LeadingEdge;
-        cwdev->is_planar = target->is_planar;
+        cwdev->num_planar_planes = target->num_planar_planes;
         cwdev->HWResolution[0] = target->HWResolution[0];
         cwdev->HWResolution[1] = target->HWResolution[1];
         cwdev->icc_cache_cl = NULL;
@@ -1444,10 +1444,10 @@ clist_mutate_to_clist(gx_device_clist_mutatable  *pdev,
                       bool                        bufferSpace_is_exact,
                 const gx_device_buf_procs_t      *buf_procs,
                       dev_proc_dev_spec_op(dev_spec_op),
-                      uint                        min_buffer_space)
+                      size_t                      min_buffer_space)
 {
     gx_device *target = (gx_device *)pdev;
-    uint space;
+    size_t space;
     int code;
     gx_device_clist *const pclist_dev = (gx_device_clist *)pdev;
     gx_device_clist_common * const pcldev = &pclist_dev->common;

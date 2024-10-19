@@ -69,8 +69,10 @@ ztype(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
     ref tnref;
-    int code = array_get(imemory, op, (long)r_btype(op - 1), &tnref);
+    int code;
 
+    check_op(2);
+    code = array_get(imemory, op, (long)r_btype(op - 1), &tnref);
     if (code < 0)
         return code;
     if (!r_has_type(&tnref, t_name)) {
@@ -248,6 +250,7 @@ zcvi(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     float fval;
 
+    check_op(1);
     switch (r_type(op)) {
         case t_integer:
             return 0;
@@ -267,6 +270,11 @@ zcvi(i_ctx_t *i_ctx_p)
                     code = gs_note_error(gs_error_syntaxerror);
                 if (code < 0)
                     return code;
+                /* gs_scan_string_token() can relocate the operand stack if a
+                 * stack overflow occurs. If that happens then 'op' is no
+                 * longer valid, so reload it now just in case.
+                 */
+                op = osp;
                 switch (r_type(&token)) {
                     case t_integer:
                         *op = token;
@@ -302,6 +310,7 @@ zcvn(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(1);
     check_read_type(*op, t_string);
     return name_from_string(imemory, op, op);
 }
@@ -313,6 +322,7 @@ zcvr(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(1);
     switch (r_type(op)) {
         case t_integer:
         {
@@ -338,6 +348,11 @@ zcvr(i_ctx_t *i_ctx_p)
                     code = gs_note_error(gs_error_syntaxerror);
                 if (code < 0)
                     return code;
+                /* gs_scan_string_token() can relocate the operand stack if a
+                 * stack overflow occurs. If that happens then 'op' is no
+                 * longer valid, so reload it now just in case.
+                 */
+                op = osp;
                 switch (r_type(&token)) {
                     case t_integer:
                         make_real(op, (float)token.value.intval);
@@ -359,6 +374,7 @@ zcvrs(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     int radix;
 
+    check_op(2);
     check_type(op[-1], t_integer);
     if (op[-1].value.intval < 2 || op[-1].value.intval > 36)
         return_error(gs_error_rangecheck);
@@ -446,8 +462,8 @@ zcvs(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     int code;
 
-    check_write_type(*op, t_string);
     check_op(2);
+    check_write_type(*op, t_string);
     code = convert_to_string(imemory, op - 1, op);
     if (code >= 0)
         pop(1);
@@ -492,6 +508,7 @@ access_check(i_ctx_t *i_ctx_p,
     os_ptr op = osp;
     ref *aop;
 
+    check_op(1);
     switch (r_type(op)) {
         case t_dictionary:
             aop = dict_access_ref(op);

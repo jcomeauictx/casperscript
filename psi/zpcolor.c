@@ -95,6 +95,7 @@ zbuildpattern1(i_ctx_t *i_ctx_p)
     gs_client_color cc_instance;
     ref *pPaintProc;
 
+    check_op(2);
     code = read_matrix(imemory, op, &mat);
     if (code < 0)
         return code;
@@ -208,7 +209,7 @@ pattern_paint_prepare(i_ctx_t *i_ctx_p)
     ref *ppp;
     bool internal_accum = true;
 
-    check_estack(6);
+    check_estack(8);
     if (pgs->have_pattern_streams) {
         code = dev_proc(cdev, dev_spec_op)(cdev, gxdso_pattern_can_accum,
                                 pinst, pinst->id);
@@ -313,6 +314,10 @@ pattern_paint_prepare(i_ctx_t *i_ctx_p)
     ++esp;
     make_istruct(esp, 0, pdev);
     ++esp;
+    make_int(esp, imemory_save_level(iimemory));
+    ++esp;
+    make_int(esp, imemory_space(iimemory));
+    ++esp;
     /* Save operator stack depth in case PaintProc leaves junk on ostack. */
     make_int(esp, ref_stack_count(&o_stack));
     push_op_estack(pattern_paint_finish);
@@ -326,11 +331,17 @@ static int
 pattern_paint_finish(i_ctx_t *i_ctx_p)
 {
     int o_stack_adjust = ref_stack_count(&o_stack) - esp->value.intval;
-    gx_device_forward *pdev = r_ptr(esp - 1, gx_device_forward);
+    gx_device_forward *pdev = r_ptr(esp - 3, gx_device_forward);
     gs_pattern1_instance_t *pinst =
         (gs_pattern1_instance_t *)gs_currentcolor(igs->saved)->pattern;
     gx_device_pattern_accum const *padev = (const gx_device_pattern_accum *) pdev;
-    gs_pattern1_instance_t *pinst2 = r_ptr(esp - 2, gs_pattern1_instance_t);
+    gs_pattern1_instance_t *pinst2 = r_ptr(esp - 4, gs_pattern1_instance_t);
+    int orig_save_level = (esp - 2)->value.intval;
+    uint vmspace = (uint)(esp - 1)->value.intval;
+
+    if (vmspace !=  imemory_space(iimemory) || orig_save_level != imemory_save_level(iimemory_local)) {
+        return_error(gs_error_undefinedresult);
+    }
 
     if (pdev != NULL) {
         gx_color_tile *ctile;
@@ -380,7 +391,7 @@ pattern_paint_finish(i_ctx_t *i_ctx_p)
                 }
             }
         }
-        code = gx_pattern_cache_add_entry(igs, pdev, &ctile, igs);
+        code = gx_pattern_cache_add_entry(igs, pdev, &ctile);
         if (code < 0)
             return code;
     }
@@ -393,7 +404,7 @@ pattern_paint_finish(i_ctx_t *i_ctx_p)
          */
         pop(o_stack_adjust);
     }
-    esp -= 5;
+    esp -= 7;
     pattern_paint_cleanup_core(i_ctx_p, 0);
     return o_pop_estack;
 }
@@ -413,6 +424,12 @@ pattern_paint_cleanup_core(i_ctx_t *i_ctx_p, bool is_error)
         gs_pattern1_instance_t *pinst = (gs_pattern1_instance_t *)gs_currentcolor(igs->saved)->pattern;
     gs_pattern1_instance_t *pinst2 = r_ptr(esp + 3, gs_pattern1_instance_t);
     int code, i, ecode=0;
+    int orig_save_level = (esp + 5)->value.intval;
+    uint vmspace = (uint)(esp + 6)->value.intval;
+
+    if (vmspace !=  imemory_space(iimemory) || orig_save_level != imemory_save_level(iimemory_local)) {
+        return_error(gs_error_undefinedresult);
+    }
     /* If the PaintProc does one or more gsaves, then encounters an error, we can get
      * here with the graphics state stack not how we expect.
      * Hence we stored a reference to the pattern instance on the exec stack, and that

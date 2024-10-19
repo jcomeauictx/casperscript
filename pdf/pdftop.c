@@ -344,7 +344,7 @@ pdf_impl_process_eof(pl_interp_implementation_t *impl)
         gp_fclose(instance->scratch_file);
         instance->scratch_file = NULL;
         code = pdfi_process_pdf_file(ctx, instance->scratch_name);
-        unlink(instance->scratch_name);
+        gp_unlink(ctx->memory, instance->scratch_name);
         if (code < 0)
         {
             gs_catch(code, "cannot process PDF file");
@@ -629,6 +629,16 @@ pdf_impl_set_param(pl_interp_implementation_t *impl,
         }
         if (argis(param, "PreserveMarkedContent")) {
             code = plist_value_get_bool(&pvalue, &ctx->args.preservemarkedcontent);
+            if (code < 0)
+                return code;
+        }
+        if (argis(param, "PreserveEmbeddedFiles")) {
+            code = plist_value_get_bool(&pvalue, &ctx->args.preserveembeddedfiles);
+            if (code < 0)
+                return code;
+        }
+        if (argis(param, "PreserveDocView")) {
+            code = plist_value_get_bool(&pvalue, &ctx->args.preservedocview);
             if (code < 0)
                 return code;
         }

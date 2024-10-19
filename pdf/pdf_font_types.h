@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2023 Artifex Software, Inc.
+/* Copyright (C) 2019-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -87,7 +87,9 @@ typedef enum pdf_font_type_e {
     int64_t descflags; \
     pdf_obj *ToUnicode;            /* Name or stream (technically should be a stream, but we've seen Identity names */ \
     bool substitute; /* We need to know what a CIDFont is a substitute */ \
-    pdf_string *filename           /* If we read this from disk, this is the file it came from */
+    pdf_string *filename;          /* If we read this from disk, this is the file it came from */ \
+    font_proc_font_info((*default_font_info)); \
+    font_type orig_FontType
 
 #define pdf_font_common \
     pdf_font_base;\
@@ -96,7 +98,7 @@ typedef enum pdf_font_type_e {
     unsigned int LastChar;          /* For PDF up to 1.4 this may be absent for the base 14 */\
     double MissingWidth; \
     double *Widths;                 /* For PDF up to 1.4 this may be absent for the base 14 */\
-    pdf_array *Encoding             /* Array built from name or dictionary */\
+    pdf_array *Encoding             /* Array built from name or dictionary */
 
 
 /* The registry and ordering strings in gs_font_cid0_data are just references to
@@ -106,7 +108,7 @@ typedef enum pdf_font_type_e {
 #define pdf_cid_font_common \
     pdf_font_base;\
     pdf_dict *CIDSystemInfo; \
-    int64_t DW; \
+    double DW; \
     pdf_array *W; \
     pdf_array *DW2; \
     pdf_array *W2; \
@@ -194,6 +196,7 @@ typedef struct pdf_font_truetype_s {
     pdf_font_common;
     pdf_buffer *sfnt;
     pdfi_truetype_cmap cmap;
+    pdf_dict *post;
 } pdf_font_truetype;
 
 typedef struct pdf_cidfont_s {

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -74,7 +74,7 @@ halftone_callback(cal_halftone_data_t *ht, void *arg)
     gx_color_index dev_white = gx_device_white(dev);
     gx_color_index dev_black = gx_device_black(dev);
 
-    if (dev->is_planar) {
+    if (dev->num_planar_planes) {
         (*dev_proc(dev, copy_planes)) (dev, ht->data, ht->x + (ht->offset_x<<3), ht->raster,
             gx_no_bitmap_id, ht->x, ht->y, ht->w, ht->h,
             ht->plane_raster);
@@ -170,7 +170,7 @@ gs_image_class_3_mono(gx_image_enum * penum, irender_proc_t *render_fn)
     gsicc_rendering_param_t rendering_params;
     cmm_dev_profile_t *dev_profile;
     bool dev_color_ok = false;
-    bool is_planar_dev = penum->dev->is_planar;
+    bool is_planar_dev = penum->dev->num_planar_planes;
 
     if (penum->spp == 1) {
         /* At this point in time, only use the ht approach if our device
@@ -402,7 +402,7 @@ image_render_mono(gx_image_enum * penum, const byte * buffer, int data_x,
             code = (*remap_color)(&cc, pcs, pdevc, pgs, dev, gs_color_select_source);\
             if (code < 0)\
                 goto err;\
-            pdevc->tag = (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);\
+            pdevc->tag = device_current_tag(dev);\
         }\
     } else if (!color_is_pure(pdevc)) {\
         code = gx_color_load_select(pdevc, pgs, dev, gs_color_select_source);\
@@ -420,7 +420,7 @@ image_render_mono(gx_image_enum * penum, const byte * buffer, int data_x,
     fixed xrun;                 /* x at start of run */
     byte run;           /* run value */
     int htrun = (masked ? 255 : -2);            /* halftone run value */
-    int code = 0;
+    int i, code = 0;
 
     if (h == 0)
         return 0;
@@ -978,12 +978,27 @@ image_render_mono(gx_image_enum * penum, const byte * buffer, int data_x,
 
     }
 #undef xl
-    if (code >= 0)
-        return 1;
+    if (code >= 0) {
+        code = 1;
+        goto done;
+    }
     /* Save position if error, in case we resume. */
 err:
     penum->used.x = rsrc - psrc_initial;
     penum->used.y = 0;
+done:
+    /* Since dev_color.binary.b_tile is just a pointer to an entry in the halftone tile "cache"
+       we cannot leave it set in case the interpeter changes the halftone
+       (whilst it shouldn't do it, it is possible for Postscript image data source
+       procedure to execute setcreen or similar). This also doesn't really adversely
+       affect performance, as we'll call gx_color_load_select() for all the samples
+       from the next buffer, which will NULL the b_tile pointer anyway (it only gets
+       set when we actually try to draw with it.
+    */
+    for (i = 0; i < 256; i++) {
+        if (gx_dc_is_binary_halftone(&penum->clues[i].dev_color))
+            penum->clues[i].dev_color.colors.binary.b_tile = NULL;
+    }
     return code;
 }
 

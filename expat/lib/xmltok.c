@@ -48,12 +48,14 @@
 
 #include <stddef.h>
 #include <string.h> /* memcpy */
-#if 0
+
+#if defined(_WIN32) && (!defined(_MSC_VER) || _MSC_VER < 1910)
+typedef int bool;
+#define true (bool)1
+#define false (bool)0
+#else
 #include <stdbool.h>
 #endif
-typedef int bool;
-#define true 1
-#define false 0
 
 #ifdef _WIN32
 #  include "winconfig.h"
