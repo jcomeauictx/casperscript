@@ -15,6 +15,9 @@ XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
 XCFLAGS += -DSYSLOG_DEBUGGING
 XCFLAGS += -DUSE_LIBREADLINE
+# fix problem with off64_t after merge with artifex-ghostpdl
+# https://stackoverflow.com/a/34853360/493161
+XCFLAGS += -Doff64_t=__off64_t
 # CHA prompt was an attempt to fix prompt on Termux, but it fails on xterm
 XCFLAGS += -DUSE_CHA_PROMPT
 #XCFLAGS += -DTEST_ZCASPER=1
