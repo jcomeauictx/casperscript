@@ -70,6 +70,10 @@ casperdict begin
     alias currentname to newname) docstring {
     exch load def
   } bind def
+  /printstack (  -
+    one-line version of pstack) docstring {
+    count array astore dup == aload pop
+  } bind def
   /strlen {  % anystring - strlen  % length to first null (\000)
     % if no nulls, entire length of string (same as `length`)
     (\000) search {3 1 roll pop pop length} {length} ifelse
