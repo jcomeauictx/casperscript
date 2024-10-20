@@ -38,13 +38,11 @@ endif
 all: $(CS_MAKEFILES)
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
-	if [ \! -e bin/cs.exe ]; then \
-		cd bin && ln -s $(GSNAME) cs.exe; \
-	fi
+	cd bin && ln -sf $(GSNAME) cs.exe
 	# make the same symlinks as for install, but in $(CWD)/bin
-	# we don't know what GSNAME is, so we just try 'em all and ignore errors
+	# NOTE: we're counting on GSNAME being unique per build!
 	cd bin && for symlink in cs gs ccs bccs; do \
-	 ln -s $(GSNAME) $$symlink || true; \
+	 ln -sf $(GSNAME) $$symlink; \
 	done
 install: $(CS_MAKEFILES)
 	make -f $< install
@@ -53,9 +51,9 @@ install: $(CS_MAKEFILES)
 	# cs "casperscript"
 	# ccs "console cs (cs -dNODISPLAY)"
 	# bccs "batch console cs"
-	# don't overwrite existing filenames but don't fail either (|| true)
+	# NOTE: GSNAME is unique for each build, so overwrite all aliases
 	cd $(INSTALL_PREFIX)/bin && for symlink in cs gs ccs bccs; do \
-	 ln -s $(GSNAME) $$symlink || true; \
+	 ln -sf $(GSNAME) $$symlink; \
 	done
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
