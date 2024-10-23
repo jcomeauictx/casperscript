@@ -85,6 +85,13 @@ casperdict begin
     % stack now: buffer string buffer offset
     3 2 roll putinterval
   } bind def
+  /inc {  % name -
+    % increments variable, e.g. `/a 1 def /a inc a =` shows `2`
+    dup cvx exec 1 add def
+  } bind def
+  /zero {  % name -
+    0 def
+  } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
