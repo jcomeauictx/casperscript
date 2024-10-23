@@ -92,6 +92,12 @@ casperdict begin
   /zero {  % name -
     0 def
   } bind def
+  /ord {  % numeric value of single-character string
+    0 get
+  } bind def
+  /chr {  % single-character string from number
+    1 string dup 0 4 -1 roll put
+  } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
