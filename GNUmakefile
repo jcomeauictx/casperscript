@@ -26,8 +26,11 @@ XTRALIBS += $(CASPERLIBS)
 VDIFF_TESTDIRS := reference latest
 VDIFF_TESTFILE ?= cjk/iso2022.ps.1.pnm
 VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
+ifeq ($(SHOWENV),)
 export CASPER XTRALIBS
-export VDIFF_TESTFILES GSNAME # for `make env` check
+else
+export
+endif
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -60,7 +63,11 @@ Makefile: | configure
 configure: | autogen.sh
 	./autogen.sh $(CONFIG_ARGS)
 env:
+ifeq ($(SHOWENV),)
+	$(MAKE) SHOWENV=1 $@
+else
 	$@
+endif
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
