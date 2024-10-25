@@ -737,6 +737,7 @@ tiffsep_initialize_device_procs(gx_device *dev)
 {
     gdev_prn_initialize_device_procs(dev);
 
+    set_dev_proc(dev, output_page, gdev_prn_output_page_seekable);
     set_dev_proc(dev, open_device, tiffsep_prn_open);
     set_dev_proc(dev, close_device, tiffsep_prn_close);
     set_dev_proc(dev, map_color_rgb, tiffsep_decode_color);
@@ -1208,7 +1209,7 @@ tiffsep1_prn_open(gx_device * pdev)
     pdev->color_info.depth = bpc_to_depth(pdev->color_info.num_components,
                                           pdev_sep->devn_params.bitspercomponent);
     pdev->color_info.separable_and_linear = GX_CINFO_SEP_LIN;
-    code = gdev_prn_open_planar(pdev, true);
+    code = gdev_prn_open_planar(pdev, pdev->color_info.num_components);
     while (pdev->child)
         pdev = pdev->child;
     ppdev = (gx_device_printer *)pdev;
@@ -1487,15 +1488,17 @@ create_separation_file_name(tiffsep_device * pdev, char * buffer,
     buffer[base_filename_length] = 0;  /* terminate the string */
 
     if (sep_num < pdev->devn_params.num_std_colorant_names) {
-        if (max_size < strlen(pdev->devn_params.std_colorant_names[sep_num]))
+        if ((max_size - base_filename_length - 1) < strlen(pdev->devn_params.std_colorant_names[sep_num]))
             return_error(gs_error_rangecheck);
         strcat(buffer, pdev->devn_params.std_colorant_names[sep_num]);
     }
     else {
         sep_num -= pdev->devn_params.num_std_colorant_names;
         if (use_sep_name) {
+            if ((max_size - SUFFIX_SIZE - 3 - base_filename_length) < pdev->devn_params.separations.names[sep_num].size)
+                return_error(gs_error_rangecheck);
             copy_separation_name(pdev, buffer + base_filename_length,
-                                max_size - SUFFIX_SIZE - 2, sep_num, 1);
+                                max_size - SUFFIX_SIZE - 2 - base_filename_length, sep_num, 1);
         } else {
                 /* Max of 10 chars in %d format */
             if (max_size < base_filename_length + 11)
@@ -1674,7 +1677,7 @@ tiffsep_prn_open(gx_device * pdev)
     pdev->color_info.depth = pdev->color_info.num_components *
                              pdev_sep->devn_params.bitspercomponent;
     pdev->color_info.separable_and_linear = GX_CINFO_SEP_LIN;
-    code = gdev_prn_open_planar(pdev, true);
+    code = gdev_prn_open_planar(pdev, pdev->color_info.num_components);
     if (code < 0)
         return code;
     while (pdev->child)
@@ -1712,17 +1715,16 @@ tiffsep_close_sep_file(tiffsep_device *tfdev, const char *fn, int comp_num)
 static int
 tiffsep_close_comp_file(tiffsep_device *tfdev, const char *fn)
 {
-    int code;
+    int code = 0;
 
     if (tfdev->tiff_comp) {
         TIFFClose(tfdev->tiff_comp);
         tfdev->tiff_comp = NULL;
     }
-
-    code = gx_device_close_output_file((gx_device *)tfdev,
-                                       fn,
-                                       tfdev->comp_file);
-    tfdev->comp_file = NULL;
+    if (tfdev->comp_file) {
+        code = gx_device_close_output_file((gx_device *)tfdev, fn, tfdev->comp_file);
+        tfdev->comp_file = NULL;
+    }
 
     return code;
 }
@@ -1740,11 +1742,9 @@ tiffsep_prn_close(gx_device * pdev)
     gsicc_free_link_dev(pdevn->icclink);
     pdevn->icclink = NULL;
 
-    if (pdevn->tiff_comp) {
-        void *t = TIFFClientdata(pdevn->tiff_comp);
-        TIFFCleanup(pdevn->tiff_comp);
-        gs_free(pdev->memory, t, sizeof(tifs_io_private), 1, "tiffsep_prn_close");
-        pdevn->tiff_comp = NULL;
+    code = tiffsep_close_comp_file(pdevn, pdevn->fname);
+    if (code < 0) {
+        goto done;
     }
     code = gdev_prn_close(pdev);
     if (code < 0) {
@@ -2065,6 +2065,7 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
     char *name = NULL;
     int save_depth = pdev->color_info.depth;
     int save_numcomps = pdev->color_info.num_components;
+    int save_planes = pdev->num_planar_planes;
     const char *fmt;
     gs_parsed_file_name_t parsed;
     int plane_count = 0;  /* quiet compiler */
@@ -2183,6 +2184,7 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
 
             pdev->color_info.depth = dst_bpc;     /* Create files for 8 bit gray */
             pdev->color_info.num_components = 1;
+            pdev->num_planar_planes = 1;
             if (!tfdev->UseBigTIFF && tfdev->Compression == COMPRESSION_NONE &&
                 height * 8 / dst_bpc > ((unsigned long)0xFFFFFFFF - (file ? gp_ftell(file) : 0)) / width) /* note width is never 0 in print_page */
             {
@@ -2195,6 +2197,7 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
             tiff_set_gray_fields(pdev, tfdev->tiff[comp_num], dst_bpc, tfdev->Compression, tfdev->MaxStripSize);
             pdev->color_info.depth = save_depth;
             pdev->color_info.num_components = save_numcomps;
+            pdev->num_planar_planes = save_planes;
             if (code < 0) {
                 goto done;
             }
@@ -2245,7 +2248,7 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
             if (num_order > 0) {
                 /* In this case, there was a specification for a separation
                    color order, which indicates what colorants we will
-                   actually creat individual separation files for.  We need
+                   actually create individual separation files for.  We need
                    to allocate for the standard colorants.  This is due to the
                    fact that even when we specify a single spot colorant, we
                    still create the composite CMYK output file. */
@@ -2288,7 +2291,7 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
                 }
             } else {
                 /* Sep color order number was not specified so just render all
-                   the  planes that we can */
+                   the planes that we can */
                 for (comp_num = 0; comp_num < num_comp; comp_num++) {
                     planes[comp_num] = gs_alloc_bytes(pdev->memory, raster_plane,
                                                     "tiffsep_print_page");
@@ -2299,8 +2302,14 @@ tiffsep_print_page(gx_device_printer * pdev, gp_file * file)
                     }
                 }
             }
+            /* Bug 707365: The downscaler always needs to be told to produce all the
+             * components. If SeparationOrder and/or SeparationColorNames are at play
+             * then ncomp may be smaller than this - we might only be wanting to produce
+             * a single color component - but we have no way of telling the downscaler
+             * which ones we want. So always render all the components. This is actually
+             * what we had been doing pre the downscaler refactor anyway! */
             code = gx_downscaler_init_planar(&ds, (gx_device *)pdev,
-                                             8, dst_bpc, num_comp,
+                                             8, dst_bpc, tfdev->color_info.num_components,
                                              &tfdev->downscale,
                                              &params);
             if (code < 0)
@@ -2377,7 +2386,7 @@ cleanup:
         if (!tfdev->NoSeparationFiles) {
             for (comp_num = 0; comp_num < num_comp; comp_num++) {
                 TIFFWriteDirectory(tfdev->tiff[comp_num]);
-                if (fmt) {
+                if (fmt || tfdev->ReopenPerPage) {
                     int sep_num = tfdev->devn_params.separation_order_map[comp_num];
 
                     code = create_separation_file_name(tfdev, name, gp_file_name_sizeof, sep_num, false);
@@ -2422,12 +2431,11 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
     int num_order = tfdev->devn_params.num_separation_order_names;
     int num_spot = tfdev->devn_params.separations.num_separations;
     int num_comp, comp_num, code = 0, code1 = 0;
-    bool double_f = false;
-    int base_filename_length = length_base_file_name((tiffsep_device *)tfdev, &double_f);
     short map_comp_to_sep[GX_DEVICE_COLOR_MAX_COMPONENTS];
     char *name = NULL;
     int save_depth = pdev->color_info.depth;
     int save_numcomps = pdev->color_info.num_components;
+    int save_planes = pdev->num_planar_planes;
     const char *fmt;
     gs_parsed_file_name_t parsed;
     int non_encodable_count = 0;
@@ -2439,20 +2447,6 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
 
     build_comp_to_sep_map((tiffsep_device *)tfdev, map_comp_to_sep);
 
-    /* Print the names of the spot colors */
-    if (num_order == 0) {
-        for (comp_num = 0; comp_num < num_spot; comp_num++) {
-            copy_separation_name((tiffsep_device *)tfdev, name,
-                gp_file_name_sizeof - base_filename_length - SUFFIX_SIZE, comp_num, 0);
-            dmlprintf1(pdev->memory, "%%%%SeparationName: %s", name);
-            dmlprintf4(pdev->memory, " CMYK = [ %d %d %d %d ]\n",
-                tfdev->equiv_cmyk_colors.color[comp_num].c,
-                tfdev->equiv_cmyk_colors.color[comp_num].m,
-                tfdev->equiv_cmyk_colors.color[comp_num].y,
-                tfdev->equiv_cmyk_colors.color[comp_num].k
-            );
-        }
-    }
     /*
      * Since different pages may have different spot colors, if this is for a
      * page after Page 1, we require that each output file is unique with a "fmt"
@@ -2545,10 +2539,12 @@ tiffsep1_print_page(gx_device_printer * pdev, gp_file * file)
 
         pdev->color_info.depth = 1;
         pdev->color_info.num_components = 1;
+        pdev->num_planar_planes = 1;
         code = tiff_set_fields_for_printer(pdev, tfdev->tiff[comp_num], 1, 0, tfdev->write_datetime);
         tiff_set_gray_fields(pdev, tfdev->tiff[comp_num], 1, tfdev->Compression, tfdev->MaxStripSize);
         pdev->color_info.depth = save_depth;
         pdev->color_info.num_components = save_numcomps;
+        pdev->num_planar_planes = save_planes;
         if (code < 0) {
             goto done;
         }

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -202,7 +202,7 @@ typedef struct {
 struct pdf_font_resource_s {
     pdf_resource_common(pdf_font_resource_t);
     font_type FontType;		/* copied from font, if any */
-    long XUID;
+    int64_t XUID;
     pdf_font_write_contents_proc_t write_contents;
     gs_string BaseFont;		/* (not used for Type 3) */
     pdf_font_descriptor_t *FontDescriptor; /* (not used for Type 0, Type 3, */
@@ -241,7 +241,7 @@ struct pdf_font_resource_s {
              */
             char Encoding_name[max( /* standard name or <id> 0 R */
                       17,	/* /UniJIS-UCS2-HW-H */
-                      sizeof(long) * 8 / 3 + 1 + 4 /* <id> 0 R */
+                      sizeof(int64_t) * 8 / 3 + 1 + 4 /* <id> 0 R */
                       ) + 1	/* \0 terminator */
             ];
             byte *CMapName_data;
@@ -255,7 +255,7 @@ struct pdf_font_resource_s {
         struct /*cidfont*/ {
 
             /* [D]W[2] is Widths. */
-            long CIDSystemInfo_id; /* (written when font is allocated) */
+            int64_t CIDSystemInfo_id; /* (written when font is allocated) */
             ushort *CIDToGIDMap; /* (CIDFontType 2 only) [count] */
             unsigned int CIDToGIDMapLength;
             gs_id glyphshow_font_id;
@@ -426,7 +426,7 @@ gs_font_base *pdf_font_resource_font(const pdf_font_resource_t *pdfont, bool com
  */
 pdf_font_embed_t pdf_font_embed_status(gx_device_pdf *pdev, gs_font *font,
                                        int *pindex,
-                                       pdf_char_glyph_pair_t *pairs, int num_glyphs);
+                                       pdf_char_glyph_pair_t *pairs, int num_glyphs, font_type *orig_type);
 
 /*
  * Compute the BaseFont of a font according to the algorithm described

@@ -59,7 +59,10 @@ zshow(i_ctx_t *i_ctx_p)
     es_ptr ep = esp;        /* Save in case of error */
     os_ptr op = osp;
     gs_text_enum_t *penum = NULL;
-    int code = op_show_setup(i_ctx_p, op);
+    int code;
+
+    check_op(1);
+    code = op_show_setup(i_ctx_p, op);
 
     if (code != 0 ||
         (code = gs_show_begin(igs, op->value.bytes, r_size(op), imemory_local, &penum)) < 0)
@@ -95,7 +98,10 @@ zashow(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     gs_text_enum_t *penum = NULL;
     double axy[2];
-    int code = num_params(op - 1, 2, axy);
+    int code;
+
+    check_op(3);
+    code = num_params(op - 1, 2, axy);
 
     if (code < 0 ||
         (code = op_show_setup(i_ctx_p, op)) != 0 ||
@@ -132,6 +138,7 @@ widthshow_aux(i_ctx_t *i_ctx_p, bool single_byte_space)
     double cxy[2];
     int code;
 
+    check_op(4);
     if ((code = op_show_setup(i_ctx_p, op)) != 0 )
         return code;
     check_type(op[-1], t_integer);
@@ -189,25 +196,6 @@ zwidthshow(i_ctx_t *i_ctx_p)
     return(widthshow_aux(i_ctx_p, false));
 }
 
-/* For PDF word spacing we need to identify strictly
-   single byte character codes of the value 32, and
-   this conflicts with Postscript's widthshow character
-   code matching, where any character code, regardless of
-   its length will match. For example, in widthshow, a
-   character code of <0032> will match a parameter value
-   of 32, but for PDF word spacing, <0032> will not match
-   the space character, and won't have the word spacing
-   applied, but <32> will.
-   Hence, we have a couple of custom operators to cover
-   the different requirements.
-*/
-/* <cx> <cy> <char> <string> .pdfwidthshow - */
-static int
-zpdfwidthshow(i_ctx_t *i_ctx_p)
-{
-    return(widthshow_aux(i_ctx_p, true));
-}
-
 static int
 awidthshow_aux(i_ctx_t *i_ctx_p, bool single_byte_space)
 {
@@ -217,6 +205,7 @@ awidthshow_aux(i_ctx_t *i_ctx_p, bool single_byte_space)
     double cxy[2], axy[2];
     int code;
 
+    check_op(6);
     if ((code = op_show_setup(i_ctx_p, op)) != 0 )
         return code;
     if ((code = num_params(op - 1, 2, axy)) < 0 )
@@ -270,13 +259,6 @@ zawidthshow(i_ctx_t *i_ctx_p)
     return(awidthshow_aux(i_ctx_p, false));
 }
 
-/* <cx> <cy> <char> <ax> <ay> <string> .pdfawidthshow - */
-static int
-zpdfawidthshow(i_ctx_t *i_ctx_p)
-{
-    return(awidthshow_aux(i_ctx_p, true));
-}
-
 /* <proc> <string> kshow - */
 static int
 zkshow(i_ctx_t *i_ctx_p)
@@ -286,6 +268,7 @@ zkshow(i_ctx_t *i_ctx_p)
     gs_text_enum_t *penum = NULL;
     int code;
 
+    check_op(2);
     check_read_type(*op, t_string);
     check_proc(op[-1]);
     /*
@@ -352,7 +335,10 @@ zstringwidth(i_ctx_t *i_ctx_p)
     es_ptr ep = esp;        /* Save in case of error */
     os_ptr op = osp;
     gs_text_enum_t *penum = NULL;
-    int code = op_show_setup(i_ctx_p, op);
+    int code;
+
+    check_op(1);
+    code = op_show_setup(i_ctx_p, op);
 
     if (code != 0 ||
         (code = gs_stringwidth_begin(igs, op->value.bytes, r_size(op),
@@ -360,6 +346,7 @@ zstringwidth(i_ctx_t *i_ctx_p)
         return code;
     *(op_proc_t *)&penum->enum_client_data = zstringwidth;
     if ((code = op_show_finish_setup(i_ctx_p, penum, 1, finish_stringwidth)) < 0) {
+        rc_decrement(penum, "error in zstringwidth");
         /* We must restore the exec stack pointer back to the point where we entered, in case
          * we 'retry' the operation (eg having increased the operand stack).
          * We'll rely on gc to handle the enumerator.
@@ -390,6 +377,7 @@ zchar_path(i_ctx_t *i_ctx_p, op_proc_t proc,
     gs_text_enum_t *penum = NULL;
     int code;
 
+    check_op(2);
     check_type(*op, t_boolean);
     code = op_show_setup(i_ctx_p, op - 1);
     if (code != 0 ||
@@ -437,7 +425,10 @@ zsetcachedevice(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     double wbox[6];
     gs_text_enum_t *penum = op_show_find(i_ctx_p);
-    int code = num_params(op, 6, wbox);
+    int code;
+
+    check_op(6);
+    code = num_params(op, 6, wbox);
 
     if (penum == 0)
         return_error(gs_error_undefined);
@@ -461,7 +452,10 @@ zsetcachedevice2(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     double wbox[10];
     gs_text_enum_t *penum = op_show_find(i_ctx_p);
-    int code = num_params(op, 10, wbox);
+    int code;
+
+    check_op(10);
+    code = num_params(op, 10, wbox);
 
     if (penum == 0)
         return_error(gs_error_undefined);
@@ -487,7 +481,10 @@ zsetcharwidth(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     double width[2];
     gs_text_enum_t *penum = op_show_find(i_ctx_p);
-    int code = num_params(op, 2, width);
+    int code;
+
+    check_op(2);
+    code = num_params(op, 2, width);
 
     if (penum == 0)
         return_error(gs_error_undefined);
@@ -511,6 +508,7 @@ zfontbbox(i_ctx_t *i_ctx_p)
     double bbox[4];
     int code;
 
+    check_op(1);
     check_type(*op, t_dictionary);
     check_dict_read(*op);
     code = font_bbox_param(imemory, op, bbox);
@@ -557,8 +555,6 @@ const op_def zchar_a_op_defs[] =
     {"4widthshow", zwidthshow},
                 /* Extensions */
     {"1.fontbbox", zfontbbox},
-    {"6.pdfawidthshow", zpdfawidthshow},
-    {"4.pdfwidthshow", zpdfwidthshow},
 
                 /* Internal operators */
     {"0%finish_show", finish_show},
@@ -842,6 +838,10 @@ op_show_continue_dispatch(i_ctx_t *i_ctx_p, int npop, int code)
                 else
                   return code;
             }
+        case gs_error_Remap_Color:
+            {
+                return code;
+            }
         default:		/* error */
 err:
             if (code >= 0)
@@ -892,11 +892,15 @@ gs_text_enum_t *
 op_show_find(i_ctx_t *i_ctx_p)
 {
     uint index = op_show_find_index(i_ctx_p);
+    ref *o;
 
     if (index == 0)
         return 0;		/* no mark */
-    return r_ptr(ref_stack_index(&e_stack, index - (snumpush - 1)),
-                 gs_text_enum_t);
+    o = ref_stack_index(&e_stack, index - (snumpush - 1));
+    if (o == NULL)
+        return 0;
+
+    return r_ptr(o, gs_text_enum_t);
 }
 
 /*
@@ -933,9 +937,13 @@ op_show_return_width(i_ctx_t *i_ctx_p, uint npop, double *pwidth)
 {
     uint index = op_show_find_index(i_ctx_p);
     es_ptr ep = (es_ptr) ref_stack_index(&e_stack, index - (snumpush - 1));
-    int code = gs_text_setcharwidth(esenum(ep), pwidth);
+    int code = 0;
     uint ocount, dsaved, dcount;
 
+    if (ep == NULL)
+        return_error(gs_error_stackunderflow);
+
+    code = gs_text_setcharwidth(esenum(ep), pwidth);
     if (code < 0)
         return code;
     /* Restore the operand and dictionary stacks. */
@@ -1023,7 +1031,11 @@ op_show_restore(i_ctx_t *i_ctx_p, bool for_error)
     if (penum->k_text_release) {
         gsicc_restore_blacktextvec(igs, true);
     }
-
+    /* Because the garbager, in most places, works on clumps, taking no
+       account of where the top of the exec stack is, we can't leave a
+       dangling pointer to this enumerator when we're about to free it.
+     */
+    make_null(ep);
     gs_text_release(NULL, penum, "op_show_restore");
     return code;
 }

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -201,7 +201,7 @@ cmykog_open(gx_device * pdev)
 
   /* Finally, we open the device requesting the underlying buffers to be
    * planar, rather than chunky. See (1) at the top of this file. */
-  return gdev_prn_open_planar(pdev, true);
+  return gdev_prn_open_planar(pdev, pdev->color_info.num_components);
 }
 
 /* Close the printer */
@@ -709,7 +709,7 @@ prn_done:
       if (arg->spot_file[i] != NULL)
         gp_fclose(arg->spot_file[i]);
       if(arg->spot_name[i][0])
-        unlink(arg->spot_name[i]);
+        gp_unlink(pdev->memory, arg->spot_name[i]);
     }
 #endif
     gs_free_object(pdev->memory, psd_ctx, "cmykog_print_page psd_ctx");
@@ -775,7 +775,7 @@ const gx_device_cmykog gs_psdcmykog_device =
   /* device specific parameters */
   { 8,                        /* Bits per color - must match ncomp, depth, etc. above */
     DevCMYKOGComponents,      /* Names of color model colorants */
-    4,                        /* Number colorants for CMYK */
+    4,                        /* This is the underlygin ProcessColorModel, 4 for CMYK */
     6,                        /* MaxSeparations */
     -1,                       /* PageSpotColors has not been specified */
     {0},                      /* SeparationNames */

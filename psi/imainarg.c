@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -305,7 +305,8 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
                 if (gs_debug[':'] && !have_dumped_args) {
                     int i;
 
-                    dmprintf1(minst->heap, "%% Args passed to instance "PRI_INTPTR": ",
+                    if (gs_debug_c(gs_debug_flag_init_details))
+                        dmprintf1(minst->heap, "%% Args passed to instance "PRI_INTPTR": ",
                               (intptr_t)minst);
                     for (i=1; i<argc; i++)
                         dmprintf1(minst->heap, "%s ", argv[i]);
@@ -1401,7 +1402,7 @@ static const char help_debug[] = "\
  --debug                       list debugging options\n";
 #endif
 static const char help_trailer[] = "\
-For more information, see %s.\n\
+For more information, see %s\n\
 Please report bugs to bugs.ghostscript.com.\n";
 static const char help_devices[] = "Available devices:";
 static const char help_default_device[] = "Default output device:";
@@ -1594,12 +1595,20 @@ static void
 print_help_trailer(const gs_main_instance *minst)
 {
     char buffer[gp_file_name_sizeof];
-    const char *use_htm = "Use.htm", *p = buffer;
+    const char *use_htm = "Use.html", *p = buffer;
+    const char *rtd_url = "https://ghostscript.readthedocs.io/en";
+    const char *latest_ver="latest";
+    const char *vers = latest_ver;
+    const char *gs_str = "gs";
+    const char *gs = "";
     uint blen = sizeof(buffer);
 
-    if (gp_file_name_combine(gs_doc_directory, strlen(gs_doc_directory),
-            use_htm, strlen(use_htm), false, buffer, &blen) != gp_combine_success)
-        p = use_htm;
+    if (strlen(GS_PRODUCT) == strlen(GS_PRODUCTFAMILY)) {
+        vers = GS_STRINGIZE(GS_DOT_VERSION);
+        gs = gs_str;
+    }
+
+    snprintf(buffer, blen, "%s/%s%s/%s", rtd_url, gs, vers, use_htm);
     outprintf(minst->heap, help_trailer, p);
 }
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -118,6 +118,7 @@ gs_pattern1_init(gs_pattern1_template_t * ppat)
 {
     gs_pattern_common_init((gs_pattern_template_t *)ppat, &gs_pattern1_type);
     ppat->uses_transparency = 0;        /* false */
+    ppat->BM_Not_Normal = 0;            /* false */
 }
 
 /* Make an instance of a PatternType 1 pattern. */
@@ -256,7 +257,7 @@ gs_pattern1_make_pattern(gs_client_color * pcc,
 
     inst.templat = *pcp;
     /* Even if the pattern wants to use transparency, don't permit it if there is no device which will support it */
-    inst.templat.uses_transparency &= dev_proc( gs_currentdevice_inline(pgs), dev_spec_op)( gs_currentdevice_inline(pgs), gxdso_supports_pattern_transparency, NULL, 0);;
+    inst.templat.uses_transparency &= dev_proc( gs_currentdevice_inline(pgs), dev_spec_op)( gs_currentdevice_inline(pgs), gxdso_supports_pattern_transparency, NULL, 0);
 
     code = compute_inst_matrix(&inst, &bbox, dev_width, dev_height, &bbw, &bbh);
     if (code < 0)
@@ -1728,9 +1729,10 @@ gx_pattern_cache_lookup(gx_device_color * pdevc, const gs_gstate * pgs,
                 color_set_phase(pdevc, -px, -py);
 #               endif
             }
-            pdevc->mask.m_tile =
-                (ctile->tmask.data == 0 ? (gx_color_tile *) 0 :
-                 ctile);
+            if (ctile->tmask.rep_width == 0 || ctile->tmask.rep_height == 0 || ctile->tmask.data == 0 || ctile->tmask.num_planes <= 0)
+                pdevc->mask.m_tile = (gx_color_tile *)NULL;
+            else
+                pdevc->mask.m_tile = ctile;
             pdevc->mask.m_phase.x = -px;
             pdevc->mask.m_phase.y = -py;
             return true;
@@ -2436,7 +2438,7 @@ gx_dc_pattern_read(
         left -= l;
         offset1 += l;
         dp += l;
-        ptile->cdev->common.page_bfile_end_pos = offset1 - sizeof(buf);
+        ptile->cdev->common.page_info.bfile_end_pos = offset1 - sizeof(buf);
     }
     if (left > 0) {
         l = left;

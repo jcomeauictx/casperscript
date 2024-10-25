@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -30,6 +30,7 @@
 #include "gxblend.h"
 #include "gdevp14.h"
 #include "gdevdevnprn.h"
+#include "gxdevsop.h"
 
 /*
  * Utility routines for common DeviceN related parameters:
@@ -186,6 +187,19 @@ check_process_color_names(fixed_colorant_names_list plist,
     return false;
 }
 
+static int count_process_color_names(fixed_colorant_names_list plist)
+{
+    int count = 0;
+
+    if (plist) {
+        while( *plist){
+            count++;
+            plist++;
+        }
+    }
+    return count;
+}
+
 /* Check only the separation names */
 int
 check_separation_names(const gx_device * dev, const gs_devn_params * pparams,
@@ -274,7 +288,8 @@ devn_get_color_comp_index(gx_device * dev, gs_devn_params * pdevn_params,
 {
     int num_order = pdevn_params->num_separation_order_names;
     int color_component_number = 0;
-    int max_spot_colors = GX_DEVICE_MAX_SEPARATIONS - pdevn_params->num_std_colorant_names;
+    int num_res_comps = pdevn_params->num_reserved_components;
+    int max_spot_colors = GX_DEVICE_MAX_SEPARATIONS - pdevn_params->num_std_colorant_names - num_res_comps;
 
     /*
      * Check if the component is in either the process color model list
@@ -326,7 +341,7 @@ devn_get_color_comp_index(gx_device * dev, gs_devn_params * pdevn_params,
     if (auto_spot_colors == ENABLE_AUTO_SPOT_COLORS)
         /* limit max_spot_colors to what the device can handle given max_components */
         max_spot_colors = min(max_spot_colors,
-                              dev->color_info.max_components - pdevn_params->num_std_colorant_names);
+                              dev->color_info.max_components - pdevn_params->num_std_colorant_names - num_res_comps);
     if (pdevn_params->separations.num_separations < max_spot_colors) {
         byte * sep_name;
         gs_separations * separations = &pdevn_params->separations;
@@ -450,6 +465,7 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
     gs_param_string_array scna;         /* SeparationColorNames array */
     gs_param_string_array sona;         /* SeparationOrder names array */
     gs_param_int_array equiv_cmyk;      /* equivalent_cmyk_color_params */
+    int num_res_comps = pdevn_params->num_reserved_components;
 
     /* Get the SeparationOrder names */
     BEGIN_ARRAY_PARAM(param_read_name_array, "SeparationOrder",
@@ -478,8 +494,8 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
     {
         break;
     } END_ARRAY_PARAM(equiv_cmyk, equiv_cmyk_e);
-    if (equiv_cmyk.data != 0 && scna.size > pdev->color_info.max_components) {
-        param_signal_error(plist, "SeparationColorNames", gs_error_rangecheck);
+    if (equiv_cmyk.data != 0 && equiv_cmyk.size > 5 * pdev->color_info.max_components) {
+        param_signal_error(plist, ".EquivCMYKColors", gs_error_rangecheck);
         return_error(gs_error_rangecheck);
     }
 
@@ -490,40 +506,78 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
          * match the process color model colorant names for the device.
          */
         if (scna.data != 0) {
-            int num_names = scna.size;
+            int num_names = scna.size, num_std_names = 0;
             fixed_colorant_names_list pcomp_names = pdevn_params->std_colorant_names;
 
-            num_spot = pdevn_params->separations.num_separations;
+            /* You would expect that pdevn_params->num_std_colorant_names would have this value but it does not.
+             * That appears to be copied from the 'ncomps' of the device and that has to be the number of components
+             * in the 'base' colour model, 1, 3 or 4 for Gray, RGB or CMYK. Other kinds of DeviceN devices can have
+             * additional standard names, eg Tags, or Artifex Orange and Artifex Green, but these are not counted in
+             * the num_std_colorant_names. They are, however, listed in pdevn_params->std_colorant_names (when is a
+             * std_colorant_name not a std_colorant_name ?), which is checked to see if a SeparationOrder name is one
+             * of the inks we are already dealing with. If it is, then we *don't* add it to num_spots.
+             * So we need to actually count the number of colorants in std_colorant_names to make sure that we
+             * don't exceed the maximum number of components.
+             */
+            num_std_names = count_process_color_names(pcomp_names);
+            num_spot = 0;
+            /* And now we check each ink to see if it's already in the separations list. If not then we count
+             * up the number of new inks
+             */
             for (i = 0; i < num_names; i++) {
                 /* Verify that the name is not one of our process colorants */
                 if (!check_process_color_names(pcomp_names, &scna.data[i])) {
-                    byte * sep_name;
-                    int name_size = scna.data[i].size;
+                    if (check_separation_names(pdev, pdevn_params, (const char *)scna.data[i].data, scna.data[i].size, 0, 0) < 0)
+                        num_spot++;
+                }
+            }
+            /* Now we can check the number of standard colourants (eg CMYKOG) + number of existing separations + number of new separations
+             * and make sure we have enough components to handle all of them
+             */
+            if (num_std_names + pdevn_params->separations.num_separations + num_spot > pdev->color_info.max_components) {
+                param_signal_error(plist, "SeparationColorNames", gs_error_rangecheck);
+                return_error(gs_error_rangecheck);
+            }
+            /* Save this value because we need it after the loop */
+            num_spot = pdevn_params->separations.num_separations;
+            /* Now go through the ink names again, this time if we get a new one we add it to the list of
+             * separations. We can do that safely now because we know we can't overflow the array of names.
+             */
+            for (i = 0; i < num_names; i++) {
+                /* Verify that the name is not one of our process colorants */
+                if (!check_process_color_names(pcomp_names, &scna.data[i])) {
+                    if (check_separation_names(pdev, pdevn_params, (const char *)scna.data[i].data, scna.data[i].size, 0, 0) < 0) {
+                        /* We have a new separation */
+                        byte * sep_name;
+                        int name_size = scna.data[i].size;
 
-                    /* We have a new separation */
-                    sep_name = (byte *)gs_alloc_bytes(pdev->memory,
-                        name_size, "devicen_put_params_no_sep_order");
-                    if (sep_name == NULL) {
-                        param_signal_error(plist, "SeparationColorNames", gs_error_VMerror);
-                        return_error(gs_error_VMerror);
+                        sep_name = (byte *)gs_alloc_bytes(pdev->memory,
+                            name_size, "devicen_put_params_no_sep_order");
+                        if (sep_name == NULL) {
+                            param_signal_error(plist, "SeparationColorNames", gs_error_VMerror);
+                            return_error(gs_error_VMerror);
+                        }
+                        memcpy(sep_name, scna.data[i].data, name_size);
+                        pdevn_params->separations.names[pdevn_params->separations.num_separations].size = name_size;
+                        pdevn_params->separations.names[pdevn_params->separations.num_separations].data = sep_name;
+                        if (pequiv_colors != NULL) {
+                            /* Indicate that we need to find equivalent CMYK color. */
+                            pequiv_colors->color[num_spot].color_info_valid = false;
+                            pequiv_colors->all_color_info_valid = false;
+                        }
+                        pdevn_params->separations.num_separations++;
+                        num_spot_changed = true;
                     }
-                    memcpy(sep_name, scna.data[i].data, name_size);
-                    pdevn_params->separations.names[num_spot].size = name_size;
-                    pdevn_params->separations.names[num_spot].data = sep_name;
-                    if (pequiv_colors != NULL) {
-                        /* Indicate that we need to find equivalent CMYK color. */
-                        pequiv_colors->color[num_spot].color_info_valid = false;
-                        pequiv_colors->all_color_info_valid = false;
-                    }
-                    num_spot++;
-                    num_spot_changed = true;
                 }
             }
 
-            for (i = pdevn_params->separations.num_separations; i < num_spot; i++)
+            for (i = num_spot; i < pdevn_params->separations.num_separations; i++)
                 pdevn_params->separation_order_map[i + pdevn_params->num_std_colorant_names] =
                 i + pdevn_params->num_std_colorant_names;
-            pdevn_params->separations.num_separations = num_spot;
+            /* We use num_spot below, to reset pdevn_params->separations.num_separations, set it
+             * here in case it gets used elsewhere
+             */
+            num_spot = pdevn_params->separations.num_separations;
         }
         /* Process any .EquivCMYKColors info */
         if (equiv_cmyk.data != 0 && pequiv_colors != 0) {
@@ -613,9 +667,9 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
                     param_signal_error(plist, "PageSpotColors", gs_error_rangecheck);
                     return_error(gs_error_rangecheck);
                 }
-                if (page_spot_colors > pdev->color_info.max_components - pdevn_params->num_std_colorant_names)
-                    page_spot_colors = pdev->color_info.max_components - pdevn_params->num_std_colorant_names;
-                    /* Need to leave room for the process colors in GX_DEVICE_COLOR_MAX_COMPONENTS  */
+                if (page_spot_colors > pdev->color_info.max_components - pdevn_params->num_std_colorant_names - num_res_comps)
+                    page_spot_colors = pdev->color_info.max_components - pdevn_params->num_std_colorant_names - num_res_comps;
+                    /* Need to leave room for the process colors (and tags!) in GX_DEVICE_COLOR_MAX_COMPONENTS  */
         }
         /*
          * The DeviceN device can have zero components if nothing has been
@@ -631,6 +685,7 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
         if (num_spot_changed || pdevn_params->max_separations != max_sep ||
                     pdevn_params->num_separation_order_names != num_order ||
                     pdevn_params->page_spot_colors != page_spot_colors) {
+            int has_tags = device_encodes_tags(pdev);
             pdevn_params->separations.num_separations = num_spot;
             pdevn_params->num_separation_order_names = num_order;
             pdevn_params->max_separations = max_sep;
@@ -650,19 +705,33 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
                 : (page_spot_colors >= 0)
                     ? npcmcolors + page_spot_colors
                     : pdev->color_info.max_components;
+            pdev->color_info.num_components += has_tags;
 
             if (pdev->color_info.num_components >
                     pdev->color_info.max_components)
                 pdev->color_info.num_components =
                         pdev->color_info.max_components;
 
+            if (pdev->color_info.num_components > pdev->num_planar_planes)
+                pdev->num_planar_planes = pdev->color_info.num_components;
+
             /*
              * See earlier comment about the depth and non compressed
              * pixel encoding.
              */
-            pdev->color_info.depth = bpc_to_depth(pdev->color_info.num_components,
-                                        pdevn_params->bitspercomponent);
+            if (pdev->num_planar_planes)
+                pdev->color_info.depth = bpc_to_depth(pdev->num_planar_planes,
+                                                      pdevn_params->bitspercomponent);
+            else
+                pdev->color_info.depth = bpc_to_depth(pdev->color_info.num_components,
+                                                      pdevn_params->bitspercomponent);
         }
+    }
+    if (code >= 0)
+    {
+        int ecode = dev_proc(pdev, dev_spec_op)(pdev, gxdso_adjust_colors, NULL, 0);
+        if (ecode < 0 && ecode != gs_error_undefined)
+            code = ecode;
     }
     return code;
 }
@@ -704,6 +773,9 @@ devn_copy_params(gx_device * psrcdev, gx_device * pdesdev)
     /* Get pointers to the parameters */
     src_devn_params = dev_proc(psrcdev, ret_devn_params)(psrcdev);
     des_devn_params = dev_proc(pdesdev, ret_devn_params)(pdesdev);
+    if (src_devn_params == NULL || des_devn_params == NULL)
+        return gs_note_error(gs_error_undefined);
+
     /* First the easy items */
     des_devn_params->bitspercomponent = src_devn_params->bitspercomponent;
     des_devn_params->max_separations = src_devn_params->max_separations;
@@ -823,6 +895,7 @@ devn_generic_put_params(gx_device *pdev, gs_param_list *plist,
     gx_device_color_info save_info = pdev->color_info;
     gs_devn_params saved_devn_params = *pdevn_params;
     equivalent_cmyk_color_params saved_equiv_colors;
+    int save_planes = pdev->num_planar_planes;
 
     if (pequiv_colors != NULL)
         saved_equiv_colors = *pequiv_colors;
@@ -847,9 +920,11 @@ devn_generic_put_params(gx_device *pdev, gs_param_list *plist,
     if (!gx_color_info_equal(&pdev->color_info, &save_info) ||
         !devn_params_equal(pdevn_params, &saved_devn_params) ||
         (pequiv_colors != NULL &&
-            compare_equivalent_cmyk_color_params(pequiv_colors, &saved_equiv_colors))) {
+            compare_equivalent_cmyk_color_params(pequiv_colors, &saved_equiv_colors)) ||
+        pdev->num_planar_planes != save_planes) {
         gx_device *parent_dev = pdev;
         gx_device_color_info resave_info = pdev->color_info;
+        int resave_planes = pdev->num_planar_planes;
 
         while (parent_dev->parent != NULL)
             parent_dev = parent_dev->parent;
@@ -857,9 +932,11 @@ devn_generic_put_params(gx_device *pdev, gs_param_list *plist,
         /* Temporarily restore the old color_info, so the close happens with
          * the old version. In particular this allows Nup to flush properly. */
         pdev->color_info = save_info;
+        pdev->num_planar_planes = save_planes;
         gs_closedevice(parent_dev);
         /* Then put the shiny new color_info back in. */
         pdev->color_info = resave_info;
+        pdev->num_planar_planes = resave_planes;
         /* Reset the separable and linear shift, masks, bits. */
         set_linear_color_bits_mask_shift(pdev);
     }
@@ -969,7 +1046,7 @@ static void
 devicen_initialize_device_procs(gx_device *dev)
 {
     set_dev_proc(dev, open_device, spotcmyk_prn_open);
-    set_dev_proc(dev, output_page, gdev_prn_output_page);
+    set_dev_proc(dev, output_page, gdev_prn_output_page_seekable);
     set_dev_proc(dev, close_device, gdev_prn_close);
     set_dev_proc(dev, get_params, gx_devn_prn_get_params);
     set_dev_proc(dev, put_params, gx_devn_prn_put_params);
@@ -1964,7 +2041,7 @@ devn_pcx_write_rle(const byte * from, const byte * end, int step, gp_file * file
         byte data = *from;
 
         from += step;
-        if (data != *from || from == end) {
+        if (from >= end || data != *from) {
             if (data >= 0xc0)
                 gp_fputc(0xc1, file);
         } else {

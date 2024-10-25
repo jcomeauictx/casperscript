@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -100,12 +100,12 @@ tile_fill_init(tile_fill_state_t * ptfs, const gx_device_color * pdevc,
 {
     gx_color_tile *m_tile = pdevc->mask.m_tile;
     int px, py;
-    bool is_planar;
+    int num_planar_planes;
 
     ptfs->pdevc = pdevc;
-    is_planar = dev->is_planar;
-    if (is_planar) {
-        ptfs->num_planes = dev->color_info.num_components;
+    num_planar_planes = dev->num_planar_planes;
+    if (num_planar_planes) {
+        ptfs->num_planes = dev->num_planar_planes;
     } else {
         ptfs->num_planes = -1;
     }
@@ -270,6 +270,11 @@ tile_by_steps(tile_fill_state_t * ptfs, int x0, int y0, int w0, int h0,
                 yoff = y0 - y, y = y0, h -= yoff;
             else
                 yoff = 0;
+            /* Check for overflow */
+            if (h > 0 && max_int - h < y)
+                h = max_int - y;
+            if (w > 0 && max_int - w < x)
+                w = max_int - x;
             if (x + w > x1)
                 w = x1 - x;
             if (y + h > y1)
@@ -513,7 +518,7 @@ gx_dc_pure_masked_fill_rect(const gx_device_color * pdevc,
      */
     code = tile_fill_init(&state, pdevc, dev, true);
     if (code < 0)
-        return code;
+        goto exit;
     if (state.pcdev == dev || ptile->is_simple)
         code = (*gx_dc_type_data_pure.fill_rectangle)
             (pdevc, x, y, w, h, state.pcdev, lop, source);
@@ -524,6 +529,7 @@ gx_dc_pure_masked_fill_rect(const gx_device_color * pdevc,
         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,
                              tile_masked_fill);
     }
+exit:
     if (CLIPDEV_INSTALLED) {
         tile_clip_free((gx_device_tile_clip *)state.cdev);
         state.cdev = NULL;
@@ -547,7 +553,7 @@ gx_dc_devn_masked_fill_rect(const gx_device_color * pdevc,
      */
     code = tile_fill_init(&state, pdevc, dev, true);
     if (code < 0)
-        return code;
+        goto exit;
     if (state.pcdev == dev || ptile->is_simple) {
         gx_device_color dcolor = *pdevc;
 
@@ -569,6 +575,7 @@ gx_dc_devn_masked_fill_rect(const gx_device_color * pdevc,
         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,
                              tile_masked_fill);
     }
+exit:
     if (CLIPDEV_INSTALLED) {
         tile_clip_free((gx_device_tile_clip *)state.cdev);
         state.cdev = NULL;
@@ -588,7 +595,7 @@ gx_dc_binary_masked_fill_rect(const gx_device_color * pdevc,
 
     code = tile_fill_init(&state, pdevc, dev, true);
     if (code < 0)
-        return code;
+        goto exit;
     if (state.pcdev == dev || ptile->is_simple)
         code = (*gx_dc_type_data_ht_binary.fill_rectangle)
             (pdevc, x, y, w, h, state.pcdev, lop, source);
@@ -599,6 +606,7 @@ gx_dc_binary_masked_fill_rect(const gx_device_color * pdevc,
         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,
                              tile_masked_fill);
     }
+exit:
     if (CLIPDEV_INSTALLED) {
         tile_clip_free((gx_device_tile_clip *)state.cdev);
         state.cdev = NULL;
@@ -618,7 +626,7 @@ gx_dc_colored_masked_fill_rect(const gx_device_color * pdevc,
 
     code = tile_fill_init(&state, pdevc, dev, true);
     if (code < 0)
-        return code;
+        goto exit;
     if (state.pcdev == dev || ptile->is_simple)
         code = (*gx_dc_type_data_ht_colored.fill_rectangle)
             (pdevc, x, y, w, h, state.pcdev, lop, source);
@@ -629,6 +637,7 @@ gx_dc_colored_masked_fill_rect(const gx_device_color * pdevc,
         code = tile_by_steps(&state, x, y, w, h, ptile, &ptile->tmask,
                              tile_masked_fill);
     }
+exit:
     if (CLIPDEV_INSTALLED) {
         tile_clip_free((gx_device_tile_clip *)state.cdev);
         state.cdev = NULL;
@@ -1392,6 +1401,15 @@ gx_trans_pattern_fill_rect(int xmin, int ymin, int xmax, int ymax,
             gx_strip_bitmap tbits;
 
             code = tile_fill_init(&state_clist_trans, pdevc, dev, false);
+            if (code < 0)
+            {
+                /* Can't use CLIPDEV_INSTALLED macro because it assumes a tile_fill_state_t structure, called 'state' */
+                if (state_clist_trans.cdev != NULL) {
+                    tile_clip_free((gx_device_tile_clip *)state_clist_trans.cdev);
+                    state_clist_trans.cdev = NULL;
+                }
+                return code;
+            }
 
             state_clist_trans.phase.x = phase.x;
             state_clist_trans.phase.y = phase.y;

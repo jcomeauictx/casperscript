@@ -57,8 +57,8 @@ casperdict begin
         errordict /.undefined errordict /undefined get put
         errordict begin
           /undefined {
-            dup type /nametype eq
-              {(\(/) print =only ( not yet defined\) ) print}
+            dup type /nametype eq exch dup xcheck 3 -1 roll and
+              {(\(/) print =only ( not yet defined\)) =}
               {pop /.undefined signalerror}
             ifelse
           } bind def
@@ -70,6 +70,10 @@ casperdict begin
     alias currentname to newname) docstring {
     exch load def
   } bind def
+  /=stack (  -
+    one-line version of pstack) docstring {
+    count array astore dup == aload pop
+  } bind def
   /strlen {  % anystring - strlen  % length to first null (\000)
     % if no nulls, entire length of string (same as `length`)
     (\000) search {3 1 roll pop pop length} {length} ifelse
@@ -80,6 +84,19 @@ casperdict begin
     1 index dup strlen  % offset to first empty place in buffer
     % stack now: buffer string buffer offset
     3 2 roll putinterval
+  } bind def
+  /inc {  % name -
+    % increments variable, e.g. `/a 1 def /a inc a =` shows `2`
+    dup cvx exec 1 add def
+  } bind def
+  /zero {  % name -
+    0 def
+  } bind def
+  /ord {  % numeric value of single-character string
+    0 get
+  } bind def
+  /chr {  % single-character string from number
+    1 string dup 0 4 -1 roll put
   } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
@@ -148,9 +165,12 @@ casperdict begin
       {pop length 0 ne}
       ifelse
   } bind def
+  /pagewidth {currentpagedevice /PageSize get 0 get} bind def
+  /pageheight {currentpagedevice /PageSize get 1 get} bind def
   /pagesize {  % - pagewidth pageheight
     % get current page size
-    currentpagedevice /PageSize get dup 1 get exch 0 get
+    % NOTE: original casperscript got this backwards!
+    currentpagedevice /PageSize get dup 0 get exch 1 get
   } bind def
   /.import {  % /dictname -
     % unconditionally import dict

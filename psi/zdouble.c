@@ -43,7 +43,9 @@ static int double_unary(i_ctx_t *, double (*)(double));
 #define dbegin_unary()\
         os_ptr op = osp;\
         double num;\
-        int code = double_params_result(op, 1, &num);\
+        int code;\
+        check_op(2);\
+        code = double_params_result(op, 1, &num);\
 \
         if ( code < 0 )\
           return code
@@ -51,7 +53,9 @@ static int double_unary(i_ctx_t *, double (*)(double));
 #define dbegin_binary()\
         os_ptr op = osp;\
         double num[2];\
-        int code = double_params_result(op, 2, num);\
+        int code;\
+        check_op(3);\
+        code = double_params_result(op, 2, num);\
 \
         if ( code < 0 )\
           return code
@@ -161,12 +165,34 @@ darc(i_ctx_t *i_ctx_p, double (*afunc)(double))
 static int
 zdarccos(i_ctx_t *i_ctx_p)
 {
+    os_ptr op = osp;
+    double num;
+    int code;
+
+    check_op(2);
+    code = real_param(op, &num);
+    if (code < 0)
+        return code;
+    if (num < -1 || num > 1)
+        return_error(gs_error_rangecheck);
+
     return darc(i_ctx_p, acos);
 }
 /* <dnum> <dresult> .darcsin <dresult> */
 static int
 zdarcsin(i_ctx_t *i_ctx_p)
 {
+    os_ptr op = osp;
+    double num;
+    int code;
+
+    check_op(2);
+    code = real_param(op, &num);
+    if (code < 0)
+        return code;
+    if (num < -1 || num > 1)
+        return_error(gs_error_rangecheck);
+
     return darc(i_ctx_p, asin);
 }
 
@@ -245,8 +271,10 @@ dcompare(i_ctx_t *i_ctx_p, int mask)
 {
     os_ptr op = osp;
     double num[2];
-    int code = double_params(op, 2, num);
+    int code;
 
+    check_op(2);
+    code = double_params(op, 2, num);
     if (code < 0)
         return code;
     make_bool(op - 1,
@@ -310,13 +338,15 @@ static int
 zcvsd(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
-    int code = double_params_result(op, 0, NULL);
+    int code;
     double num;
     char dot, buf[MAX_CHARS + 2];
     char *str = buf;
     uint len;
     char end;
 
+    chgeck_op(2);
+    code = double_params_result(op, 0, NULL);
     if (code < 0)
         return code;
     check_read_type(op[-1], t_string);
@@ -360,8 +390,10 @@ zdcvi(i_ctx_t *i_ctx_p)
     static const double min_int_real = (alt_min_long * 1.0 - 1);
     static const double max_int_real = (alt_max_long * 1.0 + 1);
     double num;
-    int code = double_params(op, 1, &num);
+    int code;
 
+    check_op(1);
+    code = double_params(op, 1, &num);
     if (code < 0)
         return code;
 
@@ -383,7 +415,10 @@ zdcvr(i_ctx_t *i_ctx_p)
 #undef b30
 #undef max_mag
     double num;
-    int code = double_params(op, 1, &num);
+    int code;
+
+    check_op(1);
+    code = double_params(op, 1, &num);
 
     if (code < 0)
         return code;
@@ -399,10 +434,12 @@ zdcvs(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
     double num;
-    int code = double_params(op - 1, 1, &num);
+    int code;
     char dot, str[MAX_CHARS + 1];
     int len;
 
+    check_op(2);
+    code = double_params(op - 1, 1, &num);
     if (code < 0)
         return code;
     check_write_type(*op, t_string);

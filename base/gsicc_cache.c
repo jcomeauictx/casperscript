@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -161,7 +161,7 @@ icc_linkcache_finalize(const gs_memory_t *mem, void *ptr)
         return;
     while (link_cache->head != NULL) {
         if (link_cache->head->ref_count != 0) {
-            emprintf2(link_cache->memory, "link at "PRI_INTPTR" being removed, but has ref_count = %d\n",
+            if_debug2m(gs_debug_flag_icc, link_cache->memory, "link at "PRI_INTPTR" being removed, but has ref_count = %d\n",
                       (intptr_t)link_cache->head, link_cache->head->ref_count);
             link_cache->head->ref_count = 0;	/* force removal */
         }
@@ -586,7 +586,7 @@ gsicc_findcachelink(gsicc_hashlink_t hash, gsicc_link_cache_t *icc_link_cache,
                 /* that was building it failed to be able to complete building it.  Try this only
                    a limited number of times before we bail. */
                 if (curr->valid == false) {
-		            emprintf1(curr->memory, "link "PRI_INTPTR" lock released, but still not valid.\n", (intptr_t)curr);	/* Breakpoint here */
+		            if_debug1m(gs_debug_flag_icc, curr->memory, "link "PRI_INTPTR" lock released, but still not valid.\n", (intptr_t)curr);	/* Breakpoint here */
                 }
                 gx_monitor_enter(icc_link_cache->lock);	/* re-enter to loop and check */
             }
@@ -606,15 +606,14 @@ gsicc_remove_link(gsicc_link_t *link)
 {
     gsicc_link_t *curr, *prev;
     gsicc_link_cache_t *icc_link_cache = link->icc_link_cache;
-    const gs_memory_t *memory = link->memory;
 
-    if_debug2m(gs_debug_flag_icc, memory,
+    if_debug2m(gs_debug_flag_icc, link->memory,
                "[icc] Removing link = "PRI_INTPTR" memory = "PRI_INTPTR"\n",
-               (intptr_t)link, (intptr_t)memory);
+               (intptr_t)link, (intptr_t)link->memory);
     /* NOTE: link->ref_count must be 0: assert ? */
     gx_monitor_enter(icc_link_cache->lock);
     if (link->ref_count != 0) {
-      emprintf2(memory, "link at "PRI_INTPTR" being removed, but has ref_count = %d\n", (intptr_t)link, link->ref_count);
+      if_debug2m(gs_debug_flag_icc, link->memory, "link at "PRI_INTPTR" being removed, but has ref_count = %d\n", (intptr_t)link, link->ref_count);
     }
     curr = icc_link_cache->head;
     prev = NULL;
@@ -749,9 +748,14 @@ gsicc_get_link(const gs_gstate *pgs1, gx_device *dev_in,
     /* If present, use an graphic object defined source profile */
     if (pgs->icc_manager != NULL &&
         pgs->icc_manager->srcgtag_profile != NULL) {
-            if (gs_input_profile->data_cs == gsRGB
+            /* This is to do with 'object' based colour management which allows the user to
+             * selectively disable (or override) colour management based on the colour space
+             * and object type. The problem is that the profile data_cs is not what we'd expect
+             * for CIEBased input, so we need to check an additional member. See Bug #706789.
+             */
+            if ((gs_input_profile->data_cs == gsRGB
                 || gs_input_profile->data_cs == gsCMYK
-                || gs_input_profile->data_cs == gsGRAY) {
+                || gs_input_profile->data_cs == gsGRAY) && gs_input_profile->default_match < CIE_A) {
                 gsicc_get_srcprofile(gs_input_profile->data_cs,
                                       dev->graphics_type_tag,
                                       pgs->icc_manager->srcgtag_profile,
@@ -1465,7 +1469,7 @@ create_named_profile(gs_memory_t *mem, cmm_profile_t *named_profile)
     buffptr = (char*)named_profile->buffer;
     buffer_count = named_profile->buffer_size;
     count = sscanf(buffptr, "%d", &num_entries);
-    if (num_entries < 1 || count == 0) {
+    if (num_entries < 1 || count <= 0) {
         gs_free(mem, namedcolor_table, 1, sizeof(gsicc_namedcolortable_t),
             "create_named_profile");
         return -1;

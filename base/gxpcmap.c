@@ -228,7 +228,7 @@ gx_pattern_accum_alloc(gs_memory_t * mem, gs_memory_t * storage_memory,
     size_t max_pattern_bitmap = tdev->MaxPatternBitmap == 0 ? MaxPatternBitmap_DEFAULT :
                                 tdev->MaxPatternBitmap;
 
-    pinst->is_planar = tdev->is_planar;
+    pinst->num_planar_planes = tdev->num_planar_planes;
     /*
      * If the target device can accumulate a pattern stream and the language
      * client supports high level patterns (ps and pdf only) we don't need a
@@ -247,8 +247,12 @@ gx_pattern_accum_alloc(gs_memory_t * mem, gs_memory_t * storage_memory,
         dev_spec_op))((gx_device *)pinst->saved->device,
         gxdso_pattern_can_accum, pinst, 0) == 1)
         force_no_clist = 1; /* Set only for first time through */
-    if (force_no_clist || (size < max_pattern_bitmap && !pinst->is_clist)
-        || pinst->templat.PaintType != 1 ) {
+    /* If the blend mode in use is not Normal, then we CANNOT use a tile. What
+     * if the blend mode changes half way through the tile? We simply must use
+     * a clist. */
+    if (force_no_clist ||
+        (((size < max_pattern_bitmap && !pinst->is_clist)
+           || pinst->templat.PaintType != 1) && !pinst->templat.BM_Not_Normal)) {
         gx_device_pattern_accum *adev = gs_alloc_struct(mem, gx_device_pattern_accum,
                         &st_device_pattern_accum, cname);
         if (adev == 0)
@@ -295,7 +299,7 @@ gx_pattern_accum_alloc(gs_memory_t * mem, gs_memory_t * storage_memory,
     }
     fdev->log2_align_mod = tdev->log2_align_mod;
     fdev->pad = tdev->pad;
-    fdev->is_planar = tdev->is_planar;
+    fdev->num_planar_planes = tdev->num_planar_planes;
     fdev->graphics_type_tag = tdev->graphics_type_tag;
     fdev->interpolate_control = tdev->interpolate_control;
     fdev->non_strict_bounds = tdev->non_strict_bounds;
@@ -425,12 +429,12 @@ pattern_accum_open(gx_device * dev)
                     bits->color_info = padev->color_info;
                     bits->bitmap_memory = mem;
 
-                    if (target->is_planar > 0)
+                    if (target->num_planar_planes > 0)
                     {
                         gx_render_plane_t planes[GX_DEVICE_COLOR_MAX_COMPONENTS];
-                        uchar num_comp = padev->color_info.num_components;
+                        uchar num_comp = padev->num_planar_planes;
                         uchar i;
-                        int depth = target->color_info.depth / target->color_info.num_components;
+                        int depth = target->color_info.depth / num_comp;
                         for (i = 0; i < num_comp; i++)
                         {
                             planes[i].shift = depth * (num_comp - 1 - i);
@@ -860,7 +864,7 @@ gx_pattern_alloc_cache(gs_memory_t * mem, uint num_tiles, ulong max_bits)
         tiles->index = i;
         tiles->cdev = NULL;
         tiles->ttrans = NULL;
-        tiles->is_planar = false;
+        tiles->num_planar_planes = 0;
     }
     return pcache;
 }
@@ -1068,11 +1072,11 @@ gx_pattern_cache_update_used(gs_gstate *pgs, size_t used)
 static void make_bitmap(gx_strip_bitmap *, const gx_device_memory *, gx_bitmap_id, const gs_memory_t *);
 int
 gx_pattern_cache_add_entry(gs_gstate * pgs,
-                   gx_device_forward * fdev, gx_color_tile ** pctile, gs_gstate* saved)
+                   gx_device_forward * fdev, gx_color_tile ** pctile)
 {
     gx_pattern_cache *pcache;
     const gs_pattern1_instance_t *pinst;
-    ulong used = 0, mask_used = 0, trans_used = 0;
+    size_t used = 0, mask_used = 0, trans_used = 0;
     gx_bitmap_id id;
     gx_color_tile *ctile;
     int code = ensure_pattern_cache(pgs);
@@ -1166,7 +1170,7 @@ gx_pattern_cache_add_entry(gs_gstate * pgs,
     ctile = gx_pattern_cache_find_tile_for_id(pcache, id);
     gx_pattern_cache_free_entry(pcache, ctile);         /* ensure that this cache slot is empty */
     ctile->id = id;
-    ctile->is_planar = pinst->is_planar;
+    ctile->num_planar_planes = pinst->num_planar_planes;
     ctile->depth = fdev->color_info.depth;
     ctile->uid = pinst->templat.uid;
     ctile->tiling_type = pinst->templat.TilingType;
@@ -1176,12 +1180,7 @@ gx_pattern_cache_add_entry(gs_gstate * pgs,
     ctile->has_overlap = pinst->has_overlap;
     ctile->is_dummy = false;
     ctile->is_locked = false;
-    if (pinst->templat.uses_transparency) {
-        /* to work with pdfi get the blend mode out of the saved pgs device */
-        ctile->blending_mode = ((pdf14_device*)(saved->device))->blend_mode;
-    }
-    else
-        ctile->blending_mode = 0;
+    ctile->blending_mode = 0;
     ctile->trans_group_popped = false;
     if (dev_proc(fdev, open_device) != pattern_clist_open_device) {
         if (mbits != 0) {
@@ -1326,7 +1325,7 @@ dump_raw_pattern(int height, int width, int n_chan, int depth,
     byte *curr_ptr = Buffer;
     int plane_offset;
 
-    is_planar = mdev->is_planar;
+    is_planar = mdev->num_planar_planes > 0;
     max_bands = ( n_chan < 57 ? n_chan : 56);   /* Photoshop handles at most 56 bands */
     if (is_planar) {
         gs_snprintf(full_file_name, sizeof(full_file_name), "%d)PATTERN_PLANE_%dx%dx%d.raw", global_pat_index,
@@ -1402,7 +1401,7 @@ make_bitmap(register gx_strip_bitmap * pbm, const gx_device_memory * mdev,
     pbm->rep_height = pbm->size.y = mdev->height;
     pbm->id = id;
     pbm->rep_shift = pbm->shift = 0;
-    pbm->num_planes = (mdev->is_planar ? mdev->color_info.num_components : 1);
+    pbm->num_planes = mdev->num_planar_planes ? mdev->num_planar_planes : 1;
 
         /* Lets dump this for debug purposes */
 
@@ -1530,7 +1529,7 @@ gx_pattern_load(gx_device_color * pdc, const gs_gstate * pgs,
     if (pinst->templat.uses_transparency) {
         if_debug1m('v', mem, "gx_pattern_load: pushing the pdf14 compositor device into this graphics state pat_id = %ld\n", pinst->id);
         if ((code = gs_push_pdf14trans_device(saved, true, false, 0, 0)) < 0)   /* spot_color_count taken from pdf14 target values */
-            return code;
+            goto fail;
         saved->device->is_open = true;
     } else {
         /* For colored patterns we clear the pattern device's
@@ -1604,7 +1603,7 @@ gx_pattern_load(gx_device_color * pdc, const gs_gstate * pgs,
     }
     /* We REALLY don't like the following cast.... */
     code = gx_pattern_cache_add_entry((gs_gstate *)pgs,
-                adev, &ctile, saved);
+                adev, &ctile);
     if (code >= 0) {
         if (!gx_pattern_cache_lookup(pdc, pgs, dev, select)) {
             mlprintf(mem, "Pattern cache lookup failed after insertion!\n");

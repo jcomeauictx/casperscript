@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -57,7 +57,7 @@ pdf_make_soft_mask_dict(gx_device_pdf * pdev, const gs_pdf14trans_params_t * ppa
             return code;
     }
     if (pdev->CompatibilityLevel <= 1.7 && pparams->transfer_function != NULL && pdev->params.TransferFunctionInfo == tfi_Preserve) {
-        long id;
+        int64_t id;
         char buf[20];
 
         code = pdf_write_function(pdev, pparams->transfer_function, &id);
@@ -107,8 +107,8 @@ pdf_make_group_dict(gx_device_pdf * pdev, const gs_pdf14trans_params_t * pparams
        a group color specified.
        In this case, the parent group is inherited from
        the previous group or the device color space */
-    if (pgs != NULL && pparams->group_color_type != UNKNOWN) {
-        const gs_color_space *cs = gs_currentcolorspace_inline(pgs);
+    if (pgs != NULL && pparams->ColorSpace != NULL) {
+        const gs_color_space *cs = pparams->ColorSpace;
 
         if (pparams->ColorSpace == NULL)
             code = pdf_color_space_named(pdev, pgs, &cs_value, NULL, cs,

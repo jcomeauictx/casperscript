@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -132,7 +132,7 @@ gx_begin_image3x_generic(gx_device * dev,
                         const gx_clip_path *pcpath, gs_memory_t *mem,
                         image3x_make_mid_proc_t make_mid,
                         image3x_make_mcde_proc_t make_mcde,
-                        gx_image_enum_common_t **pinfo)
+                        gx_image_enum_common_t **pinfo, int64_t OC)
 {
     const gs_image3x_t *pim = (const gs_image3x_t *)pic;
     gx_image3x_enum_t *penum;
@@ -301,6 +301,9 @@ gx_begin_image3x_generic(gx_device * dev,
         pixel.image.type = type1;
         pixel.image.image_parent_type = gs_image_type3x;
     }
+    if (minfo[0] != NULL)
+        minfo[0]->OC = OC;
+
     code = make_mcde(dev, pgs, pmat, (const gs_image_common_t *)&pixel.image,
                      prect, pdcolor, pcpath, mem, &penum->pixel.info,
                      &pcdev, midev, minfo, origin, pim);
@@ -516,7 +519,7 @@ make_midx_default(gx_device **pmidev, gx_device *dev, int width, int height,
             return_error(gs_error_VMerror);
     if (mdproto == 0)
         return_error(gs_error_rangecheck);
-    midev = gs_alloc_struct(mem, gx_device_memory, &st_device_memory,
+    midev = gs_alloc_struct_immovable(mem, gx_device_memory, &st_device_memory,
                             "make_mid_default");
     if (midev == 0)
         return_error(gs_error_VMerror);
@@ -598,7 +601,7 @@ gx_begin_image3x(gx_device * dev,
 {
     return gx_begin_image3x_generic(dev, pgs, pmat, pic, prect, pdcolor,
                                     pcpath, mem, make_midx_default,
-                                    make_mcdex_default, pinfo);
+                                    make_mcdex_default, pinfo, 0);
 }
 
 /* Process the next piece of an ImageType 3 image. */

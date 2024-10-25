@@ -44,6 +44,7 @@ zcond(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     es_ptr ep = esp;
 
+    check_op(1);
     /* Push the array on the e-stack and call the continuation. */
     if (!r_is_array(op))
         return_op_typecheck(op);
@@ -68,6 +69,7 @@ cond_continue(i_ctx_t *i_ctx_p)
     es_ptr ep = esp;
     int code;
 
+    check_op(1);
     /* The top element of the e-stack is the remaining tail of */
     /* the cond body.  The top element of the o-stack should be */
     /* the (boolean) result of the test that is the first element */
@@ -81,6 +83,7 @@ cond_continue(i_ctx_t *i_ctx_p)
         const ref_packed *elts = ep->value.packed;
 
         check_estack(2);
+        ep = esp;
         r_dec_size(ep, 2);
         elts = packed_next(elts);
         elts = packed_next(elts);
@@ -129,6 +132,7 @@ zexecn(i_ctx_t *i_ctx_p)
     uint n, i;
     es_ptr esp_orig;
 
+    check_op(1);
     check_int_leu(*op, max_uint - 1);
     n = (uint) op->value.intval;
     check_op(n + 1);
@@ -136,6 +140,9 @@ zexecn(i_ctx_t *i_ctx_p)
     esp_orig = esp;
     for (i = 0; i < n; ++i) {
         const ref *rp = ref_stack_index(&o_stack, (long)(i + 1));
+
+        if (rp == NULL)
+            continue;
 
         /* Make sure this object is legal to execute. */
         if (ref_type_uses_access(r_type(rp))) {
@@ -237,6 +244,7 @@ zif(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(2);
     check_proc(*op);
     check_type(op[-1], t_boolean);
     if (op[-1].value.boolval) {
@@ -255,6 +263,7 @@ zifelse(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(3);
     check_proc(*op);
     check_proc(op[-1]);
     check_type(op[-2], t_boolean);
@@ -283,6 +292,7 @@ zfor(i_ctx_t *i_ctx_p)
     int code;
     float params[3];
 
+    check_op(4);
         /* Mostly undocumented, and somewhat bizarre Adobe behavior discovered	*/
         /* with the CET (28-05) and FTS (124-01) is that the proc is not run	*/
         /* if BOTH the initial value and increment are zero.			*/
@@ -410,6 +420,7 @@ zfor_samples(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     es_ptr ep;
 
+    check_op(4);
     check_type(op[-3], t_real);
     check_type(op[-2], t_integer);
     check_type(op[-1], t_real);
@@ -454,6 +465,8 @@ int
 zrepeat(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
+
+    check_op(2);
     check_proc(*op);
     check_type(op[-1], t_integer);
     if (op[-1].value.intval < 0)
@@ -491,6 +504,7 @@ zloop(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(1);
     check_proc(*op);
     check_estack(4);
     /* Push a mark and the procedure, and invoke */
@@ -598,6 +612,7 @@ zzstop(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     uint count;
 
+    check_op(2);
     check_type(*op, t_integer);
     count = count_to_stopped(i_ctx_p, op->value.intval);
     if (count) {
@@ -779,6 +794,8 @@ do_execstack(i_ctx_t *i_ctx_p, bool include_marks, bool include_oparrays, os_ptr
     for (i = 0, rq = arefs + asize; rq != arefs; ++i) {
         const ref *rp = ref_stack_index(&e_stack, (long)i);
 
+        if (rp == NULL)
+            continue;
         if (r_has_type_attrs(rp, t_null, a_executable) && !include_marks)
             continue;
         --rq;
@@ -848,40 +865,6 @@ zquit(i_ctx_t *i_ctx_p)
     return_error(gs_error_Quit);	/* Interpreter will do the exit */
 }
 
-/* - currentfile <file> */
-static ref *zget_current_file(i_ctx_t *);
-static int
-zcurrentfile(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    ref *fp;
-
-    push(1);
-    /* Check the cache first */
-    if (esfile != 0) {
-#ifdef DEBUG
-        /* Check that esfile is valid. */
-        ref *efp = zget_current_file(i_ctx_p);
-
-        if (esfile != efp) {
-            lprintf2("currentfile: esfile="PRI_INTPTR", efp="PRI_INTPTR"\n",
-                     (intptr_t) esfile, (intptr_t) efp);
-            ref_assign(op, efp);
-        } else
-#endif
-            ref_assign(op, esfile);
-    } else if ((fp = zget_current_file(i_ctx_p)) == 0) {	/* Return an invalid file object. */
-        /* This doesn't make a lot of sense to me, */
-        /* but it's what the PostScript manual specifies. */
-        make_invalid_file(i_ctx_p, op);
-    } else {
-        ref_assign(op, fp);
-        esfile_set_cache(fp);
-    }
-    /* Make the returned value literal. */
-    r_clear_attrs(op, a_executable);
-    return 0;
-}
 /* Get the current file from which the interpreter is reading. */
 static ref *
 zget_current_file(i_ctx_t *i_ctx_p)
@@ -900,6 +883,54 @@ zget_current_file(i_ctx_t *i_ctx_p)
     return 0;
 }
 
+/* - currentfile <file> */
+int
+z_current_file(i_ctx_t *i_ctx_p, ref **s)
+{
+    ref *fp;
+    /* Check the cache first */
+    if (esfile != 0) {
+#ifdef DEBUG
+        /* Check that esfile is valid. */
+        ref *efp = zget_current_file(i_ctx_p);
+
+        if (esfile != efp) {
+            lprintf2("currentfile: esfile="PRI_INTPTR", efp="PRI_INTPTR"\n",
+                     (intptr_t) esfile, (intptr_t) efp);
+            *s = efp;
+        } else
+#endif
+            *s = esfile;
+    } else if ((fp = zget_current_file(i_ctx_p)) == 0) {	/* Return an invalid file object. */
+        *s = NULL;
+    } else {
+        *s = fp;
+        esfile_set_cache(fp);
+    }
+    return 0;
+}
+static int
+zcurrentfile(i_ctx_t *i_ctx_p)
+{
+    os_ptr op = osp;
+    ref *s;
+    int code;
+
+    push(1);
+
+    code = z_current_file(i_ctx_p, &s);
+    if (code < 0 || s == NULL) {
+        /* This doesn't make a lot of sense to me, */
+        /* but it's what the PostScript manual specifies. */
+        make_invalid_file(i_ctx_p, op);
+    }
+    else {
+        ref_assign(op, s);
+    }
+    /* Make the returned value literal. */
+    r_clear_attrs(op, a_executable);
+    return code;
+}
 /* ------ Initialization procedure ------ */
 
 /* We need to split the table because of the 16-element limit. */
@@ -990,10 +1021,14 @@ count_exec_stack(i_ctx_t *i_ctx_p, bool include_marks)
     if (!include_marks) {
         uint i;
 
-        for (i = count; i--;)
-            if (r_has_type_attrs(ref_stack_index(&e_stack, (long)i),
-                                 t_null, a_executable))
+        for (i = count; i--;) {
+            ref *o;
+            o = ref_stack_index(&e_stack, (long)i);
+            if (o == NULL)
+                continue;
+            if (r_has_type_attrs(o, t_null, a_executable))
                 --count;
+        }
     }
     return count;
 }
@@ -1042,10 +1077,26 @@ pop_estack(i_ctx_t *i_ctx_p, uint count)
     for (; idx < count; idx++) {
         ref *ep = ref_stack_index(&e_stack, idx - popped);
 
+        if (ep == NULL)
+            continue;
+
         if (r_is_estack_mark(ep)) {
-            ref_stack_pop(&e_stack, idx + 1 - popped);
+            /* This exec stack juggling is to cope with hitting
+               exactly the bottom of a stack block. It is possible
+               to end up with the book keeping at the bottom of
+               one block, and the opproc at the top of the previous
+               block. If we pop everything in one go, the book keeping
+               entries disappear, so we pop to the start of the book
+               keeping values, call the cleanup, then pop the final
+               entry.
+             */
+            op_proc_t opproc = real_opproc(ep);
+            ref_stack_pop(&e_stack, idx - popped);
+            esp--;
+            (*opproc) (i_ctx_p);
+            esp++;
+            ref_stack_pop(&e_stack, 1);
             popped = idx + 1;
-            (*real_opproc(ep)) (i_ctx_p);
         }
     }
     ref_stack_pop(&e_stack, count - popped);

@@ -1,6 +1,9 @@
 /* expat_config.h.  Generated from expat_config.h.in by configure.  */
 /* expat_config.h.in.  Generated from configure.ac by autoheader.  */
 
+#ifndef EXPAT_CONFIG_H
+#define EXPAT_CONFIG_H 1
+
 /* Define if building universal (internal helper macro) */
 /* #undef AC_APPLE_UNIVERSAL_BUILD */
 
@@ -11,7 +14,7 @@
 /* #undef HAVE_ARC4RANDOM */
 
 /* Define to 1 if you have the `arc4random_buf' function. */
-/* #undef HAVE_ARC4RANDOM_BUF */
+/* #define HAVE_ARC4RANDOM_BUF 1 */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
@@ -36,7 +39,9 @@
 
 /* Define to 1 if you have the <stdint.h> header file. */
 /*#define HAVE_STDINT_H 1*/
-# if defined(__WIN32__) /* MSVC currently doesn't provide C99 headers */
+#if defined(_WIN32) && (!defined(_MSC_VER) || _MSC_VER < 1910) /* Older MSVC don't provide C99 headers */
+#undef HAVE_STDINT_H
+
    typedef signed char             int8_t;
    typedef short int               int16_t;
    typedef int                     int32_t;
@@ -49,6 +54,8 @@
    typedef unsigned short uint16_t;
    typedef unsigned int uint32_t;
    typedef unsigned long long uint64_t;
+#else
+#define HAVE_STDINT_H 1
 #endif
 
 /* Define to 1 if you have the <stdio.h> header file. */
@@ -91,7 +98,7 @@
 #define PACKAGE_NAME "expat"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "expat 2.4.9"
+#define PACKAGE_STRING "expat 2.5.0"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "expat"
@@ -100,7 +107,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.4.9"
+#define PACKAGE_VERSION "2.5.0"
 
 /* Define to 1 if all of the C90 standard headers exist (not just the ones
    required in a freestanding environment). This macro is provided for
@@ -108,7 +115,7 @@
 #define STDC_HEADERS 1
 
 /* Version number of package */
-#define VERSION "2.4.9"
+#define VERSION "2.5.0"
 
 /* Define WORDS_BIGENDIAN to 1 if your processor stores words with the most
    significant byte first (like Motorola and SPARC, unlike Intel). */
@@ -147,3 +154,5 @@
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
 /* #undef size_t */
+
+#endif // ndef EXPAT_CONFIG_H

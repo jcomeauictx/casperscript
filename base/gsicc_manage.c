@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -871,12 +871,13 @@ gsicc_set_srcgtag_struct(gsicc_manager_t *icc_manager, const char* pname,
         return gs_throw1(-1, "setting of %s src obj color info failed", pname);
     }
     gs_free_object(mem, buffer_ptr, "gsicc_set_srcgtag_struct");
-    srcgtag->name_length = strlen(pname);
-    srcgtag->name = (char*) gs_alloc_bytes(mem, srcgtag->name_length,
+    srcgtag->name_length = namelen;
+    srcgtag->name = (char*) gs_alloc_bytes(mem, srcgtag->name_length + 1,
                                   "gsicc_set_srcgtag_struct");
     if (srcgtag->name == NULL)
         return gs_throw(gs_error_VMerror, "Insufficient memory for tag name");
-    strncpy(srcgtag->name, pname, srcgtag->name_length);
+    memcpy(srcgtag->name, pname, namelen);
+    srcgtag->name[namelen] = 0x00;
     icc_manager->srcgtag_profile = srcgtag;
     return 0;
 }
@@ -957,7 +958,7 @@ gsicc_set_profile(gsicc_manager_t *icc_manager, const char* pname, int namelen,
                 return 0;
         }
         if (strncmp(icc_profile->name, OI_PROFILE,
-                    strlen(icc_profile->name)) == 0) {
+                    icc_profile->name_length) == 0) {
                 return 0;
         }
         gsicc_adjust_profile_rc(icc_profile, -1,"gsicc_set_profile");
@@ -1238,9 +1239,8 @@ gsicc_open_search(const char* pname, int namelen, gs_memory_t *mem_gc,
                                      "gsicc_open_search");
         if (buffer == NULL)
             return_error(gs_error_VMerror);
-        strcpy(buffer, dirname);
-        buffer[dirlen] = '\0';
-        strcat(buffer, pname);
+        memcpy(buffer, dirname, dirlen);
+        memcpy(buffer + dirlen, pname, namelen);
         /* Just to make sure we were null terminated */
         buffer[namelen + dirlen] = '\0';
 
@@ -1259,7 +1259,14 @@ gsicc_open_search(const char* pname, int namelen, gs_memory_t *mem_gc,
 
     /* First just try it like it is */
     if (gs_check_file_permission(mem_gc, pname, namelen, "r") >= 0) {
-        str = sfopen(pname, "r", mem_gc);
+        char CFileName[gp_file_name_sizeof];
+
+        if (namelen + 1 > gp_file_name_sizeof)
+            return_error(gs_error_ioerror);
+        memcpy(CFileName, pname, namelen);
+        CFileName[namelen] = 0x00;
+
+        str = sfopen(CFileName, "r", mem_gc);
         if (str != NULL) {
             *strp = str;
             return 0;
@@ -1273,7 +1280,7 @@ gsicc_open_search(const char* pname, int namelen, gs_memory_t *mem_gc,
     if (buffer == NULL)
         return_error(gs_error_VMerror);
     strcpy(buffer, DEFAULT_DIR_ICC);
-    strcat(buffer, pname);
+    memcpy(buffer + strlen(DEFAULT_DIR_ICC), pname, namelen);
     /* Just to make sure we were null terminated */
     buffer[namelen + strlen(DEFAULT_DIR_ICC)] = '\0';
     str = sfopen(buffer, "r", mem_gc);
@@ -1805,13 +1812,14 @@ gsicc_init_device_profile_struct(gx_device * dev,
     }
     /* Either use the incoming or a default */
     if (profile_name == NULL) {
+        int has_tags = device_encodes_tags(dev);
         profile_name =
             (char *) gs_alloc_bytes(dev->memory,
                                     MAX_DEFAULT_ICC_LENGTH,
                                     "gsicc_init_device_profile_struct");
         if (profile_name == NULL)
             return_error(gs_error_VMerror);
-        switch(dev->color_info.num_components) {
+        switch(dev->color_info.num_components - has_tags) {
             case 1:
                 strncpy(profile_name, DEFAULT_GRAY_ICC, strlen(DEFAULT_GRAY_ICC));
                 profile_name[strlen(DEFAULT_GRAY_ICC)] = 0;
@@ -1865,6 +1873,8 @@ gsicc_verify_device_profiles(gx_device * pdev)
     bool check_components = true;
     bool can_postrender = false;
     bool objects = false;
+    int has_tags = device_encodes_tags(pdev);
+    int num_components = pdev->color_info.num_components - has_tags;
 
     if (dev_proc(pdev, dev_spec_op) != NULL) {
         check_components = !(dev_proc(pdev, dev_spec_op)(pdev, gxdso_skip_icc_component_validation, NULL, 0));
@@ -1890,8 +1900,7 @@ gsicc_verify_device_profiles(gx_device * pdev)
             return gs_rethrow(-1, "Post render profile not supported by device");
         }
         if (check_components) {
-            if (dev_icc->postren_profile->num_comps !=
-                pdev->color_info.num_components) {
+            if (dev_icc->postren_profile->num_comps != num_components) {
                 return gs_rethrow(-1, "Post render profile does not match the device color model");
             }
             return 0;
@@ -1909,7 +1918,7 @@ gsicc_verify_device_profiles(gx_device * pdev)
     if (dev_icc->link_profile == NULL) {
         if (!objects) {
             if (check_components && dev_icc->device_profile[GS_DEFAULT_DEVICE_PROFILE]->num_comps !=
-                pdev->color_info.num_components)
+                num_components)
                 return gs_rethrow(-1, "Mismatch of ICC profiles and device color model");
             else
                 return 0;  /* Currently sep devices have some leeway here */
@@ -1917,8 +1926,7 @@ gsicc_verify_device_profiles(gx_device * pdev)
             if (check_components) {
                 for (k = 1; k < NUM_DEVICE_PROFILES; k++)
                     if (dev_icc->device_profile[k] != NULL) {
-                        if (dev_icc->device_profile[k]->num_comps !=
-                            pdev->color_info.num_components)
+                        if (dev_icc->device_profile[k]->num_comps != num_components)
                             return gs_rethrow(-1, "Mismatch of object dependent ICC profiles and device color model");
                     }
             }
@@ -1929,7 +1937,7 @@ gsicc_verify_device_profiles(gx_device * pdev)
            profile and the device link output must match the device color
            model */
         if (check_components && dev_icc->link_profile->num_comps_out !=
-            pdev->color_info.num_components) {
+            num_components) {
             return gs_rethrow(-1, "Mismatch of device link profile and device color model");
         }
         if (check_components) {
@@ -2327,7 +2335,7 @@ gsicc_init_iccmanager(gs_gstate * pgs)
                 profile = NULL;
         }
         if (profile == NULL)
-            code = gsicc_set_profile(iccmanager, pname, namelen+1,
+            code = gsicc_set_profile(iccmanager, pname, namelen,
                                      default_profile_params[k].default_type);
         if (code < 0)
             return gs_rethrow(code, "cannot find default icc profile");
@@ -3024,7 +3032,7 @@ gs_setdefaultgrayicc(const gs_gstate * pgs, gs_param_string * pval)
     memcpy(pname,pval->data,namelen-1);
     pname[namelen-1] = 0;
     code = gsicc_set_profile(pgs->icc_manager,
-        (const char*) pname, namelen, DEFAULT_GRAY);
+        (const char*) pname, namelen-1, DEFAULT_GRAY);
     gs_free_object(mem, pname,
         "set_default_gray_icc");
     if (code < 0)
@@ -3051,7 +3059,7 @@ gs_currenticcdirectory(const gs_gstate * pgs, gs_param_string * pval)
         pval->persistent = true;
     } else {
         pval->data = (const byte *)(lib_ctx->profiledir);
-        pval->size = lib_ctx->profiledir_len - 1;
+        pval->size = lib_ctx->profiledir_len;
         pval->persistent = false;
     }
 }
@@ -3071,7 +3079,7 @@ gs_seticcdirectory(const gs_gstate * pgs, gs_param_string * pval)
             return gs_rethrow(gs_error_VMerror, "cannot allocate directory name");
         memcpy(pname,pval->data,namelen-1);
         pname[namelen-1] = 0;
-        if (gs_lib_ctx_set_icc_directory(mem, (const char*) pname, namelen) < 0) {
+        if (gs_lib_ctx_set_icc_directory(mem, (const char*) pname, namelen-1) < 0) {
             gs_free_object(mem, pname, "gs_seticcdirectory");
             return -1;
         }
@@ -3146,7 +3154,7 @@ gs_setdefaultrgbicc(const gs_gstate * pgs, gs_param_string * pval)
     memcpy(pname,pval->data,namelen-1);
     pname[namelen-1] = 0;
     code = gsicc_set_profile(pgs->icc_manager,
-        (const char*) pname, namelen, DEFAULT_RGB);
+        (const char*) pname, namelen-1, DEFAULT_RGB);
     gs_free_object(mem, pname,
         "set_default_rgb_icc");
     if (code < 0)
@@ -3186,7 +3194,7 @@ gs_setnamedprofileicc(const gs_gstate * pgs, gs_param_string * pval)
         memcpy(pname,pval->data,namelen-1);
         pname[namelen-1] = 0;
         code = gsicc_set_profile(pgs->icc_manager,
-            (const char*) pname, namelen, NAMED_TYPE);
+            (const char*) pname, namelen-1, NAMED_TYPE);
         gs_free_object(mem, pname,
                 "set_named_profile_icc");
         if (code < 0)
@@ -3226,7 +3234,7 @@ gs_setdefaultcmykicc(const gs_gstate * pgs, gs_param_string * pval)
     memcpy(pname,pval->data,namelen-1);
     pname[namelen-1] = 0;
     code = gsicc_set_profile(pgs->icc_manager,
-        (const char*) pname, namelen, DEFAULT_CMYK);
+        (const char*) pname, namelen-1, DEFAULT_CMYK);
     gs_free_object(mem, pname,
                 "set_default_cmyk_icc");
     if (code < 0)
@@ -3260,7 +3268,7 @@ gs_setlabicc(const gs_gstate * pgs, gs_param_string * pval)
     memcpy(pname,pval->data,namelen-1);
     pname[namelen-1] = 0;
     code = gsicc_set_profile(pgs->icc_manager,
-        (const char*) pname, namelen, LAB_TYPE);
+        (const char*) pname, namelen-1, LAB_TYPE);
     gs_free_object(mem, pname,
                 "set_lab_icc");
     if (code < 0)

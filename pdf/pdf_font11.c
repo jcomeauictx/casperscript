@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -236,6 +236,13 @@ pdfi_cidtype2_enumerate_glyph(gs_font *font, int *pindex,
     return code;
 }
 
+static void pdfi_set_cidtype2_custom_procs(pdf_cidfont_type2 *pdfttfont)
+{
+    gs_font_type42 *pfont = (gs_font_type42 *)pdfttfont->pfont;
+    pdfttfont->default_font_info = pfont->procs.font_info;
+    pfont->procs.font_info = pdfi_default_font_info;
+}
+
 static int
 pdfi_alloc_cidtype2_font(pdf_context *ctx, pdf_cidfont_type2 **font, bool is_cid)
 {
@@ -300,15 +307,18 @@ pdfi_alloc_cidtype2_font(pdf_context *ctx, pdf_cidfont_type2 **font, bool is_cid
     pfont->procs.decode_glyph = pdfi_cidfont_decode_glyph;
     pfont->procs.define_font = gs_no_define_font;
     pfont->procs.make_font = gs_no_make_font;
-    pfont->procs.font_info = gs_default_font_info;
+
+    ttfont->default_font_info = gs_default_font_info;
+    pfont->procs.font_info = pdfi_default_font_info;
+
     pfont->procs.glyph_info = gs_default_glyph_info;
     pfont->procs.glyph_outline = gs_no_glyph_outline;
     pfont->procs.build_char = NULL;
     pfont->procs.same_font = gs_default_same_font;
     pfont->procs.enumerate_glyph = gs_no_enumerate_glyph;
 
-    pfont->encoding_index = 1;          /****** WRONG ******/
-    pfont->nearest_encoding_index = 1;          /****** WRONG ******/
+    pfont->encoding_index = ENCODING_INDEX_UNKNOWN;
+    pfont->nearest_encoding_index = ENCODING_INDEX_UNKNOWN;
 
     cid_system_info_set_null(&pfont->cidata.common.CIDSystemInfo);
     pfont->cidata.common.CIDCount = 0; /* set later */
@@ -385,15 +395,11 @@ int pdfi_read_cidtype2_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *str
         obj = NULL;
     }
 
-    code = pdfi_dict_knownget_type(ctx, font_dict, "DW", PDF_INT, (pdf_obj **)&obj);
-    if (code > 0) {
-        font->DW = ((pdf_num *)obj)->value.i;
-        pdfi_countdown(obj);
-        obj = NULL;
-    }
-    else {
+    code = pdfi_dict_knownget_number(ctx, font_dict, "DW", &font->DW);
+    if (code <= 0) {
         font->DW = 1000;
     }
+
     code = pdfi_dict_knownget_type(ctx, font_dict, "DW2", PDF_ARRAY, (pdf_obj **)&obj);
     if (code > 0) {
         font->DW2 = (pdf_array *)obj;
@@ -493,6 +499,8 @@ int pdfi_read_cidtype2_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *str
     if (code < 0) {
         goto error;
     }
+    pdfi_set_cidtype2_custom_procs(font);
+
     if (uid_is_XUID(&font->pfont->UID))
         uid_free(&font->pfont->UID, font->pfont->memory, "pdfi_read_type1_font");
     uid_set_invalid(&font->pfont->UID);
@@ -525,6 +533,7 @@ int pdfi_read_cidtype2_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *str
     cid2->cidata.orig_procs.get_outline = cid2->data.get_outline;
     cid2->data.get_glyph_index = pdfi_cidtype2_get_glyph_index;
 
+    pdfi_font_set_orig_fonttype(ctx, (pdf_font *)font);
     code = gs_definefont(ctx->font_dir, (gs_font *)font->pfont);
     if (code < 0) {
         goto error;
@@ -543,6 +552,21 @@ int pdfi_read_cidtype2_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *str
     *ppfont = (pdf_font *)font;
     return code;
 error:
+    pdfi_countdown(obj);
+    obj = NULL;
+    if (pdfi_dict_get(ctx, font_dict, ".Path", &obj) >= 0)
+    {
+        char fname[gp_file_name_sizeof + 1];
+        pdf_string *fobj = (pdf_string *)obj;
+
+        memcpy(fname, fobj->data, fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length);
+        fname[fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length] = '\0';
+
+        pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_cidtype2_font", "Error reading CIDType2/TrueType font file %s\n", fname);
+    }
+    else {
+        pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_cidtype2_font", "Error reading embedded CIDType2/TrueType font object %u\n", font_dict->object_num);
+    }
 
     pdfi_countdown(obj);
     pdfi_countdown(font);

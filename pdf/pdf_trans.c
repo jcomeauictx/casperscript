@@ -270,10 +270,9 @@ static int pdfi_trans_set_mask(pdf_context *ctx, pdfi_int_gstate *igs, int color
                 params.ColorSpace = pcs;
                 if (code < 0)
                     goto exit;
-            } else {
-                /* Inherit current colorspace */
-                params.ColorSpace = ctx->pgs->color[colorindex].color_space;
             }
+            else
+                   params.ColorSpace = NULL;
         } else {
             /* GS and Adobe will ignore the whole mask in this case, so we do the same.
             */
@@ -295,7 +294,7 @@ static int pdfi_trans_set_mask(pdf_context *ctx, pdfi_int_gstate *igs, int color
             }
             params.Background_components = pdfi_array_size(BC);
 
-            if (gs_color_space_num_components(params.ColorSpace) != params.Background_components)
+            if (params.ColorSpace != NULL && gs_color_space_num_components(params.ColorSpace) != params.Background_components)
                 pdfi_set_warning(ctx, 0, NULL, W_PDF_GROUP_BAD_BC, "pdfi_trans_set_mask", NULL);
 
             /* TODO: Not sure how to handle this...  recheck PS code (pdf_draw.ps/gssmask) */

@@ -310,44 +310,38 @@ static int cmap_endfbrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, by
         if (pdf_ps_obj_has_type(&(stobj[i + 2]), PDF_PS_OBJ_ARRAY)
         &&  pdf_ps_obj_has_type(&(stobj[i + 1]), PDF_PS_OBJ_STRING)
         &&  pdf_ps_obj_has_type(&(stobj[i]), PDF_PS_OBJ_STRING)){
+            uint cidbase;
+            int m, size;
 
-            uint cidbase = 0;
-            int srcs = 0, srce = 0;
-            int kslen = stobj[i].size;
-
-            if (kslen > 4) {
-                dprintf("CMap: value out of range\n");
+            if (stobj[i + 2].size < 1)
                 continue;
-            }
 
-            for (k = 0; k < stobj[i].size; k++) {
-                srcs |= stobj[i].val.string[stobj[i].size - k - 1] << (8 * k);
-            }
-            for (k = 0; k < stobj[i + 1].size; k++) {
-                srce |= stobj[i + 1].val.string[stobj[i + 1].size - k - 1] << (8 * k);
-            }
+            else if (stobj[i + 2].size == 1) {
+                if (stobj[i + 2].val.arr[0].type != PDF_PS_OBJ_STRING)
+                     continue;
 
-            for (k = srcs; k < srce + 1; k++) {
-                int m, size;
-                char srccode[4]; /* we only deal with up to 4 bytes */
-                char *psrccode = &(srccode[4 - kslen]);
+                size = stobj[i + 2].val.arr[0].size;
 
-                if ((k - srcs) < stobj[i + 2].size) {
-                    if (stobj[i + 2].val.arr[k - srcs].type != PDF_PS_OBJ_STRING)
-                        continue;
-                    size = stobj[i + 2].val.arr[k - srcs].size;
+                cidbase = 0;
+                for (m = 0; m < size; m++) {
+                    cidbase |= stobj[i + 2].val.arr[0].val.string[size - m - 1] << (8 * m);
+                }
 
-                    cidbase = 0;
-                    for (m = 0; m < size; m++) {
-                        cidbase |= stobj[i + 2].val.arr[k - srcs].val.string[size - m - 1] << (8 * m);
+                /* First, find the length of the prefix */
+                for (preflen = 0; preflen < stobj[i].size; preflen++) {
+                    if(stobj[i].val.string[preflen] != stobj[i + 1].val.string[preflen]) {
+                        break;
                     }
                 }
-                else {
-                    cidbase++;
+
+                if (preflen == stobj[i].size) {
+                    preflen = 1;
                 }
 
-                for (m = 0; m < kslen; m++) {
-                    psrccode[m] = (k >> (8 * (kslen - m - 1))) & 0xff;
+                if (preflen > MAX_CMAP_CODE_SIZE || stobj[i].size - preflen > MAX_CMAP_CODE_SIZE || stobj[i + 1].size - preflen > MAX_CMAP_CODE_SIZE
+                    || stobj[i].size - preflen < 0 || stobj[i + 1].size - preflen < 0) {
+                    (void)pdf_ps_stack_pop(s, to_pop);
+                    return_error(gs_error_syntaxerror);
                 }
 
                 /* Find how many bytes we need for the cidbase value */
@@ -355,15 +349,13 @@ static int cmap_endfbrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, by
                 for (valuelen = 16; valuelen < 32 && (cidbase >> valuelen) > 0; valuelen += 1)
                     DO_NOTHING;
 
-                preflen = kslen > 4 ? 4 : kslen;
-
                 valuelen = ((valuelen + 7) & ~7) >> 3;
 
                 /* The prefix is already directly in the gx_cmap_lookup_range_t
                  * We need to store the lower and upper character codes, after lopping the prefix
                  * off them. The upper and lower codes must be the same number of bytes.
                  */
-                j = sizeof(pdfi_cmap_range_map_t) + (kslen - preflen) + valuelen;
+                j = sizeof(pdfi_cmap_range_map_t) + 2 * (stobj[i].size - preflen) + valuelen;
 
                 pdfir = (pdfi_cmap_range_map_t *)gs_alloc_bytes(mem, j, "cmap_endcidrange_func(pdfi_cmap_range_map_t)");
                 if (pdfir != NULL) {
@@ -371,29 +363,121 @@ static int cmap_endfbrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, by
                     pdfir->next = NULL;
                     gxr->num_entries = 1;
                     gxr->keys.data = (byte *)&(pdfir[1]);
-                    gxr->values.data = gxr->keys.data + (kslen - preflen);
+                    gxr->values.data = gxr->keys.data + 2 * (stobj[i].size - preflen);
 
                     gxr->cmap = NULL;
                     gxr->font_index = 0;
-                    gxr->key_is_range = false;
+                    gxr->key_is_range = true;
                     gxr->value_type = CODE_VALUE_CID;
                     gxr->key_prefix_size = preflen;
-                    gxr->key_size = kslen - gxr->key_prefix_size;
-                    memcpy(gxr->key_prefix, psrccode, gxr->key_prefix_size);
+                    gxr->key_size = stobj[i].size - gxr->key_prefix_size;
+                    memcpy(gxr->key_prefix, stobj[i].val.string, gxr->key_prefix_size);
 
-                    memcpy(gxr->keys.data, psrccode + gxr->key_prefix_size, kslen - gxr->key_prefix_size);
+                    memcpy(gxr->keys.data, stobj[i].val.string + gxr->key_prefix_size, stobj[i].size - gxr->key_prefix_size);
+                    memcpy(gxr->keys.data + (stobj[i].size - gxr->key_prefix_size), stobj[i + 1].val.string + gxr->key_prefix_size, stobj[i + 1].size - gxr->key_prefix_size);
 
-                    gxr->keys.size = kslen - gxr->key_prefix_size;
+                    gxr->keys.size = (stobj[i].size - gxr->key_prefix_size) + (stobj[i + 1].size - gxr->key_prefix_size);
                     for (j = 0; j < valuelen; j++) {
                         gxr->values.data[j] = (cidbase >> ((valuelen - 1 - j) * 8)) & 255;
                     }
                     gxr->value_size = valuelen; /* I'm not sure.... */
                     gxr->values.size = valuelen;
-                    if (cmap_insert_map(&(pdficmap->cmap_range), pdfir) < 0) break;
+                    if (cmap_insert_map(&pdficmap->cmap_range, pdfir) < 0) break;
                 }
                 else {
                     (void)pdf_ps_stack_pop(s, to_pop);
                     return_error(gs_error_VMerror);
+                }
+            }
+            else {
+                int m, size, keysize;
+                uint codelo = 0, codehi = 0;
+
+                size = stobj[i].size;
+                for (m = 0; m < size; m++) {
+                    codelo |= stobj[i].val.string[size - m - 1] << (8 * m);
+                }
+                size = stobj[i + 1].size;
+                for (m = 0; m < size; m++) {
+                    codehi |= stobj[i + 1].val.string[size - m - 1] << (8 * m);
+                }
+
+                if (codehi <= codelo || stobj[i + 2].size < (codehi - codelo))
+                    continue;
+
+                for (k = codelo; k <= codehi; k++) {
+                    uint cidbase;
+                    int ind = k - codelo;
+
+                    if (stobj[i + 2].val.arr[ind].type != PDF_PS_OBJ_STRING)
+                         continue;
+
+                    size = stobj[i + 2].val.arr[ind].size;
+
+                    cidbase = 0;
+                    for (m = 0; m < size; m++) {
+                        cidbase |= stobj[i + 2].val.arr[ind].val.string[size - m - 1] << (8 * m);
+                    }
+                    /* Find how many bytes we need for the cidbase value */
+                    /* We always store at least two bytes for the cidbase value */
+                    for (valuelen = 16; valuelen < 32 && (cidbase >> valuelen) > 0; valuelen += 1)
+                        DO_NOTHING;
+
+                    valuelen = ((valuelen + 7) & ~7) >> 3;
+
+                    /* Find how many bytes we need for the cidbase value */
+                    /* We always store at least two bytes for the cidbase value */
+                    for (keysize = 16; keysize < 32 && (cidbase >> keysize) > 0; keysize += 1)
+                        DO_NOTHING;
+
+                    keysize = ((keysize + 7) & ~7) >> 3;
+                    if (keysize > MAX_CMAP_CODE_SIZE * 2) {
+                        (void)pdf_ps_stack_pop(s, to_pop);
+                        return_error(gs_error_syntaxerror);
+                    }
+                    preflen = keysize > 4 ? 4 : keysize;
+                    keysize -= preflen;
+
+                    /* The prefix is already directly in the gx_cmap_lookup_range_t
+                     * We need to store the lower and upper character codes, after lopping the prefix
+                     * off them. The upper and lower codes must be the same number of bytes.
+                     */
+                    j = sizeof(pdfi_cmap_range_map_t) + keysize + valuelen;
+
+                    pdfir = (pdfi_cmap_range_map_t *)gs_alloc_bytes(mem, j, "cmap_endcidrange_func(pdfi_cmap_range_map_t)");
+                    if (pdfir != NULL) {
+                        gx_cmap_lookup_range_t *gxr = &pdfir->range;
+                        pdfir->next = NULL;
+                        gxr->num_entries = 1;
+                        gxr->keys.data = (byte *)&(pdfir[1]);
+                        gxr->values.data = gxr->keys.data + keysize;
+
+                        gxr->cmap = NULL;
+                        gxr->font_index = 0;
+                        gxr->key_is_range = false;
+                        gxr->value_type = CODE_VALUE_CID;
+                        gxr->key_prefix_size = preflen;
+                        gxr->key_size = keysize;
+                        for (j = 0; j < preflen; j++) {
+                            gxr->key_prefix[j] = (k >> ((preflen - 1 - j) * 8)) & 255;
+                        }
+
+                        for (j = preflen; j < preflen + keysize; j++) {
+                            gxr->keys.data[j] = (k >> (((preflen + keysize) - 1 - j) * 8)) & 255;
+                        }
+
+                        gxr->keys.size = keysize;
+                        for (j = 0; j < valuelen; j++) {
+                            gxr->values.data[j] = (cidbase >> ((valuelen - 1 - j) * 8)) & 255;
+                        }
+                        gxr->value_size = valuelen; /* I'm not sure.... */
+                        gxr->values.size = valuelen;
+                        if (cmap_insert_map(&pdficmap->cmap_range, pdfir) < 0) break;
+                    }
+                    else {
+                        (void)pdf_ps_stack_pop(s, to_pop);
+                        return_error(gs_error_VMerror);
+                    }
                 }
             }
         }
@@ -426,7 +510,7 @@ static int general_endcidchar_func(gs_memory_t *mem, pdf_ps_ctx_t *s, pdf_cmap *
         int preflen = 1, valuelen;
 
         if (pdf_ps_obj_has_type(&(stobj[i + 1]), PDF_PS_OBJ_INTEGER)
-        &&  pdf_ps_obj_has_type(&(stobj[i]), PDF_PS_OBJ_STRING)) {
+        &&  pdf_ps_obj_has_type(&(stobj[i]), PDF_PS_OBJ_STRING) && stobj[i].size > 0) {
             uint cidbase = stobj[i + 1].val.i;
 
             /* Find how many bytes we need for the cidbase value */
@@ -630,7 +714,13 @@ static int cmap_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *buf
         }
         else if (!memcmp(s->cur[-1].val.name, CMAP_NAME_AND_LEN("WMode"))) {
             if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_INTEGER)) {
-                pdficmap->wmode = s->cur[0].val.i;
+                if (s->cur[0].val.i != 0) {
+                    if (s->cur[0].val.i != 1)
+                        pdfi_set_warning(s->pdfi_ctx, 0, NULL, W_PDF_BAD_WMODE, "cmap_def_func", NULL);
+                    pdficmap->wmode = 1;
+                }
+                else
+                    pdficmap->wmode = 0;
             }
             else {
                 pdficmap->wmode = 0;

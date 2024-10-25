@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -106,6 +106,20 @@ typedef struct stream_save_s {
     int group_depth;
 } stream_save;
 
+/* resource font object cache - this is a simple lookup table
+   to match a FontDescriptor containing a FontFile* entry with
+   a pdfi font object derived from the FontFile stream
+ */
+
+#define RESOURCE_FONT_CACHE_BLOCK_SIZE 32
+typedef struct resource_font_cache_s resource_font_cache_t;
+
+struct resource_font_cache_s
+{
+    int desc_obj_num;
+    pdf_obj *pdffont;
+};
+
 typedef struct name_entry_s {
     char *name;
     int len;
@@ -137,6 +151,8 @@ typedef struct cmd_args_s {
     bool preserveannots;
     char **preserveannottypes; /* Null terminated array of strings, NULL if none */
     bool preservemarkedcontent;
+    bool preserveembeddedfiles;
+    bool preservedocview;
     bool nouserunit;
     bool renderttnotdef;
     bool pdfinfo;
@@ -233,6 +249,11 @@ typedef struct text_state_s {
      * when we are in a text block.
      */
     int BlockDepth;
+    /* We set this when in a clipping text rendering mode when we draw the first text
+     * We use this (and the BlockDepth) to detect whether switching to a non-clipping
+     * text mode is an error or not.
+     */
+    bool TextClip;
     /* This is to determine if we get Type 3 Charproc operators (d0 and d1) outside
      * a Type 3 BuildChar.
      */
@@ -473,6 +494,8 @@ typedef struct pdf_context_s
     pdf_dict *pdfnativefontmap; /* Explicit mappings take precedence, hence we need separate dictionaries */
     pdf_dict *pdf_substitute_fonts;
     pdf_dict *pdfcidfmap;
+    resource_font_cache_t *resource_font_cache;
+    uint32_t resource_font_cache_size;
 
     gx_device *devbbox; /* Cached for use in pdfi_string_bbox */
     /* These function pointers can be replaced by ones intended to replicate
@@ -515,6 +538,7 @@ int pdfi_open_pdf_file(pdf_context *ctx, char *filename);
 int pdfi_set_input_stream(pdf_context *ctx, stream *stm);
 int pdfi_process_pdf_file(pdf_context *ctx, char *filename);
 int pdfi_prep_collection(pdf_context *ctx, uint64_t *TotalFiles, char ***names_array);
+int pdfi_finish_pdf_file(pdf_context *ctx);
 int pdfi_close_pdf_file(pdf_context *ctx);
 int pdfi_gstate_from_PS(pdf_context *ctx, gs_gstate *pgs, pdfi_switch_t *i_switch, gsicc_profile_cache_t *profile_cache);
 void pdfi_gstate_to_PS(pdf_context *ctx, gs_gstate *pgs, pdfi_switch_t *i_switch);

@@ -28,6 +28,7 @@
 #include "gsicc_create.h"
 #include "gsicc_cache.h"
 #include "gximdecode.h" /* Need so that we can unpack and decode */
+#include "gxpaint.h"
 
 #define MAXPRINTERNAME 64
 
@@ -159,17 +160,16 @@ typedef struct xps_image_enum_s {
     byte *devc_buffer; /* Needed for case where we are mapping to device colors */
     gs_color_space *pcs;     /* Needed for Sep, DeviceN, Indexed */
     gsicc_link_t *icc_link;  /* Needed for CIELAB */
-    const gs_gstate *pgs;    /* Needed for color conversions of DeviceN etc */
     gp_file *fid;
 } xps_image_enum_t;
 
 static void
 xps_image_enum_finalize(const gs_memory_t *cmem, void *vptr);
 
-gs_private_st_suffix_add4_final(st_xps_image_enum, xps_image_enum_t,
+gs_private_st_suffix_add3_final(st_xps_image_enum, xps_image_enum_t,
     "xps_image_enum_t", xps_image_enum_enum_ptrs,
     xps_image_enum_reloc_ptrs, xps_image_enum_finalize, st_vector_image_enum,
-    buffer, devc_buffer, pcs, pgs);
+    buffer, devc_buffer, pcs);
 
 typedef struct gx_device_xps_s {
     /* superclass state */
@@ -192,6 +192,10 @@ typedef struct gx_device_xps_s {
     double miterlimit;
     bool can_stroke;
     unsigned char PrinterName[MAXPRINTERNAME];
+    bool in_path;
+    bool in_clip;
+    bool clip_written;
+    bool rect_written;
 } gx_device_xps;
 
 gs_public_st_suffix_add1_final(st_device_xps, gx_device_xps,
@@ -913,6 +917,10 @@ xps_open_device(gx_device *dev)
     xps->linejoin = XPS_DEFAULT_LINEJOIN;
     xps->miterlimit = XPS_DEFAULT_MITERLIMIT;
     xps->can_stroke = true;
+    xps->in_path = false;
+    xps->in_clip = false;
+    xps->clip_written = false;
+    xps->rect_written = false;
     /* zip info */
     xps->f2i = NULL;
     xps->f2i_tail = NULL;
@@ -1074,6 +1082,10 @@ xps_output_page(gx_device *dev, int num_copies, int flush)
     gx_device_vector *vdev = (gx_device_vector *)dev;
     int code;
 
+    if (!vdev->in_page) {
+        (*vdev_proc(vdev, beginpage)) (vdev);
+        vdev->in_page = true;
+    }
     write_str_to_current_page(xps, "</Canvas></FixedPage>");
 
     if (xps->relations_head)
@@ -1487,7 +1499,7 @@ static bool
 drawing_path(gx_path_type_t path_type, xps_brush_t brush_type)
 {
     return ((path_type & gx_path_type_stroke) || (path_type & gx_path_type_fill) ||
-        image_brush_fill(path_type, brush_type));
+        (path_type & gx_path_type_clip) || image_brush_fill(path_type, brush_type));
 }
 
 static void
@@ -1552,6 +1564,34 @@ xps_dorect(gx_device_vector *vdev, fixed x0, fixed y0,
         return 0;
     }
 
+    /* CLIP - we only write clips as an attribute of a path */
+    if (type & gx_path_type_clip && !image_brush_fill(type, xps->filltype)) {
+        if (xps->in_path == false)
+            return 0;
+        fmt = "Clip=\"M %g,%g V %g H %g V %g Z\" ";
+        gs_snprintf(line, sizeof(line), fmt,
+                   fixed2float(x0), fixed2float(y0),
+                   fixed2float(y1), fixed2float(x1),
+                   fixed2float(y0));
+        write_str_to_current_page(xps, line);
+        return 0;
+    }
+
+    if (xps->in_path && image_brush_fill(type, xps->filltype)) {
+        write_str_to_current_page(xps, "/>\n");
+        xps->in_path = false;
+        xps->in_clip = false;
+        xps->clip_written = false;
+    }
+
+    if (xps->in_path && xps->rect_written) {
+        write_str_to_current_page(xps, "/>\n");
+        xps->in_path = false;
+        xps->in_clip = false;
+        xps->clip_written = false;
+        xps->rect_written = false;
+    }
+
     if ((type & gx_path_type_stroke) && !xps->can_stroke) {
         return_error(gs_error_rangecheck);
     }
@@ -1569,7 +1609,8 @@ xps_dorect(gx_device_vector *vdev, fixed x0, fixed y0,
         xps_finish_image_path(vdev);
     } else if (type & gx_path_type_fill) {
         /* Solid fill */
-        write_str_to_current_page(xps, "<Path ");
+        if (!xps->in_path)
+            write_str_to_current_page(xps, "<Path ");
         /* NB - F0 should be changed for a different winding type */
         fmt = "Fill=\"#%06X\" Data=\"M %g,%g V %g H %g V %g Z\" ";
         c = xps->fillcolor & 0xffffffL;
@@ -1578,10 +1619,14 @@ xps_dorect(gx_device_vector *vdev, fixed x0, fixed y0,
                    fixed2float(y1), fixed2float(x1),
                    fixed2float(y0));
         write_str_to_current_page(xps, line);
-        write_str_to_current_page(xps, "/>\n");
+        if (!xps->in_path)
+            write_str_to_current_page(xps, "/>\n");
+        else
+            xps->rect_written = true;
     } else {
         /* Solid stroke */
-        write_str_to_current_page(xps, "<Path ");
+        if (!xps->in_path)
+            write_str_to_current_page(xps, "<Path ");
         fmt = "Stroke=\"#%06X\" Data=\"M %g,%g V %g H %g V %g Z\" ";
         c = xps->strokecolor & 0xffffffL;
         gs_snprintf(line, sizeof(line), fmt, c,
@@ -1596,7 +1641,10 @@ xps_dorect(gx_device_vector *vdev, fixed x0, fixed y0,
             gs_snprintf(line, sizeof(line), fmt, xps->linewidth);
             write_str_to_current_page(xps, line);
         }
-        write_str_to_current_page(xps, "/>\n");
+        if (!xps->in_path)
+            write_str_to_current_page(xps, "/>\n");
+        else
+            xps->rect_written = true;
     }
     /* end and close NB \n not necessary. */
     return 0;
@@ -1607,10 +1655,31 @@ gdev_xps_fill_path(gx_device * dev, const gs_gstate * pgs, gx_path * ppath,
                    const gx_fill_params * params,
                    const gx_drawing_color * pdcolor, const gx_clip_path * pcpath)
 {
+    gx_device_xps *xps = (gx_device_xps *)dev;
+    int code = 0;
+
     if (gx_path_is_void(ppath)) {
         return 0;
     }
-    return gdev_vector_fill_path(dev, pgs, ppath, params, pdcolor, pcpath);
+
+    (void)gdev_vector_stream((gx_device_vector*)xps);
+
+    if (xps->in_path) {
+        write_str_to_current_page(xps, "/>\n");
+        xps->in_clip = false;
+    }
+
+    xps->clip_path_id = xps->no_clip_path_id;
+    write_str_to_current_page(xps, "<Path ");
+    xps->in_path = true;
+    code = gdev_vector_fill_path(dev, pgs, ppath, params, pdcolor, pcpath);
+    if (xps->in_path) {
+        write_str_to_current_page(xps, "/>\n");
+        xps->in_path = false;
+    }
+    xps->clip_written = false;
+    xps->rect_written = false;
+    return code;
 }
 
 static int
@@ -1618,10 +1687,32 @@ gdev_xps_stroke_path(gx_device * dev, const gs_gstate * pgs, gx_path * ppath,
                      const gx_stroke_params * params,
                      const gx_drawing_color * pdcolor, const gx_clip_path * pcpath)
 {
+    gx_device_xps *xps = (gx_device_xps *)dev;
+    int code = 0;
+
     if (gx_path_is_void(ppath)) {
         return 0;
     }
-    return gdev_vector_stroke_path(dev, pgs, ppath, params, pdcolor, pcpath);
+
+    (void)gdev_vector_stream((gx_device_vector*)xps);
+
+    if (xps->in_path) {
+        write_str_to_current_page(xps, "/>\n");
+        xps->in_clip = false;
+    }
+
+    xps->clip_path_id = xps->no_clip_path_id;
+    write_str_to_current_page(xps, "<Path ");
+    xps->in_path = true;
+    code = gdev_vector_stroke_path(dev, pgs, ppath, params, pdcolor, pcpath);
+    if (xps->in_path) {
+        write_str_to_current_page(xps, "/>\n");
+        xps->in_path = false;
+
+    }
+    xps->clip_written = false;
+    xps->rect_written = false;
+    return code;
 }
 
 static int
@@ -1640,26 +1731,44 @@ xps_beginpath(gx_device_vector *vdev, gx_path_type_t type)
         return 0;
     }
 
-    if (!xps->can_stroke) {
+    if ((type & gx_path_type_stroke) && !xps->can_stroke) {
         return_error(gs_error_rangecheck);
     }
 
     c = type & gx_path_type_fill ? xps->fillcolor : xps->strokecolor;
     c &= 0xffffffL;
 
+    /* NOTE the XPS code (ab)uses the clip to write the rectangle for the image!
+    */
+    if (type & gx_path_type_clip && !image_brush_fill(type, xps->filltype)) {
+        if (xps->in_path == true && xps->clip_written == false) {
+            write_str_to_current_page(xps, " Clip=\"");
+            xps->in_clip = true;
+        }
+        goto exit;
+    }
+
     if (!image_brush_fill(type, xps->filltype)) {
-        write_str_to_current_page(xps, "<Path ");
-        if (type & gx_path_type_fill)
-            fmt = "Fill=\"#%06X\" Data=\"";
-        else
+        if (type & gx_path_type_fill) {
+            if (type == gx_path_type_fill)
+                fmt = "Fill=\"#%06X\" Data=\"F 1";
+            else
+                fmt = "Fill=\"#%06X\" Data=\"";
+        }
+        else {
             fmt = "Stroke=\"#%06X\" Data=\"";
+        }
         gs_snprintf(line, sizeof(line), fmt, c);
         write_str_to_current_page(xps, line);
     }
     else {
-        write_str_to_current_page(xps, "<Path Data=\"");
+        if ( image_brush_fill(type, xps->filltype))
+            write_str_to_current_page(xps, "<Path Data=\"");
+        else
+            write_str_to_current_page(xps, " Data=\"");
     }
 
+exit:
     if_debug1m('_', xps->memory, "xps_beginpath %s\n", line);
 
     return 0;
@@ -1676,10 +1785,18 @@ xps_moveto(gx_device_vector *vdev, double x0, double y0,
 
     /* skip non-drawing paths for now */
     if (!drawing_path(type, xps->filltype)) {
-        if_debug1m('_', xps->memory, "xps_moveto: type not supported %x\n", type);
-        return 0;
+        if (type == gx_path_type_none) {
+            if (xps->in_path == false) {
+                if_debug1m('_', xps->memory, "xps_moveto: type not supported %x\n", type);
+                return 0;
+            }
+        }
     }
 
+    if ((type & gx_path_type_clip || type == gx_path_type_none) && !image_brush_fill(type, xps->filltype)) {
+        if (xps->in_path == false || xps->clip_written)
+            return 0;
+    }
     gs_snprintf(line, sizeof(line), " M %g,%g", x, y);
     write_str_to_current_page(xps, line);
     if_debug1m('_', xps->memory, "xps_moveto %s", line);
@@ -1697,9 +1814,19 @@ xps_lineto(gx_device_vector *vdev, double x0, double y0,
 
     /* skip non-drawing paths for now */
     if (!drawing_path(type, xps->filltype)) {
-        if_debug1m('_', xps->memory, "xps_lineto: type not supported %x\n", type);
-        return 0;
+        if (type == gx_path_type_none) {
+            if (xps->in_path == false) {
+                if_debug1m('_', xps->memory, "xps_lineto: type not supported %x\n", type);
+                return 0;
+            }
+        }
     }
+
+    if ((type & gx_path_type_clip || type == gx_path_type_none) && !image_brush_fill(type, xps->filltype)) {
+        if (xps->in_path == false || xps->clip_written)
+            return 0;
+    }
+
     gs_snprintf(line, sizeof(line), " L %g,%g", x, y);
     write_str_to_current_page(xps, line);
     if_debug1m('_', xps->memory, "xps_lineto %s\n", line);
@@ -1716,8 +1843,17 @@ xps_curveto(gx_device_vector *vdev, double x0, double y0,
 
     /* skip non-drawing paths for now */
     if (!drawing_path(type, xps->filltype)) {
-        if_debug1m('_', xps->memory, "xps_curveto: type not supported %x\n", type);
-        return 0;
+        if (type == gx_path_type_none) {
+            if (xps->in_path == false) {
+                if_debug1m('_', xps->memory, "xps_curveto: type not supported %x\n", type);
+                return 0;
+            }
+        }
+    }
+
+    if ((type & gx_path_type_clip || type == gx_path_type_none) && !image_brush_fill(type, xps->filltype)) {
+        if (xps->in_path == false || xps->clip_written)
+            return 0;
     }
 
     gs_snprintf(line, sizeof(line), " C %g,%g %g,%g %g,%g", x1, y1,
@@ -1736,8 +1872,17 @@ xps_closepath(gx_device_vector *vdev, double x, double y,
 
     /* skip non-drawing paths for now */
     if (!drawing_path(type, xps->filltype)) {
-        if_debug1m('_', xps->memory, "xps_closepath: type not supported %x\n", type);
-        return 0;
+        if (type == gx_path_type_none) {
+            if (xps->in_path == false) {
+                if_debug1m('_', xps->memory, "xps_closepath: type not supported %x\n", type);
+                return 0;
+            }
+        }
+    }
+
+    if ((type & gx_path_type_clip || type == gx_path_type_none) && !image_brush_fill(type, xps->filltype)) {
+        if (xps->in_path == false || xps->clip_written)
+            return 0;
     }
 
     write_str_to_current_page(xps, " Z");
@@ -1753,10 +1898,18 @@ xps_endpath(gx_device_vector *vdev, gx_path_type_t type)
     char line[200];
     const char *fmt;
 
-    /* skip non-drawing paths for now */
-    if (!drawing_path(type, xps->filltype)) {
-        if_debug1m('_', xps->memory, "xps_endpath: type not supported %x\n", type);
-        return 0;
+    if (xps->in_clip) {
+        xps->in_clip = false;
+        xps->clip_written = true;
+        if (type & gx_path_type_clip) {
+            if (xps->in_path == false)
+                return 0;
+        }
+    } else {
+        if (type & gx_path_type_clip && !image_brush_fill(type, xps->filltype)) {
+            if (xps->in_path == false || xps->clip_written)
+                return 0;
+        }
     }
 
     if (image_brush_fill(type, xps->filltype)) {
@@ -1765,12 +1918,51 @@ xps_endpath(gx_device_vector *vdev, gx_path_type_t type)
         xps_finish_image_path(vdev);
     } else if (type & gx_path_type_stroke) {
         /* NB format width. */
-        fmt = "\" StrokeThickness=\"%g\" />\n";
+        fmt = "\" StrokeThickness=\"%g\" ";
         gs_snprintf(line, sizeof(line), fmt, xps->linewidth);
         write_str_to_current_page(xps, line);
+        switch(xps->linecap) {
+            case gs_cap_round:
+                gs_snprintf(line, sizeof(line), "StrokeStartLineCap=\"Round\" StrokeEndLineCap=\"Round\" ");
+                write_str_to_current_page(xps, line);
+                break;
+            case gs_cap_square:
+                gs_snprintf(line, sizeof(line), "StrokeStartLineCap=\"Square\" StrokeEndLineCap=\"Square\" ");
+                write_str_to_current_page(xps, line);
+                break;
+            case gs_cap_triangle:
+                gs_snprintf(line, sizeof(line), "StrokeStartLineCap=\"Triangle\" StrokeEndLineCap=\"Triangle\" ");
+                write_str_to_current_page(xps, line);
+                break;
+            case gs_cap_butt:
+            case gs_cap_unknown:
+            default:
+                break;
+        }
+        switch(xps->linejoin) {
+            case gs_join_round:
+                gs_snprintf(line, sizeof(line), "StrokeLineJoin=\"Round\" ");
+                write_str_to_current_page(xps, line);
+                break;
+            case gs_join_miter:
+                gs_snprintf(line, sizeof(line), "StrokeLineJoin=\"Miter\" ");
+                write_str_to_current_page(xps, line);
+                gs_snprintf(line, sizeof(line), "StrokeMiterLimit=\"%g\" ", xps->miterlimit);
+                write_str_to_current_page(xps, line);
+                break;
+            case gs_join_bevel:
+                gs_snprintf(line, sizeof(line), "StrokeLineJoin=\"Bevel\" ");
+                write_str_to_current_page(xps, line);
+                break;
+            case gs_join_none:
+            case gs_join_triangle:
+            case gs_join_unknown:
+            default:
+                break;
+        }
     } else { /* fill */
         /* close the path data attribute */
-        write_str_to_current_page(xps, "\" />\n");
+        write_str_to_current_page(xps, " Z\" ");
     }
 
     return 0;
@@ -2177,9 +2369,12 @@ xps_begin_typed_image(gx_device               *dev,
             *pinfo = NULL;
             return_error(gs_error_VMerror);
         }
-        /* Also, the color remaps need the gs_gstate */
-        pie->pgs = pgs;
     }
+
+    /* Also, the color remaps need the gs_gstate */
+    pie->pgs = pgs;
+    if (pgs != NULL)
+        pie->pgs_level = pgs->level;
 
     *pinfo = (gx_image_enum_common_t *)pie;
     return 0;
@@ -2264,6 +2459,9 @@ const gx_image_plane_t *planes, int height, int *rows_used)
         pie->decode_st.bps / num_planes + 7) >> 3);
     void *bufend = (void*)(pie->buffer + width * bytes_comp * pie->decode_st.spp);
     byte *outbuffer;
+
+    if (info->pgs != NULL && info->pgs->level < info->pgs_level)
+        return_error(gs_error_undefinedresult);
 
     if (width_bits != pie->bits_per_row || (data_bit & 7) != 0)
         return_error(gs_error_rangecheck);

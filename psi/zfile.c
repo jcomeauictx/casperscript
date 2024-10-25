@@ -345,9 +345,11 @@ zdeletefile(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
     gs_parsed_file_name_t pname;
-    int code = parse_real_file_name(op, &pname, imemory, "deletefile");
+    int code;
     bool is_temp = false;
 
+    check_op(1);
+    code = parse_real_file_name(op, &pname, imemory, "deletefile");
     if (code < 0)
         return code;
     if (pname.iodev == iodev_default(imemory)) {
@@ -382,6 +384,7 @@ zfilenameforall(i_ctx_t *i_ctx_p)
     gs_parsed_file_name_t pname;
     int code = 0;
 
+    check_op(3);
     check_write_type(*op, t_string);
     check_proc(op[-1]);
     check_read_type(op[-2], t_string);
@@ -414,7 +417,7 @@ zfilenameforall(i_ctx_t *i_ctx_p)
     *++esp = op[-1];
     ref_stack_pop(&o_stack, 3);
     code = file_continue(i_ctx_p);
-    return (code == o_pop_estack ? o_push_estack : code);
+    return code;
 }
 /* Continuation operator for enumerating files */
 static int
@@ -429,7 +432,7 @@ file_continue(i_ctx_t *i_ctx_p)
     uint code;
 
     if (len < devlen) {
-        esp -= 5;               /* pop proc, pfen, devlen, iodev , mark */
+        esp -= 6;               /* pop proc, pfen, scratch, devlen, iodev , mark */
         return_error(gs_error_rangecheck);     /* not even room for device len */
     }
 
@@ -438,7 +441,7 @@ file_continue(i_ctx_t *i_ctx_p)
         code = iodev->procs.enumerate_next(imemory, pfen, (char *)pscratch->value.bytes + devlen,
                     len - devlen);
         if (code == ~(uint) 0) {    /* all done */
-            esp -= 5;               /* pop proc, pfen, devlen, iodev , mark */
+            esp -= 6;               /* pop proc, pfen, scratch, devlen, iodev , mark */
             return o_pop_estack;
         } else if (code > len) {      /* overran string */
             return_error(gs_error_rangecheck);
@@ -461,6 +464,8 @@ file_cleanup(i_ctx_t *i_ctx_p)
     gx_io_device *iodev = r_ptr(esp + 2, gx_io_device);
 
     iodev->procs.enumerate_close(imemory, r_ptr(esp + 5, file_enum));
+    /* See bug #707007, gp_enumerate_file_close() explicitly frees the file enumerator */
+    make_null(esp + 5);
     return 0;
 }
 
@@ -472,6 +477,7 @@ zrenamefile(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     gs_parsed_file_name_t pname1, pname2;
 
+    check_op(2);
     code = parse_real_file_name(op, &pname2, imemory, "renamefile(to)");
     if (code < 0)
         return code;
@@ -522,6 +528,7 @@ zstatus(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(1);
     switch (r_type(op)) {
         case t_file:
             {
@@ -600,6 +607,7 @@ zexecfile(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(1);
     check_type_access(*op, t_file, a_executable | a_read | a_execute);
     check_estack(4);            /* cleanup, file, finish, file */
     push_mark_estack(es_other, execfile_cleanup);
@@ -643,6 +651,7 @@ zfilenamesplit(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
 
+    check_op(1);
     check_read_type(*op, t_string);
 /****** NOT IMPLEMENTED YET ******/
     return_error(gs_error_undefined);
@@ -661,7 +670,8 @@ zlibfile(i_ctx_t *i_ctx_p)
     stream *s;
     gx_io_device *iodev_dflt;
 
-    check_ostack(2);
+    check_op(1); /* Enough arguments */
+    check_ostack(2); /* Enough space for our results */
     code = parse_file_name(op, &pname, i_ctx_p->LockFilePermissions, imemory);
     if (code < 0)
         return code;
@@ -735,7 +745,7 @@ ztempfile(i_ctx_t *i_ctx_p)
     const char *pstr;
     char fmode[4];
     char fmode_temp[4];
-    int code = parse_file_access_string(op, fmode_temp);
+    int code;
     char *prefix = NULL;
     char *fname= NULL;
     uint fnlen;
@@ -743,6 +753,8 @@ ztempfile(i_ctx_t *i_ctx_p)
     stream *s;
     byte *buf, *sbody;
 
+    check_op(2);
+    code = parse_file_access_string(op, fmode_temp);
     if (code < 0)
         return code;
     prefix = (char *)gs_alloc_bytes(imemory, gp_file_name_sizeof, "ztempfile(prefix)");
@@ -865,6 +877,7 @@ static int zgetfilename(i_ctx_t *i_ctx_p)
     byte *sbody;
     int code;
 
+    check_op(1);
     check_ostack(1);
     check_read_type(*op, t_file);
 
@@ -894,7 +907,7 @@ static int zaddcontrolpath(i_ctx_t *i_ctx_p)
     ref nsref;
     unsigned int n = -1;
 
-    check_ostack(2);
+    check_op(2);
     check_read_type(*op, t_string);
     check_type(op[-1], t_name);
 

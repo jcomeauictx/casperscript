@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -30,6 +30,7 @@
 #define X_DPI 72
 #define Y_DPI 72
 
+static dev_proc_initialize_device(ocr_initialize_device);
 static dev_proc_print_page(ocr_print_page);
 static dev_proc_print_page(hocr_print_page);
 static dev_proc_get_params(ocr_get_params);
@@ -55,6 +56,7 @@ ocr_initialize_device_procs(gx_device *dev)
 {
     gdev_prn_initialize_device_procs_gray_bg(dev);
 
+    set_dev_proc(dev, initialize_device, ocr_initialize_device);
     set_dev_proc(dev, open_device, ocr_open);
     set_dev_proc(dev, close_device, ocr_close);
     set_dev_proc(dev, get_params, ocr_get_params);
@@ -79,6 +81,7 @@ hocr_initialize_device_procs(gx_device *dev)
 {
     gdev_prn_initialize_device_procs_gray_bg(dev);
 
+    set_dev_proc(dev, initialize_device, ocr_initialize_device);
     set_dev_proc(dev, open_device, ocr_open);
     set_dev_proc(dev, close_device, hocr_close);
     set_dev_proc(dev, get_params, ocr_get_params);
@@ -103,6 +106,17 @@ const gx_device_ocr gs_hocr_device =
 #define HOCR_TRAILER " </body>\n</html>\n"
 
 static int
+ocr_initialize_device(gx_device *dev)
+{
+    gx_device_ocr *odev = (gx_device_ocr *)dev;
+    const char *default_ocr_lang = "eng";
+
+    odev->language[0] = '\0';
+    strcpy(odev->language, default_ocr_lang);
+    return 0;
+}
+
+static int
 ocr_open(gx_device *pdev)
 {
     gx_device_ocr *dev = (gx_device_ocr *)pdev;
@@ -122,7 +136,6 @@ static int
 ocr_close(gx_device *pdev)
 {
     gx_device_ocr *dev = (gx_device_ocr *)pdev;
-    gx_device_printer * const ppdev = (gx_device_printer *)pdev;
 
     ocr_fin_api(dev->memory->non_gc_memory, dev->api);
 
@@ -133,7 +146,6 @@ static int
 hocr_close(gx_device *pdev)
 {
     gx_device_ocr *dev = (gx_device_ocr *)pdev;
-    gx_device_printer * const ppdev = (gx_device_printer *)pdev;
 
     if (dev->page_count > 0 && dev->file != NULL) {
        gp_fwrite(HOCR_TRAILER, 1, sizeof(HOCR_TRAILER)-1, dev->file);
@@ -187,11 +199,17 @@ ocr_put_params(gx_device *dev, gs_param_list *plist)
 
     switch (code = param_read_string(plist, (param_name = "OCRLanguage"), &langstr)) {
         case 0:
-            len = langstr.size;
-            if (len >= sizeof(pdev->language))
-                len = sizeof(pdev->language)-1;
-            memcpy(pdev->language, langstr.data, len);
-            pdev->language[len] = 0;
+                if (gs_is_path_control_active(pdev->memory)
+                && (strlen(pdev->language) != langstr.size || memcmp(pdev->language, langstr.data, langstr.size) != 0)) {
+                return_error(gs_error_invalidaccess);
+            }
+            else {
+                len = langstr.size;
+                if (len >= sizeof(pdev->language))
+                    len = sizeof(pdev->language)-1;
+                memcpy(pdev->language, langstr.data, len);
+                pdev->language[len] = 0;
+            }
             break;
         case 1:
             break;
@@ -230,7 +248,6 @@ ocr_put_params(gx_device *dev, gs_param_list *plist)
 static int
 do_ocr_print_page(gx_device_ocr * pdev, gp_file * file, int hocr)
 {
-    gs_memory_t *mem = pdev->memory;
     int row;
     byte *data = NULL;
     char *out;

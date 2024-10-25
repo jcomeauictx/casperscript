@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -201,13 +201,19 @@ pdfi_pscript_interpret(pdf_ps_ctx_t *cs, byte *pdfpsbuf, int64_t buflen)
                     while (pdfpsbuf < buflim && *pdfpsbuf != '>')
                         pdfpsbuf++;
                     len = pdfpsbuf - s;
-                    while (len % 2)
-                        len--;
                     for (i = 0; i < len; i += 2) {
-                        hbuf[0] = s[i];
-                        hbuf[1] = s[i + 1];
+                        /* If it's a single digit, see iff we can treat it as a nibble */
+                        if (i + 2 > len) {
+                            hbuf[0] = (byte)'0';
+                            hbuf[1] = s[i];
+                            len++;
+                        }
+                        else {
+                            hbuf[0] = s[i];
+                            hbuf[1] = s[i + 1];
+                        }
                         if (!ishex(hbuf[0]) || !ishex(hbuf[1])) {
-                            code = gs_note_error(gs_error_typecheck);
+                            i = len;
                             break;
                         }
                         *s2++ = (decodehex(hbuf[0]) << 4) | decodehex(hbuf[1]);
@@ -448,7 +454,13 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
               }
               else if (pdf_ps_name_cmp(&s->cur[-1], "WMode")) {
                   if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_INTEGER)) {
-                      priv->gsu.gst1.WMode = s->cur[0].val.i;
+                      if (s->cur[0].val.i != 0) {
+                          if (s->cur[0].val.i != 1)
+                            pdfi_set_warning(s->pdfi_ctx, 0, NULL, W_PDF_BAD_WMODE, "ps_font_def_func", NULL);
+                        priv->gsu.gst1.WMode = 1;
+                      }
+                      else
+                        priv->gsu.gst1.WMode = 0;
                   }
               }
               else if (pdf_ps_name_cmp(&s->cur[-1], "lenIV")) {
@@ -565,7 +577,7 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                       if (code >= 0) {
                           pdfi_countup(pname);
 
-                          code = pdfi_create_Encoding(s->pdfi_ctx, (pdf_obj *) pname, NULL, (pdf_obj **) &new_enc);
+                          code = pdfi_create_Encoding(s->pdfi_ctx, NULL, (pdf_obj *) pname, NULL, (pdf_obj **) &new_enc);
                           if (code >= 0) {
                               pdfi_countdown(priv->u.t1.Encoding);
                               priv->u.t1.Encoding = new_enc;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-2023 Artifex Software, Inc.
+/* Copyright (C) 2022-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -62,6 +62,7 @@ PARAM(W_PDF_BAD_MEDIABOX,           "Couldn't retrieve MediaBox for page, using 
 PARAM(W_PDF_CA_OUTOFRANGE,          "CA or ca value not in range 0.0 to 1.0, clamped to range."),
 PARAM(W_PDF_INVALID_DEFAULTSPACE,   "Invalid DefaultGray, DefaultRGB or DefaultCMYK space specified, ignored."),
 PARAM(W_PDF_INVALID_DECRYPT_LEN,    "Invalid /Length supplied in Encryption dictionary."),
+PARAM(W_PDF_SPURIOUS_DECRYPT_LEN,   "/Length present in Encryption dictionary and /V is neither 2 nor 3"),
 PARAM(W_PDF_INVALID_FONT_BASEENC,   "Ignoring invalid BaseEncoding name in font"),
 PARAM(W_PDF_GROUP_HAS_COLORSPACE,   "Group attributes dictionary has /ColorSpace instead of /CS"),
 PARAM(W_PDF_GROUP_BAD_BC,           "Group attributes dictionary /BC differs in number of components from the colour space"),
@@ -71,6 +72,7 @@ PARAM(W_PDF_BAD_TREE_LIMITS,        "Name tree node Limits array does not have 2
 PARAM(W_PDF_NAMES_ARRAY_SIZE,       "Name tree Names array size not a mulitple of 2"),
 PARAM(W_PDF_MISSING_NAMED_RESOURCE, "Couldn't find a named resource"),
 PARAM(W_PDF_BAD_OUTLINES,           "A problem was encountered trying to preserve the Outlines"),
+PARAM(W_PDF_OUTLINECHILD_NO_COUNT,  "An Outline with descendants is missing the required /Count key"),
 PARAM(W_PDF_BAD_INFO,               "The file has a bad /Info dictionary"),
 PARAM(W_PDF_BAD_EMBEDDEDFILES,      "File has Embedded files which could not be preserved"),
 PARAM(W_PDF_BAD_ACROFORM,           "Bad AcroForm detected"),
@@ -95,4 +97,10 @@ PARAM(W_PDF_FONTRESOURCE_TYPE,      "A Font key in a Resources dictionary has a 
 PARAM(W_PDF_UNBLANACED_BT,          "A page ended after a BT had been executed and without a mtching ET"),
 PARAM(W_PDF_MISMATCH_GENERATION,    "The generation number of an indirectly referenced object did not match the xref"),
 PARAM(W_PDF_BAD_RENDERINGINTENT,    "A ri or /RI used an unknown named rendering intent"),
+PARAM(W_PDF_BAD_VIEW,               "Couldn't read the initial document view"),
+PARAM(W_PDF_BAD_WMODE,              "A Font or CMap has a WMode which is neither 0 (horizontal) nor 1 (vertical)"),
+PARAM(W_PDF_BAD_OCDICT,             "Optional content (/OC) did not reference a dictionary object"),
+PARAM(W_PDF_DO_OC_FAILED,           "Failed to write optional content for an image or form, layers will be incorrect."),
+PARAM(W_PDF_BAD_CONFIG,             "A configuration or command line parameter was invalid or incorrect."),
+PARAM(W_PDF_INVALID_TTF_CMAP,       "A TrueType font contains invalid or no cmap table(s)"),
 #undef PARAM

@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -777,10 +777,14 @@ static int pdfi_apply_filter(pdf_context *ctx, pdf_dict *dict, pdf_name *n, pdf_
 
     if (ctx->args.pdfdebug)
     {
-        char str[100];
+        char *str;
+        str = (char *)gs_alloc_bytes(ctx->memory, n->length + 1, "temp string for debug");
+        if (str == NULL)
+            return_error(gs_error_VMerror);
         memcpy(str, (const char *)n->data, n->length);
         str[n->length] = '\0';
         dmprintf1(ctx->memory, "FILTER NAME:%s\n", str);
+        gs_free_object(ctx->memory, str, "temp string for debug");
     }
 
     if (pdfi_name_is(n, "RunLengthDecode")) {
@@ -1102,6 +1106,7 @@ int pdfi_filter(pdf_context *ctx, pdf_stream *stream_obj, pdf_c_stream *source,
             pdf_obj *FS = NULL, *o = NULL;
             pdf_dict *dict = NULL;
             stream *gstream = NULL;
+            char CFileName[gp_file_name_sizeof];
 
             code = pdfi_dict_get(ctx, stream_dict, "F", &FileSpec);
             if (code < 0)
@@ -1124,12 +1129,20 @@ int pdfi_filter(pdf_context *ctx, pdf_stream *stream_obj, pdf_c_stream *source,
                 code = gs_note_error(gs_error_typecheck);
                 goto error;
             }
+
+            if (((pdf_string *)FileSpec)->length + 1 > gp_file_name_sizeof) {
+                code = gs_note_error(gs_error_ioerror);
+                goto error;
+            }
+            memcpy(CFileName, ((pdf_string *)FileSpec)->data, ((pdf_string *)FileSpec)->length);
+            CFileName[((pdf_string *)FileSpec)->length] = 0x00;
+
             /* We should now have a string with the filename (or URL). We need
              * to open the file and create a stream, if that succeeds.
              */
-            gstream = sfopen((const char *)((pdf_string *)FileSpec)->data, "r", ctx->memory);
+            gstream = sfopen((const char *)CFileName, "r", ctx->memory);
             if (gstream == NULL) {
-                emprintf1(ctx->memory, "Failed to open file %s\n", (const char *)((pdf_string *)FileSpec)->data);
+                emprintf1(ctx->memory, "Failed to open file %s\n", CFileName);
                 code = gs_note_error(gs_error_ioerror);
                 goto error;
             }
@@ -1406,7 +1419,7 @@ int pdfi_open_memory_stream_from_filtered_stream(pdf_context *ctx, pdf_stream *s
     if (!known)
         pdfi_dict_known(ctx, dict, "Filter", &known);
 
-    if (!known)
+    if (!known && !ctx->encryption.is_encrypted)
         return size;
 
     compressed_stream = *new_pdf_stream;
@@ -1674,7 +1687,7 @@ pdfi_stream_to_buffer(pdf_context *ctx, pdf_stream *stream_obj, byte **buf, int6
     int code = 0;
     int64_t buflen = 0, read = 0, ToRead = *bufferlen;
     gs_offset_t savedoffset;
-    pdf_c_stream *stream;
+    pdf_c_stream *stream = NULL, *SubFileStream = NULL;
     bool filtered;
     pdf_dict *stream_dict = NULL;
 
@@ -1705,9 +1718,9 @@ retry:
                 goto exit;
             }
             while (seofp(stream->s) != true && serrorp(stream->s) != true) {
-                (void)sbufskip(stream->s, sbufavailable(stream->s));
                 s_process_read_buf(stream->s);
                 buflen += sbufavailable(stream->s);
+                (void)sbufskip(stream->s, sbufavailable(stream->s));
             }
             pdfi_close_file(ctx, stream);
         } else {
@@ -1729,10 +1742,20 @@ retry:
         goto exit;
     }
     if (filtered || ctx->encryption.is_encrypted) {
-        code = pdfi_filter(ctx, stream_obj, ctx->main_stream, &stream, false);
+        if (ToRead && stream_obj->length_valid)
+            code = pdfi_apply_SubFileDecode_filter(ctx, stream_obj->Length, NULL, ctx->main_stream, &SubFileStream, false);
+        else
+            code = pdfi_apply_SubFileDecode_filter(ctx, 0, "endstream", ctx->main_stream, &SubFileStream, false);
+        if (code < 0)
+            goto exit;
+
+        code = pdfi_filter(ctx, stream_obj, SubFileStream, &stream, false);
         if (code < 0)
             goto exit;
         read = sfread(Buffer, 1, buflen, stream->s);
+        pdfi_close_file(ctx, stream);
+        /* Because we opened the SubFileDecode separately to the filter chain, we need to close it separately too */
+        pdfi_close_file(ctx, SubFileStream);
         if (read == ERRC) {
             /* Error reading the expected number of bytes. If we already calculated the number of
              * bytes in the loop above, then ignore the error and carry on. If, however, we were
@@ -1741,7 +1764,6 @@ retry:
              */
             if(ToRead != 0) {
                 buflen = ToRead = 0;
-                pdfi_close_file(ctx, stream);
                 code = pdfi_seek(ctx, ctx->main_stream, pdfi_stream_offset(ctx, stream_obj), SEEK_SET);
                 if (code < 0)
                     goto exit;
@@ -1749,9 +1771,16 @@ retry:
                 goto retry;
             }
         }
-        pdfi_close_file(ctx, stream);
     } else {
-        read = sfread(Buffer, 1, buflen, ctx->main_stream->s);
+        if (ToRead && stream_obj->length_valid)
+            code = pdfi_apply_SubFileDecode_filter(ctx, stream_obj->Length, NULL, ctx->main_stream, &SubFileStream, false);
+        else
+            code = pdfi_apply_SubFileDecode_filter(ctx, ToRead, "endstream", ctx->main_stream, &SubFileStream, false);
+        if (code < 0)
+            goto exit;
+
+        read = sfread(Buffer, 1, buflen, SubFileStream->s);
+        pdfi_close_file(ctx, SubFileStream);
         if (read == ERRC) {
             /* Error reading the expected number of bytes. If we already calculated the number of
              * bytes in the loop above, then ignore the error and carry on. If, however, we were
@@ -1785,8 +1814,14 @@ static int pdfi_open_resource_file_inner(pdf_context *ctx, const char *fname, co
     if (fname == NULL || fnamelen == 0 || fnamelen >= gp_file_name_sizeof)
         *s = NULL;
     else if (gp_file_name_is_absolute(fname, fnamelen) || fname[0] == '%') {
+        char CFileName[gp_file_name_sizeof];
+
+        if (fnamelen + 1 > gp_file_name_sizeof)
+            return_error(gs_error_ioerror);
+        memcpy(CFileName, fname, fnamelen);
+        CFileName[fnamelen] = 0x00;
         /* If it's an absolute path or an explicit PS style device, just try to open it */
-        *s = sfopen(fname, "r", ctx->memory);
+        *s = sfopen(CFileName, "r", ctx->memory);
     }
     else {
         char fnametotry[gp_file_name_sizeof];
@@ -1856,7 +1891,7 @@ bool pdfi_resource_file_exists(pdf_context *ctx, const char *fname, const int fn
     stream *s = NULL;
     int code = pdfi_open_resource_file_inner(ctx, fname, fnamelen, &s);
     if (s)
-        sclose(s);
+        sfclose(s);
 
     return (code >= 0);
 }
@@ -1870,8 +1905,14 @@ static int pdfi_open_font_file_inner(pdf_context *ctx, const char *fname, const 
     if (fname == NULL || fnamelen == 0 || fnamelen >= (gp_file_name_sizeof - fontdirstrlen))
         *s = NULL;
     else if (gp_file_name_is_absolute(fname, fnamelen) || fname[0] == '%') {
+        char CFileName[gp_file_name_sizeof];
+
+        if (fnamelen + 1 > gp_file_name_sizeof)
+            return_error(gs_error_ioerror);
+        memcpy(CFileName, fname, fnamelen);
+        CFileName[fnamelen] = 0x00;
         /* If it's an absolute path or an explicit PS style device, just try to open it */
-        *s = sfopen(fname, "r", ctx->memory);
+        *s = sfopen(CFileName, "r", ctx->memory);
     }
     else {
         char fnametotry[gp_file_name_sizeof];
@@ -1940,7 +1981,7 @@ bool pdfi_font_file_exists(pdf_context *ctx, const char *fname, const int fnamel
     stream *s = NULL;
     int code = pdfi_open_font_file_inner(ctx, fname, fnamelen, &s);
     if (s)
-        sclose(s);
+        sfclose(s);
 
     return (code >= 0);
 }

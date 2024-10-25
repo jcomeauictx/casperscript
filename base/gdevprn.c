@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -302,7 +302,7 @@ gdev_prn_allocate(gx_device *pdev, gdev_space_params *new_space_params,
     /* Re/allocate memory */
     ppdev->orig_procs = pdev->procs;
     for ( pass = 1; pass <= (reallocate ? 2 : 1); ++pass ) {
-        ulong mem_space;
+        size_t mem_space;
         size_t pdf14_trans_buffer_size = 0;
         byte *base = 0;
         bool bufferSpace_is_default = false;
@@ -332,6 +332,11 @@ gdev_prn_allocate(gx_device *pdev, gdev_space_params *new_space_params,
         memset(ppdev->skip, 0, sizeof(ppdev->skip));
         size_ok = ppdev->printer_procs.buf_procs.size_buf_device
             (&buf_space, pdev, NULL, pdev->height, false) >= 0;
+
+        /* Make sure we won't overflow a size_t, if we do then we'll use a clist below */
+        if (ARCH_MAX_SIZE_T - buf_space.bits < buf_space.line_ptrs)
+            size_ok = 0;
+
         mem_space = buf_space.bits + buf_space.line_ptrs;
         if (ppdev->page_uses_transparency) {
             pdf14_trans_buffer_size = (ESTIMATED_PDF14_ROW_SPACE(max(1, pdev->width), pdev->color_info.num_components, deep ? 16 : 8) >> 3);
@@ -378,7 +383,7 @@ gdev_prn_allocate(gx_device *pdev, gdev_space_params *new_space_params,
                 gs_free_object(buffer_memory, the_memory, "printer_buffer");
                 the_memory = NULL;
             }
-            base = gs_alloc_bytes(buffer_memory, (uint)mem_space, "printer_buffer");
+            base = gs_alloc_bytes(buffer_memory, mem_space, "printer_buffer");
             if (base == 0)
                 is_command_list = true;
             else
@@ -1271,6 +1276,7 @@ gdev_prn_open_printer_seekable(gx_device *pdev, bool binary_mode,
               && !IS_LIBCTX_STDERR(pdev->memory, gp_get_file(ppdev->file))) {
 
                 code = gx_device_close_output_file(pdev, ppdev->fname, ppdev->file);
+                ppdev->file = NULL;
                 if (code < 0)
                     return code;
             }
@@ -1396,15 +1402,15 @@ gx_default_create_buf_device(gx_device **pbdev, gx_device *target, int y,
         depth = render_plane->depth;
     else {
         depth = target->color_info.depth;
-        if (target->is_planar)
-            depth /= target->color_info.num_components;
+        if (target->num_planar_planes)
+            depth /= target->num_planar_planes;
     }
 
     mdproto = gdev_mem_device_for_bits(depth);
     if (mdproto == 0)
         return_error(gs_error_rangecheck);
     if (mem) {
-        mdev = gs_alloc_struct(mem, gx_device_memory, &st_device_memory,
+        mdev = gs_alloc_struct_immovable(mem, gx_device_memory, &st_device_memory,
                                "create_buf_device");
         if (mdev == 0)
             return_error(gs_error_VMerror);
@@ -1449,7 +1455,7 @@ gx_default_create_buf_device(gx_device **pbdev, gx_device *target, int y,
     mdev->band_y = y;
     mdev->log2_align_mod = target->log2_align_mod;
     mdev->pad = target->pad;
-    mdev->is_planar = target->is_planar;
+    mdev->num_planar_planes = target->num_planar_planes;
     /*
      * The matrix in the memory device is irrelevant,
      * because all we do with the device is call the device-level
@@ -1500,7 +1506,7 @@ gx_default_size_buf_device(gx_device_buf_space_t *space, gx_device *target,
          target->color_info.depth);
     mdev.color_info.num_components = target->color_info.num_components;
     mdev.width = target->width;
-    mdev.is_planar = target->is_planar;
+    mdev.num_planar_planes = target->num_planar_planes;
     mdev.pad = target->pad;
     mdev.log2_align_mod = target->log2_align_mod;
     if (gdev_mem_bits_size(&mdev, target->width, height, &(space->bits)) < 0)
@@ -1537,8 +1543,8 @@ gx_default_setup_buf_device(gx_device *bdev, byte *buffer, int raster,
          */
         ptrs = (byte **)
             gs_alloc_byte_array(mdev->memory,
-                                (mdev->is_planar ?
-                                 full_height * mdev->color_info.num_components :
+                                (mdev->num_planar_planes ?
+                                 full_height * mdev->num_planar_planes :
                                  setup_height),
                                 sizeof(byte *), "setup_buf_device");
         if (ptrs == 0)

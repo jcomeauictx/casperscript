@@ -197,6 +197,7 @@ zimage1(i_ctx_t *i_ctx_p)
     int             code;
     gs_color_space *csp = gs_currentcolorspace(igs);
 
+    check_op(1);
     /* Adobe interpreters accept sampled images when the current color
      * space is a pattern color space using the base color space instead
      * of the pattern space. CET 12-07a-12
@@ -256,6 +257,7 @@ zimagemask1(i_ctx_t *i_ctx_p)
     image_params ip;
     int code;
 
+    check_op(1);
     gs_image_t_init_mask_adjust(&image, false,
                                 gs_incachedevice(igs) != CACHE_DEVICE_NONE);
     code = data_image_params(imemory, op, (gs_data_image_t *) & image,
@@ -437,9 +439,22 @@ image_proc_continue(i_ctx_t *i_ctx_p)
     else {
         for (i = 0; i < num_sources; i++)
             plane_data[i].size = 0;
-        plane_data[px].data = op->value.bytes;
+
+        /* Make a copy of the string source data in 'stable' memory (immune to save/restore)
+         * We need this because of bug #706867 where one of the procedure data sources does
+         * a 'restore' back to a point where the string returned (and saved) by one of the
+         * other procedure data sources is freed. By copying the string to stable memory
+         * this can't happen.
+         */
+        plane_data[px].data = gs_alloc_string(imemory->stable_memory, size, "image_proc_continue");
+        if (plane_data[px].data == NULL)
+            return_error(gs_error_VMerror);
+        memcpy((byte *)plane_data[px].data, op->value.bytes, size);
         plane_data[px].size = size;
-        code = gs_image_next_planes(penum, plane_data, used);
+        /* Set the txfer_control flag to true to transfer control of the string (which must be allocated
+         * in stable memory for this) to the gs_image_next_planes() routine.
+         */
+        code = gs_image_next_planes(penum, plane_data, used, true);
         if (code == gs_error_Remap_Color) {
             op->value.bytes += used[px]; /* skip used data */
             r_dec_size(op, used[px]);
@@ -559,7 +574,7 @@ image_file_continue(i_ctx_t *i_ctx_p)
             int pi;
             uint used[GS_IMAGE_MAX_COMPONENTS];
 
-            code = gs_image_next_planes(penum, plane_data, used);
+            code = gs_image_next_planes(penum, plane_data, used, false);
             /* Now that used has been set, update the streams. */
             total_used = 0;
             for (pi = 0, pp = ETOP_SOURCE(esp, 0); pi < num_sources;
@@ -596,7 +611,7 @@ image_string_continue(i_ctx_t *i_ctx_p)
     memset(sources, 0, sizeof(sources[0]) * num_sources);
     for (;;) {
         int px;
-        int code = gs_image_next_planes(penum, sources, used);
+        int code = gs_image_next_planes(penum, sources, used, false);
 
         if (code == gs_error_Remap_Color)
             return code;

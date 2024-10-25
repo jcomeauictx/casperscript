@@ -193,6 +193,8 @@ struct gx_device_win_pr2_s {
     int selected_bpp;		/* selected bpp, memorised by win_pr2_set_bpp */
     bool tumble;		/* tumble setting (with duplex) */
     int query_user;		/* query user (-dQueryUser) */
+    int TextAlpha;
+    int GraphicsAlpha;
 
     HANDLE win32_hdevmode;	/* handle to device mode information */
     HANDLE win32_hdevnames;	/* handle to device names information */
@@ -235,6 +237,8 @@ gx_device_win_pr2 far_data gs_mswinpr2_device =
     0,				/* selected_bpp */
     false,			/* tumble */
     -1,				/* query_user */
+    1,
+    1,
     NULL,			/* win32_hdevmode */
     NULL,			/* win32_hdevnames */
     NULL,			/* lpfnAbortProc */
@@ -405,8 +409,16 @@ win_pr2_open(gx_device * dev)
     }
     code1 = win_pr2_set_bpp(dev, depth);
 
-    /* gdev_prn_open opens a temporary file which we don't want */
-    /* so we specify the name now so we can delete it later */
+    /* Previous comment was misleading and has been removed. This is an ugly hack!
+     * We don't get to the mswinpr2 'print_page' method until we've been through
+     * gdev_prn_output_page, which (in gdev_prn_output_page_aux) calls
+     * gdev_prn_open_printer_seekable(), which insists on having a filename and
+     * opening that file, even though we don't use it. If we don't have a valid
+     * filename we can use in that function then we get an error.....
+     *
+     * So this code simply creates a dummy temporary file which we never use,
+     * just to get around that problem.....
+     */
     wdev->fname[0] = '\0';
     pfile = gp_open_scratch_file(dev->memory,
                                  gp_scratch_file_name_prefix,
@@ -430,7 +442,7 @@ win_pr2_open(gx_device * dev)
     }
 
     if ((code < 0) && wdev->fname[0])
-        unlink(wdev->fname);
+        gp_unlink(wdev->memory, wdev->fname);
 
     if (!wdev->nocancel) {
         /* inform user of progress with dialog box and allow cancel */
@@ -481,11 +493,11 @@ win_pr2_close(gx_device * dev)
         wdev->win32_hdevnames = NULL;
     }
 
-    code = gdev_prn_close(dev);
-
     /* delete unwanted temporary file */
     if (wdev->fname[0])
-        unlink(wdev->fname);
+        gp_unlink(wdev->memory, wdev->fname);
+
+    code = gdev_prn_close(dev);
 
     return code;
 }
@@ -699,6 +711,14 @@ win_pr2_map_color_rgb(gx_device * dev, gx_color_index color,
 }
 
 static int
+param_normalize_anti_alias_bits( uint max_gray, int bits )
+{
+        int	max_bits = ilog2( max_gray + 1);
+
+        return  (bits > max_bits ? max_bits : bits);
+}
+
+static int
 win_pr2_set_bpp(gx_device * dev, int depth)
 {
     int code = 0;
@@ -801,6 +821,12 @@ win_pr2_set_bpp(gx_device * dev, int depth)
         }
     }
 
+    wdev->color_info.anti_alias.text_bits =
+            param_normalize_anti_alias_bits(max(wdev->color_info.max_gray,
+            wdev->color_info.max_color), wdev->TextAlpha);
+    wdev->color_info.anti_alias.graphics_bits =
+            param_normalize_anti_alias_bits(max(wdev->color_info.max_gray,
+            wdev->color_info.max_color), wdev->GraphicsAlpha);
     wdev->selected_bpp = depth;
 
     /* copy encode/decode procedures */
@@ -855,7 +881,7 @@ win_pr2_put_params(gx_device * pdev, gs_param_list * plist)
 {
     int ecode = 0, code;
     int old_bpp = pdev->color_info.depth;
-    int bpp = old_bpp;
+    int bpp = old_bpp, tab = 1, gab = 1;
     gx_device_win_pr2 *wdev = (gx_device_win_pr2 *)pdev;
     bool tumble   = wdev->tumble;
     bool nocancel = wdev->nocancel;
@@ -939,6 +965,50 @@ win_pr2_put_params(gx_device * pdev, gs_param_list * plist)
         default:
             ecode = code;
             param_signal_error(plist, "QueryUser", ecode);
+        case 1:
+            break;
+    }
+
+    switch (code = param_read_int(plist, "TextAlphaBits", &tab))
+    {
+        case 0:
+            switch(tab) {
+                case 1:
+                case 2:
+                case 4:
+                    wdev->TextAlpha = tab;
+                    break;
+                default:
+                    ecode = gs_error_rangecheck;
+                    param_signal_error(plist, "TextAlphaBits", ecode);
+                    break;
+            }
+            break;
+        default:
+            ecode = code;
+            param_signal_error(plist, "TextAlphaBits", ecode);
+        case 1:
+            break;
+    }
+
+    switch (code = param_read_int(plist, "GraphicsAlphaBits", &gab))
+    {
+        case 0:
+            switch(gab) {
+                case 1:
+                case 2:
+                case 4:
+                    wdev->GraphicsAlpha = gab;
+                    break;
+                default:
+                    ecode = gs_error_rangecheck;
+                    param_signal_error(plist, "GraphicsAlphaBits", ecode);
+                    break;
+            }
+            break;
+        default:
+            ecode = code;
+            param_signal_error(plist, "GraphicsAlphaBits", ecode);
         case 1:
             break;
     }
@@ -1545,8 +1615,24 @@ win_pr2_print_setup_interaction(gx_device_win_pr2 * wdev, int mode)
     free(devname);
 
     if (mode == 3) {
+		devmode->dmFields |= DM_COPIES;
         devmode->dmCopies = wdev->user_copies * wdev->print_copies;
         pd.nCopies = 1;
+
+		if(wdev->user_orient){
+			devmode->dmFields |= DM_ORIENTATION;
+			devmode->dmOrientation = wdev->user_orient;
+		}
+
+        if (wdev->user_color) {
+		    devmode->dmFields |= DM_COLOR;
+		    devmode->dmColor = wdev->user_color;
+        }
+
+		if(wdev->user_paper){
+			devmode->dmFields |= DM_PAPERSIZE;
+			devmode->dmPaperSize = wdev->user_paper;
+		}
     }
 
     wdev->user_page_begin = pd.nFromPage;

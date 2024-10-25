@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -107,6 +107,17 @@ clipper_initialize_device_procs(gx_device *dev)
     set_dev_proc(dev, fill_linear_color_trapezoid, gx_default_fill_linear_color_trapezoid);
     set_dev_proc(dev, fill_linear_color_triangle, gx_default_fill_linear_color_triangle);
 }
+
+void
+gx_device_clip_finalize(const gs_memory_t *cmem, void *vpdev)
+{
+    gx_device_clip *dev = (gx_device_clip *)vpdev;
+    if (dev->rect_list != NULL) {
+        rc_decrement(dev->rect_list, "finalizing clipper device");
+        dev->rect_list = NULL;
+    }
+}
+
 static const gx_device_clip gs_clip_device =
 {std_device_std_body(gx_device_clip,
                      clipper_initialize_device_procs, "clipper",
@@ -120,6 +131,12 @@ gx_make_clip_device_on_stack(gx_device_clip * dev, const gx_clip_path *pcpath, g
     gx_device_init_on_stack((gx_device *)dev, (const gx_device *)&gs_clip_device, target->memory);
     dev->cpath = pcpath;
     dev->list = *gx_cpath_list(pcpath);
+    /* NOTE we do not count up the rect list even though we've taken a reference to it.
+     * this is because we would then need to count it down in gx_destroy_clip_device_on_stack
+     * and I have found at least one place where we do not call that function (!)
+     * We should be safe though, the clip rectangle list should not disappear before we
+     * exit the calling function at which point this device will disappear too.
+     */
     dev->translation.x = 0;
     dev->translation.y = 0;
     dev->HWResolution[0] = target->HWResolution[0];
@@ -128,7 +145,7 @@ gx_make_clip_device_on_stack(gx_device_clip * dev, const gx_clip_path *pcpath, g
     dev->target = target;
     dev->pad = target->pad;
     dev->log2_align_mod = target->log2_align_mod;
-    dev->is_planar = target->is_planar;
+    dev->num_planar_planes = target->num_planar_planes;
     dev->graphics_type_tag = target->graphics_type_tag;	/* initialize to same as target */
     dev->non_strict_bounds = target->non_strict_bounds;
     /* There is no finalization for device on stack so no rc increment */
@@ -173,7 +190,7 @@ gx_make_clip_device_on_stack_if_needed(gx_device_clip * dev, const gx_clip_path 
     dev->target = target;
     dev->pad = target->pad;
     dev->log2_align_mod = target->log2_align_mod;
-    dev->is_planar = target->is_planar;
+    dev->num_planar_planes = target->num_planar_planes;
     dev->graphics_type_tag = target->graphics_type_tag;	/* initialize to same as target */
     dev->non_strict_bounds = target->non_strict_bounds;
     /* There is no finalization for device on stack so no rc increment */
@@ -190,6 +207,13 @@ gx_make_clip_device_in_heap(gx_device_clip *dev,
     (void)gx_device_init((gx_device *)dev,
                          (const gx_device *)&gs_clip_device, mem, true);
     dev->list = *gx_cpath_list(pcpath);
+    dev->rect_list = pcpath->rect_list;
+    /* Bug #706771 we must make sure that the clip rectangle list does not
+     * vanish while we still have a pointer to it. Do that by increasing the
+     * reference count (obviously). We will decrement it in the device's finalize
+     * routine.
+     */
+    rc_increment(dev->rect_list);
     dev->translation.x = 0;
     dev->translation.y = 0;
     dev->HWResolution[0] = target->HWResolution[0];
@@ -197,7 +221,7 @@ gx_make_clip_device_in_heap(gx_device_clip *dev,
     dev->sgr = target->sgr;
     dev->pad = target->pad;
     dev->log2_align_mod = target->log2_align_mod;
-    dev->is_planar = target->is_planar;
+    dev->num_planar_planes = target->num_planar_planes;
     dev->non_strict_bounds = target->non_strict_bounds;
     gx_device_set_target((gx_device_forward *)dev, target);
     gx_device_retain((gx_device *)dev, true); /* will free explicitly */
@@ -264,6 +288,11 @@ clip_enumerate_rest(gx_device_clip * rdev,
      * the list.
      */
     if (y >= rptr->ymax) {
+        /* Bug 706875: The 'stopper' here is a rectangle from (max_int, max_int) to
+         * (max_int, max_int). Hence it doesn't 'stop' cases when y == max_int.
+         * These shouldn't really happen, but let's be sure. */
+        if (y == max_int)
+            return 0;
         if ((rptr = rptr->next) != 0)
             while (INCR_THEN(up, y >= rptr->ymax))
                 rptr = rptr->next;
@@ -917,13 +946,15 @@ clip_copy_mono_t1(gx_device * dev,
         INCR(in_y);
         if (x >= rptr->xmin && xe <= rptr->xmax) {
             INCR(in);
+            /* Untranspose coords here. */
             return dev_proc(tdev, copy_mono)
-                    (tdev, data, sourcex, raster, id, y, x, h, w, color0, color1);
+                    (tdev, data, sourcex, raster, id, y, x, w, h, color0, color1);
         }
     }
     ccdata.tdev = tdev;
     ccdata.data = data, ccdata.sourcex = sourcex, ccdata.raster = raster;
     ccdata.color[0] = color0, ccdata.color[1] = color1;
+    /* Coords are passed in transposed here, but will appear untransposed at the end. */
     return clip_enumerate_rest(rdev, x, y, xe, ye,
                                clip_call_copy_mono, &ccdata);
 }
@@ -1455,49 +1486,124 @@ clip_get_bits_rectangle(gx_device * dev, const gs_int_rect * prect,
                      (tdev, &rect, params);
 }
 
+static int clip_list_enumerate_intersections(gx_clip_list *list, int (*process)(clip_callback_data_t *, int, int, int, int), clip_callback_data_t *pccd, int x, int y, int xe, int ye)
+{
+    int transpose = list->transpose;
+    int code = 0;
+    int yc;
+    /* Start at the last place we succeeded, to try to exploit
+     * locality of reference. */
+    gx_clip_rect *rptr = pccd->last_clip_rect;
+
+    /* If this is the first time through, start at the head. */
+    if (rptr == NULL)
+        rptr = (list->head == NULL ? &list->single : list->head);
+
+    /*
+     * Warp the cursor forwards or backward to the first rectangle row
+     * that could include a given y value.  Assumes rptr is set, and
+     * updates it.  Specifically, after this loop, either rptr == 0 (if
+     * the y value is greater than all y values in the list), or y <
+     * rptr->ymax and either rptr->prev == 0 or y >= rptr->prev->ymax.
+     * Note that y <= rptr->ymin is possible.
+     *
+     * In the first case below, the while loop is safe because if there
+     * is more than one rectangle, there is a 'stopper' at the end of
+     * the list.
+     */
+    if (y >= rptr->ymax) {
+        /* Bug 706875: The 'stopper' here is a rectangle from (max_int, max_int) to
+         * (max_int, max_int). Hence it doesn't 'stop' cases when y == max_int.
+         * These shouldn't really happen, but let's be sure. */
+        if (y == max_int)
+            return 0;
+        if ((rptr = rptr->next) != NULL)
+            while (y >= rptr->ymax)
+                rptr = rptr->next;
+    } else
+        while (rptr->prev != NULL && y < rptr->prev->ymax)
+            rptr = rptr->prev;
+    /* If we've run out, bale! */
+    if (rptr == NULL || (yc = rptr->ymin) >= ye)
+        return 0;
+    if (yc < y)
+        yc = y;
+
+    do {
+        const int ymax = rptr->ymax;
+        int yec = min(ymax, ye);
+
+        do {
+            int xc = rptr->xmin;
+            int xec = rptr->xmax;
+
+            if (xc < x)
+                xc = x;
+            if (xec > xe)
+                xec = xe;
+            if (xec > xc) {
+                if (transpose)
+                    code = process(pccd, yc, xc, yec, xec);
+                else
+                    code = process(pccd, xc, yc, xec, yec);
+                if (code < 0)
+                    return code;
+            }
+            pccd->last_clip_rect = rptr;
+            rptr = rptr->next;
+            if (rptr == NULL)
+                return 0;
+        }
+        while (rptr->ymax == ymax);
+    } while ((yc = rptr->ymin) < ye);
+    return 0;
+}
+
 static int
-clip_call_fill_path(clip_callback_data_t * pccd, int xc, int yc, int xec, int yec)
+do_clip_call_fill_path(clip_callback_data_t *pccd, int xc, int yc, int xec, int yec)
 {
     gx_device *tdev = pccd->tdev;
-    dev_proc_fill_path((*proc));
+    gx_clip_path cpath;
+    gs_fixed_rect rect;
     int code;
-    gx_clip_path cpath_intersection;
-    gx_clip_path *pcpath = (gx_clip_path *)pccd->pcpath;
+    dev_proc_fill_path((*proc));
 
-    /* Previously the code here tested for pcpath != NULL, but
-     * we can commonly (such as from clist_playback_band) be
-     * called with a non-NULL, but still invalid clip path.
-     * Detect this by the list having at least one entry in it. */
-    if (pcpath != NULL && pcpath->rect_list->list.count != 0) {
-        gx_path rect_path;
-        code = gx_cpath_init_local_shared_nested(&cpath_intersection, pcpath, pccd->ppath->memory, 1);
-        if (code < 0)
-            return code;
-        gx_path_init_local(&rect_path, pccd->ppath->memory);
-        code = gx_path_add_rectangle(&rect_path, int2fixed(xc), int2fixed(yc), int2fixed(xec), int2fixed(yec));
-        if (code < 0)
-            return code;
-        code = gx_cpath_intersect(&cpath_intersection, &rect_path,
-                                  gx_rule_winding_number, (gs_gstate *)(pccd->pgs));
-        gx_path_free(&rect_path, "clip_call_fill_path");
-    } else {
-        gs_fixed_rect clip_box;
-        clip_box.p.x = int2fixed(xc);
-        clip_box.p.y = int2fixed(yc);
-        clip_box.q.x = int2fixed(xec);
-        clip_box.q.y = int2fixed(yec);
-        gx_cpath_init_local(&cpath_intersection, pccd->ppath->memory);
-        code = gx_cpath_from_rectangle(&cpath_intersection, &clip_box);
-    }
+    rect.p.x = int2fixed(xc);
+    rect.p.y = int2fixed(yc);
+    rect.q.x = int2fixed(xec);
+    rect.q.y = int2fixed(yec);
+
+    /* The cpath calls might look expensive, but actually are
+     * achieved without any allocations. */
+    gx_cpath_init_local(&cpath, pccd->ppath->memory);
+    code = gx_cpath_from_rectangle(&cpath, &rect);
     if (code < 0)
         return code;
     proc = dev_proc(tdev, fill_path);
     if (proc == NULL)
         proc = gx_default_fill_path;
     code = (*proc)(pccd->tdev, pccd->pgs, pccd->ppath, pccd->params,
-                   pccd->pdcolor, &cpath_intersection);
-    gx_cpath_free(&cpath_intersection, "clip_call_fill_path");
+                   pccd->pdcolor, &cpath);
+    /* We could call gx_cpath_free here, but actually everything
+     * is allocated on the stack, so it serves no purpose. */
+    /* gx_cpath_free(&cpath, "clip_call_fill_path"); */
+
     return code;
+}
+
+static int
+clip_call_fill_path(clip_callback_data_t * pccd, int xc, int yc, int xec, int yec)
+{
+    gx_clip_path *pcpath = (gx_clip_path *)pccd->pcpath;
+
+    /* Previously the code here tested for pcpath != NULL, but
+     * we can commonly (such as from clist_playback_band) be
+     * called with a non-NULL, but still invalid clip path.
+     * Detect this by the list having at least one entry in it. */
+    if (pcpath != NULL && pcpath->rect_list->list.count != 0)
+        return clip_list_enumerate_intersections(&pcpath->rect_list->list, do_clip_call_fill_path, pccd,  xc, yc, xec, yec);
+
+    return do_clip_call_fill_path(pccd, xc, yc, xec, yec);
 }
 static int
 clip_fill_path(gx_device * dev, const gs_gstate * pgs,
@@ -1514,6 +1620,7 @@ clip_fill_path(gx_device * dev, const gs_gstate * pgs,
     ccdata.params = params;
     ccdata.pdcolor = pdcolor;
     ccdata.pcpath = pcpath;
+    ccdata.last_clip_rect = NULL;
     clip_get_clipping_box(dev, &box);
     return clip_enumerate(rdev,
                           fixed2int(box.p.x),

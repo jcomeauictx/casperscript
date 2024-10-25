@@ -49,6 +49,9 @@
 #include "oper.h"
 #include "store.h"
 #include "gpcheck.h"
+#define FORCE_ASSERT_CHECKING 1
+#define DEBUG_TRACE_PS_OPERATORS 1
+#include "assert_.h"
 
 /*
  * We may or may not optimize the handling of the special fast operators
@@ -83,9 +86,13 @@ static int
 do_call_operator(op_proc_t op_proc, i_ctx_t *i_ctx_p)
 {
     int code;
+    assert(e_stack.p >= e_stack.bot - 1 && e_stack.p < e_stack.top + 1);
+    assert(o_stack.p >= o_stack.bot - 1 && o_stack.p < o_stack.top + 1);
     code = op_proc(i_ctx_p);
     if (gs_debug_c(gs_debug_flag_validate_clumps))
         ivalidate_clean_spaces(i_ctx_p);
+    assert(e_stack.p >= e_stack.bot - 1 && e_stack.p < e_stack.top + 1);
+    assert(o_stack.p >= o_stack.bot - 1 && o_stack.p < o_stack.top + 1);
     return code; /* A good place for a conditional breakpoint. */
 }
 static int
@@ -628,6 +635,9 @@ again:
                     for (i = skip; i < skip + MIN_BLOCK_ESTACK; ++i) {
                         const ref *ep = ref_stack_index(&e_stack, i);
 
+                        if (ep == NULL)
+                            continue;
+
                         if (r_has_type_attrs(ep, t_null, a_executable)) {
                             skip = i + 1;
                             break;
@@ -681,6 +691,22 @@ again:
         !r_has_type(perrordict, t_dictionary)                          ||
         dict_find(perrordict, &error_name, &epref) <= 0))
         return code;            /* error name not in errordict??? */
+
+    if (code == gs_error_execstackoverflow
+        && obj_eq(imemory, &doref, epref)) {
+        /* This strongly suggests we're in an error handler that
+           calls itself infinitely, so Postscript is done, return
+           to the caller.
+         */
+         ref_stack_clear(&e_stack);
+         *pexit_code = gs_error_execstackoverflow;
+         return_error(gs_error_execstackoverflow);
+    }
+
+    if (!r_is_proc(epref)){
+        *pexit_code = gs_error_Fatal;
+        return_error(gs_error_Fatal);
+    }
 
     doref = *epref;
     epref = &doref;
@@ -869,7 +895,7 @@ copy_stack(i_ctx_t *i_ctx_p, const ref_stack_t * pstack, int skip, ref * arr)
     if (pstack == &o_stack && dict_find_string(systemdict, "SAFETY", &safety) > 0 &&
         dict_find_string(safety, "safe", &safe) > 0 && r_has_type(safe, t_boolean) &&
         safe->value.boolval == true) {
-        code = ref_stack_array_sanitize(i_ctx_p, arr, arr);
+        code = ref_stack_array_sanitize(i_ctx_p, arr, arr, 0);
         if (code < 0)
             return code;
     }
@@ -1018,6 +1044,7 @@ interp(/* lgtm [cpp/use-of-goto] */
      make_null(&ierror.full);
      ierror.obj = &ierror.full;
      make_null(&refnull);
+     refnull.value.intval = 0;
      pvalue = &refnull;
 
     /*
@@ -1518,6 +1545,20 @@ remap:              if (iesp + 2 >= estop) {
                             /* the pre-check is still valid. */
                             iosp++;
                             ref_assign_inline(iosp, &token);
+                            /* With a construct like /f currentfile def //f we can
+                               end up here with IREF == &token which can go badly wrong,
+                               so find the current file we're interpeting on the estack
+                               and have IREF point to that ref, rather than "token"
+                             */
+                            if (IREF == &token) {
+                                ref *st;
+                                int code2 = z_current_file(i_ctx_p, &st);
+                                if (code2 < 0 || st == NULL) {
+                                    ierror.code = gs_error_Fatal;
+                                    goto rweci;
+                                }
+                                SET_IREF(st);
+                            }
                             goto rt;
                         }
                         store_state(iesp);
@@ -2072,6 +2113,7 @@ zsetstackprotect(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     ref *ep = oparray_find(i_ctx_p);
 
+    check_op(1);
     check_type(*op, t_boolean);
     if (ep == 0)
         return_error(gs_error_rangecheck);

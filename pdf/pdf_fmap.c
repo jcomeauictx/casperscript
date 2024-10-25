@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -67,26 +67,33 @@ pdf_fontmap_open_file(pdf_context *ctx, const char *mapfilename, byte **buf, int
 
     if (code >= 0) {
         int i;
+        int64_t file_size;
+
         sfseek(s, 0, SEEK_END);
-        *buflen = sftell(s);
+        file_size = sftell(s);
         sfseek(s, 0, SEEK_SET);
-        *buf = gs_alloc_bytes(ctx->memory, *buflen + poststringlen, "pdf_cmap_open_file(buf)");
-        if (*buf != NULL) {
-            sfread((*buf), 1, *buflen, s);
-            memcpy((*buf) + *buflen, poststring, poststringlen);
-            *buflen += poststringlen;
-            /* This is naff, but works for now
-               When parsing Fontmap in PS, ";" is defined as "def"
-               We don't need either, because the dictionary is built from the stack.
-             */
-            for (i = 0; i < *buflen - 1; i++) {
-                if ((*buf)[i] == ';') {
-                    (*buf)[i] = ' ';
+        if (file_size < 0 || file_size > max_int - poststringlen) {
+            code = gs_note_error(gs_error_ioerror);
+        } else {
+            *buflen = (int)file_size;
+            *buf = gs_alloc_bytes(ctx->memory, *buflen + poststringlen, "pdf_cmap_open_file(buf)");
+            if (*buf != NULL) {
+                sfread((*buf), 1, *buflen, s);
+                memcpy((*buf) + *buflen, poststring, poststringlen);
+                *buflen += poststringlen;
+                /* This is naff, but works for now
+                   When parsing Fontmap in PS, ";" is defined as "def"
+                   We don't need either, because the dictionary is built from the stack.
+                 */
+                for (i = 0; i < *buflen - 1; i++) {
+                    if ((*buf)[i] == ';') {
+                        (*buf)[i] = ' ';
+                    }
                 }
             }
-        }
-        else {
-            code = gs_note_error(gs_error_VMerror);
+            else {
+                code = gs_note_error(gs_error_VMerror);
+            }
         }
         sfclose(s);
     }
@@ -532,15 +539,33 @@ static int pdfi_ttf_add_to_native_map(pdf_context *ctx, stream *f, byte magic[4]
                 for (j = 0; j < nte; j++) {
                     byte *rec = namet + 6 + j * 12;
                     if (u16(rec + 6) == 6) {
+                        int pid = u16(rec);
+                        int eid = u16(rec + 2);
                         int nl = u16(rec + 8);
                         int noffs = u16(rec + 10);
+
                         if (nl + noffs + storageOffset > table_len) {
                             break;
                         }
                         memcpy(pname, namet + storageOffset + noffs, nl);
                         pname[nl] = '\0';
+                        if ((pid == 0 || (pid == 2 && eid == 1) || (pid == 3 && eid == 1)) && (nl % 2) == 0) {
+                            for (k = 0; k < nl; k += 2) {
+                                if (pname[k] != '\0')
+                                    break;
+                            }
+                            if (k == nl) {
+                                int k1, k2;
+                                for (k1 = 0, k2 = 1; k2 < nl; k1++, k2 += 2) {
+                                    pname[k1] = pname[k2];
+                                }
+                                nl = nl >> 1;
+                                pname[nl] = '\0';
+                            }
+                        }
+
                         for (k = 0; k < nl; k++)
-                            if (pname[k] < 32 || pname[k] > 126) /* is it a valid name? */
+                            if (pname[k] < 32 || pname[k] > 126) /* is it a valid PS name? */
                                 break;
                         if (k == nl) {
                             code = 0;
@@ -552,15 +577,32 @@ static int pdfi_ttf_add_to_native_map(pdf_context *ctx, stream *f, byte magic[4]
                     for (j = 0; j < nte; j++) {
                         byte *rec = namet + 6 + j * 12;
                         if (u16(rec + 6) == 4) {
+                            int pid = u16(rec);
+                            int eid = u16(rec + 2);
                             int nl = u16(rec + 8);
                             int noffs = u16(rec + 10);
+
                             if (nl + noffs + storageOffset > table_len) {
                                 break;
                             }
                             memcpy(pname, namet + storageOffset + noffs, nl);
                             pname[nl] = '\0';
+                            if ((pid == 0 || (pid == 2 && eid == 1) || (pid == 3 && eid == 1)) && (nl % 2) == 0) {
+                                for (k = 0; k < nl; k += 2) {
+                                    if (pname[k] != '\0')
+                                        break;
+                                }
+                                if (k == nl) {
+                                    int k1, k2;
+                                    for (k1 = 0, k2 = 1; k2 < nl; k1++, k2 += 2) {
+                                        pname[k1] = pname[k2];
+                                    }
+                                    nl = nl >> 1;
+                                    pname[nl] = '\0';
+                                }
+                            }
                             for (k = 0; k < nl; k++)
-                                if (pname[k] < 32 || pname[k] > 126) /* is it a valid name? */
+                                if (pname[k] < 32 || pname[k] > 126) /* is it a valid PS name? */
                                     break;
                             if (k == nl)
                                 code = 0;
@@ -604,7 +646,7 @@ static const char *font_scan_skip_list[] = {
   ".pcf"
 };
 
-static bool font_scan_skip_file(char *fname)
+static bool font_scan_skip_file(const char *fname)
 {
     size_t l2, l = strlen(fname);
     bool skip = false;
@@ -620,6 +662,100 @@ static bool font_scan_skip_file(char *fname)
     return skip;
 }
 
+static int pdfi_add_font_to_native_map(pdf_context *ctx, const char *fp, char *working)
+{
+    stream *sf;
+    int code = 0;
+    uint nread;
+    byte magic[4]; /* We only (currently) use up to 4 bytes for type guessing */
+    int type;
+
+    if (font_scan_skip_file(fp))
+        return 0;
+
+    sf = sfopen(fp, "r", ctx->memory);
+    if (sf == NULL)
+        return 0;
+    code = sgets(sf, magic, 4, &nread);
+    if (code < 0 || nread < 4) {
+        code = 0;
+        sfclose(sf);
+        return 0;
+    }
+
+    code = sfseek(sf, 0, SEEK_SET);
+    if (code < 0) {
+        code = 0;
+        sfclose(sf);
+        return 0;
+    }
+    /* Slightly naff: in this one case, we want to treat OTTO fonts
+       as Truetype, so we lookup the TTF 'name' table - it's more efficient
+       than decoding the CFF, and probably will give more expected results
+     */
+    if (memcmp(magic, "OTTO", 4) == 0 || memcmp(magic, "ttcf", 4) == 0) {
+        type = tt_font;
+    }
+    else {
+        type = pdfi_font_scan_type_picker((byte *)magic, 4);
+    }
+    switch(type) {
+        case tt_font:
+          code = pdfi_ttf_add_to_native_map(ctx, sf, magic, (char *)fp, working, gp_file_name_sizeof);
+          break;
+        case cff_font:
+              code = gs_error_undefined;
+          break;
+        case type1_font:
+        default:
+          code = pdfi_type1_add_to_native_map(ctx, sf, (char *)fp, working, gp_file_name_sizeof);
+          break;
+    }
+    sfclose(sf);
+    /* We ignore most errors, on the basis it probably means it wasn't a valid font file */
+    if (code != gs_error_VMerror)
+        code = 0;
+
+    return code;
+}
+
+/* still writes into pdfnativefontmap dictionary */
+static int pdfi_generate_platform_fontmap(pdf_context *ctx)
+{
+    void *enum_state = NULL;
+    int code = 0;
+    char *fontname, *path;
+    char *working = NULL;
+
+    working = (char *)gs_alloc_bytes(ctx->memory, gp_file_name_sizeof, "pdfi_generate_platform_fontmap");
+    if (working == NULL) {
+        code = gs_note_error(gs_error_VMerror);
+        goto done;
+    }
+
+    enum_state = gp_enumerate_fonts_init(ctx->memory);
+    if (enum_state == NULL) {
+        code = gs_note_error(gs_error_VMerror);
+        goto done;
+    }
+
+    while((code = gp_enumerate_fonts_next(enum_state, &fontname, &path )) > 0) {
+        if (fontname == NULL || path == NULL) {
+            continue;
+        }
+        code = pdfi_add_font_to_native_map(ctx, path, working);
+
+        /* We ignore most errors, on the basis it probably means it wasn't a valid font file */
+        if (code == gs_error_VMerror)
+            break;
+        code = 0;
+    }
+done:
+    gp_enumerate_fonts_free(enum_state);
+    gs_free_object(ctx->memory, working, "pdfi_generate_platform_fontmap");
+    return code;
+}
+
 static int pdfi_generate_native_fontmap(pdf_context *ctx)
 {
     file_enum *fe;
@@ -627,10 +763,7 @@ static int pdfi_generate_native_fontmap(pdf_context *ctx)
     char *patrn= NULL;
     char *result = NULL;
     char *working = NULL;
-    byte magic[4]; /* We only (currently) use up to 4 bytes for type guessing */
-    stream *sf;
     int code = 0, l;
-    uint nread;
 
     if (ctx->pdfnativefontmap != NULL) /* Only run this once */
         return 0;
@@ -661,51 +794,10 @@ static int pdfi_generate_native_fontmap(pdf_context *ctx)
 
         fe = gp_enumerate_files_init(ctx->memory, (const char *)patrn, strlen(patrn));
         while ((l = gp_enumerate_files_next(ctx->memory, fe, result, gp_file_name_sizeof - 1)) != ~(uint) 0) {
-            int type;
             result[l] = '\0';
 
-            if (font_scan_skip_file(result))
-                continue;
+            code = pdfi_add_font_to_native_map(ctx, result, working);
 
-            sf = sfopen(result, "r", ctx->memory);
-            if (sf == NULL)
-                continue;
-            code = sgets(sf, magic, 4, &nread);
-            if (code < 0 || nread < 4) {
-                code = 0;
-                sfclose(sf);
-                continue;
-            }
-
-            code = sfseek(sf, 0, SEEK_SET);
-            if (code < 0) {
-                code = 0;
-                sfclose(sf);
-                continue;
-            }
-            /* Slightly naff: in this one case, we want to treat OTTO fonts
-               as Truetype, so we lookup the TTF 'name' table - it's more efficient
-               than decoding the CFF, and probably will give more expected results
-             */
-            if (memcmp(magic, "OTTO", 4) == 0 || memcmp(magic, "ttcf", 4) == 0) {
-                type = tt_font;
-            }
-            else {
-                type = pdfi_font_scan_type_picker((byte *)magic, 4);
-            }
-            switch(type) {
-                case tt_font:
-                  code = pdfi_ttf_add_to_native_map(ctx, sf, magic, result, working, gp_file_name_sizeof);
-                  break;
-                case cff_font:
-                      code = gs_error_undefined;
-                  break;
-                case type1_font:
-                default:
-                  code = pdfi_type1_add_to_native_map(ctx, sf, result, working, gp_file_name_sizeof);
-                  break;
-            }
-            sfclose(sf);
             /* We ignore most errors, on the basis it probably means it wasn't a valid font file */
             if (code == gs_error_VMerror)
                 break;
@@ -715,8 +807,9 @@ static int pdfi_generate_native_fontmap(pdf_context *ctx)
         if (code < 0)
             gp_enumerate_files_close(ctx->memory, fe);
     }
+    (void)pdfi_generate_platform_fontmap(ctx);
 
-#if 0
+#ifdef DUMP_NATIVE_FONTMAP
     if (ctx->pdfnativefontmap != NULL) {
         uint64_t ind;
         int find = -1;
@@ -792,7 +885,7 @@ static int pdfi_generate_native_fontmap(pdf_context *ctx)
 }
 
 int
-pdf_fontmap_lookup_font(pdf_context *ctx, pdf_name *fname, pdf_obj **mapname, int *findex)
+pdf_fontmap_lookup_font(pdf_context *ctx, pdf_dict *font_dict, pdf_name *fname, pdf_obj **mapname, int *findex)
 {
     int code;
     pdf_obj *mname;
@@ -860,6 +953,7 @@ pdf_fontmap_lookup_font(pdf_context *ctx, pdf_name *fname, pdf_obj **mapname, in
     }
     if (mname != NULL && pdfi_type_of(mname) == PDF_STRING && pdfi_fmap_file_exists(ctx, (pdf_string *)mname)) {
         *mapname = mname;
+        (void)pdfi_dict_put(ctx, font_dict, ".Path", mname);
         code = 0;
     }
     else if (mname != NULL && pdfi_type_of(mname) == PDF_NAME) { /* If we map to a name, we assume (for now) we have the font as a "built-in" */
@@ -984,6 +1078,7 @@ pdf_fontmap_lookup_cidfont(pdf_context *ctx, pdf_dict *font_dict, pdf_name *name
         }
 
         *mapname = (pdf_obj *)path;
+        (void)pdfi_dict_put(ctx, font_dict, ".Path", (pdf_obj *)path);
         code = pdfi_dict_get_int(ctx, rec, "Index", &i64);
         *findex = (code < 0) ? 0 : (int)i64; /* rangecheck? */
         code = 0;

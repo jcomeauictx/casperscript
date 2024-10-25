@@ -1,4 +1,4 @@
-.. Copyright (C) 2001-2022 Artifex Software, Inc.
+.. Copyright (C) 2001-2023 Artifex Software, Inc.
 .. All Rights Reserved.
 
 .. title:: Details of Ghostscript Output Devices
@@ -6,19 +6,19 @@
 
 .. include:: header.rst
 
-.. _Devices.htm:
+.. _Devices.html:
 
 
 Details of Ghostscript Output Devices
 =============================================
 
 
-For other information, see the :ref:`Ghostscript overview<Ghostscript Introduction>`. You may also be interested in :ref:`how to build Ghostscript<Make.htm>` and :ref:`install<Install.htm>` it, as well as the description of the :ref:`driver interface<Drivers.htm>`.
+For other information, see the :ref:`Ghostscript overview<Ghostscript Introduction>`. You may also be interested in :ref:`how to build Ghostscript<Make.html>` and :ref:`install<Install.html>` it, as well as the description of the :ref:`driver interface<Drivers.html>`.
 
-Documentation for some older, superceded devices has been moved to :ref:`unsupported devices<UnsupportedDevices.htm>`. In general such devices are deprecated and will be removed in future versions of Ghostscript. In general all older printer drivers can be replaced by the :title:`ijs` interface and one of the available 3rd party raster driver collections. We recommend moving to the :title:`ijs` device for all such printing.
+Documentation for some older, superceded devices has been moved to :ref:`unsupported devices<UnsupportedDevices.html>`. In general such devices are deprecated and will be removed in future versions of Ghostscript. In general all older printer drivers can be replaced by the :title:`ijs` interface and one of the available 3rd party raster driver collections. We recommend moving to the :title:`ijs` device for all such printing.
 
 
-Documentation for device subclassing can be found on the :ref:`Device Subclassing<DeviceSubclassing.htm>` page.
+Documentation for device subclassing can be found on the :ref:`Device Subclassing<DeviceSubclassing.html>` page.
 
 
 .. _Devices_Notes on measurements:
@@ -91,7 +91,7 @@ These options control the use of subsample antialiasing. Their use is highly rec
 Because this feature relies upon rendering the input it is incompatible, and will generate an error on attempted use, with any of the vector output devices.
 
 
-It is also conventional to call Ghostscript with the ``-dSAFER -dBATCH -dNOPAUSE`` trio of options when rasterizing to a file. These suppress interactive prompts and enable some security checks on the file to be run. Please see the :ref:`Using Ghostscript<Use.htm>` section for further details.
+It is also conventional to call Ghostscript with the ``-dSAFER -dBATCH -dNOPAUSE`` trio of options when rasterizing to a file. These suppress interactive prompts and enable some security checks on the file to be run. Please see the :ref:`Using Ghostscript<Use.html>` section for further details.
 
 
 
@@ -273,7 +273,7 @@ There are two unrelated sets of TIFF drivers. There are five color TIFF drivers 
    .. note::
       The composite CMYK output, because it uses the tint transformed colour equivalents for any spot colours (see Postscript Language Reference "Separation Color Spaces" and "DeviceN Color Spaces"), may not produce an accurate preview, if the job uses overprinting.
 
-   The :title:`tiffsep` device also prints the names of any spot colors detected within a document to stderr, (stderr is also used for the output from the :title:`bbox` device). For each spot color, the name of the color is printed preceded by '%%SeparationName: '. This provides a simple mechanism for users and external applications to be informed about the names of spot colors within a document.
+   The :title:`tiffsep` device can also print the names of any spot colors detected within a document to stderr, (stderr is also used for the output from the :title:`bbox` device). For each spot color, the name of the color is printed preceded by '%%SeparationName: '. This provides a simple mechanism for users and external applications to be informed about the names of spot colors within a document. This is controlled by the ``PrintSpotCMYK`` switch, which defaults to ``false`` (don't print).
 
    Generally Ghostscript will support a maximum of 64 process and spot colors. The :title:`tiffsep` device the :title:`psdcmyk` device and the :title:`psdcmyk16` devices maintain rendered data in a planar form with a maximum of 64 planes set by the definition of ``GS_CLIENT_COLOR_MAX_COMPONENTS`` in the code. That is there can be up to 64 colorants accurately handled with overprint on a single page. If more than 64 colorants are encountered, those beyond 64 will be mapped to CMYK using the alternate tint transform.
 
@@ -295,6 +295,8 @@ There are two unrelated sets of TIFF drivers. There are five color TIFF drivers 
    The file specified via the ``OutputFile`` command line parameter will not be created (it is opened, but deleted prior to finishing each page).
 
    File names for the separations for the CMYK colorants are created by appending '(Cyan).tif', '(Magenta).tif' '(Yellow).tif' or '(Black).tif' to the to the end of the file name specified via the ``OutputFile`` parameter. File names for the spot color separation files are created by appending the ``Spot`` color name in '(' and ').tif' to the filename. If the file name specified via the ``OutputFile`` parameter ends with the suffix '.tif', then the suffix is removed prior to adding the component name in '(' and ').tif'.
+
+   The :title:`tiffsep1` device can also print the names of any spot colors detected within a document to stderr, (stderr is also used for the output from the :title:`bbox` device). For each spot color, the name of the color is printed preceded by '%%SeparationName: '. This provides a simple mechanism for users and external applications to be informed about the names of spot colors within a document. This is controlled by the ``PrintSpotCMYK`` switch, which defaults to ``false`` (don't print).
 
 :title:`tiffscaled`
    The :title:`tiffscaled` device renders internally at the specified resolution to an 8 bit greyscale image. This is then scaled down by an integer scale factor (set by ``-dDownScaleFactor=`` described below) and then error diffused to give 1bpp output. The compression can be set using ``-sCompression=`` as described below.
@@ -678,7 +680,7 @@ High level devices
 ---------------------------------------------------------------------------------
 
 
-Please refer to :ref:`High Level Devices<VectorDevices.htm>` for documentation on the device options for these devices.
+Please refer to :ref:`High Level Devices<VectorDevices.html>` for documentation on the device options for these devices.
 
 
 
@@ -1014,7 +1016,7 @@ The ``setup.ps`` file is responsible for the device selection, therefore you sho
 
 .. code-block:: postscript
 
-   mark
+   <<
      /NoCancel      true                       % don't show the cancel dialog
      /BitsPerPixel  4                          % force 4 bits/pixel
      /UserSettings
@@ -1022,8 +1024,8 @@ The ``setup.ps`` file is responsible for the device selection, therefore you sho
          /DocumentName  (Ghostscript document) % name for the Windows spooler
          /MaxResolution 360                    % maximum document resolution
        >>
-     (mswinpr2) finddevice                     % select the Windows device driver
-     putdeviceprops
+     /OutputDevice /mswinpr2                   % select the Windows device driver
+   >> setpagedevice
   setdevice
 
 

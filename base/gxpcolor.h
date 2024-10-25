@@ -215,7 +215,7 @@ struct gx_color_tile_s {
     byte is_dummy;		/* if true, the device manages the pattern,
                                    and the content of the tile is empty. */
     byte trans_group_popped;    /* Used to avoid multiple group pops in image mask fills */
-    byte is_planar;             /* Has to be stored here due to the device
+    byte num_planar_planes;     /* Has to be stored here due to the device
                                    change that can occur when the tile is
                                    created and when it is written in the clist
                                    when we are writing to a transparency
@@ -309,7 +309,7 @@ void gx_pattern_cache_update_space(gs_gstate * pgs, size_t used);
 /* device, but it may zero out the bitmap_memory pointers to prevent */
 /* the accumulated bitmaps from being freed when the device is closed. */
 int gx_pattern_cache_add_entry(gs_gstate *, gx_device_forward *,
-                               gx_color_tile **, gs_gstate*);
+                               gx_color_tile **);
 /* Add a dummy Pattern cache entry.  Stubs a pattern tile for interpreter when
    device handles high level patterns. */
 int gx_pattern_cache_add_dummy_entry(gs_gstate *pgs, gs_pattern1_instance_t *pinst,

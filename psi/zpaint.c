@@ -49,6 +49,7 @@ fillstroke_cont(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     int restart, code;
 
+    check_op(1);
     check_type(*op, t_integer);
     restart = (int)op->value.intval;
     code = gs_fillstroke(igs, &restart);
@@ -65,6 +66,7 @@ zfillstroke(i_ctx_t *i_ctx_p)
 {
     os_ptr op = osp;
     push(1);
+    check_estack(1);
     make_int(op, 0);		/* 0 implies we are at fill color, need to swap first */
     push_op_estack(fillstroke_cont);
     return o_push_estack;
@@ -76,6 +78,7 @@ eofillstroke_cont(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     int restart, code;
 
+    check_op(1);
     check_type(*op, t_integer);
     restart = (int)op->value.intval;
     code = gs_eofillstroke(igs, &restart);
@@ -113,6 +116,7 @@ zimagepath(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     int code;
 
+    check_op(3);
     check_type(op[-2], t_integer);
     check_type(op[-1], t_integer);
     check_read_type(*op, t_string);

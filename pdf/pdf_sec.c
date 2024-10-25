@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -182,8 +182,11 @@ static int apply_sasl(pdf_context *ctx, char *Password, int Len, char **NewPassw
          * Fortunately, the stringprep error codes are sorted to make
          * this easy: the errors we want to ignore are the ones with
          * codes less than 100. */
-        if ((int)err < 100)
+        if ((int)err < 100) {
+            *NewPassword = Password;
+            *NewLen = Len;
             return 0;
+        }
 
         return_error(gs_error_ioerror);
     }
@@ -301,7 +304,8 @@ error:
     pdfi_countdown(Key);
     gs_free_object(ctx->memory, Test, "R5 password test");
 #ifdef HAVE_LIBIDN
-    gs_free_object(ctx->memory, UTF8_Password, "free sasl result");
+    if (UTF8_Password != Password)
+        gs_free_object(ctx->memory, UTF8_Password, "free sasl result");
 #endif
     return code;
 }
@@ -1065,14 +1069,12 @@ static int pdfi_read_Encrypt_dict(pdf_context *ctx, int *KeyLen)
 
         ctx->encryption.V = (int)i64;
 
-        if (ctx->encryption.V == 2 || ctx->encryption.V == 3) {
-            code = pdfi_dict_knownget_number(ctx, d, "Length", &f);
-            if (code < 0)
-                goto done;
+        code = pdfi_dict_knownget_number(ctx, d, "Length", &f);
+        if (code < 0)
+            goto done;
 
-            if (code > 0)
-                *KeyLen = (int)f;
-        }
+        if (code > 0)
+            *KeyLen = (int)f;
     }
 
     code = pdfi_dict_get_int(ctx, d, "P", &i64);
@@ -1282,7 +1284,7 @@ static int check_password_R5(pdf_context *ctx, char *Password, int PasswordLen, 
         /* If the supplied Password fails as the user *and* owner password, maybe its in
          * the locale, not UTF-8, try converting to UTF-8
          */
-        code = pdfi_object_alloc(ctx, PDF_STRING, strlen(ctx->encryption.Password), (pdf_obj **)&P);
+        code = pdfi_object_alloc(ctx, PDF_STRING, PasswordLen, (pdf_obj **)&P);
         if (code < 0)
             return code;
         memcpy(P->data, Password, PasswordLen);
@@ -1329,7 +1331,7 @@ static int check_password_R6(pdf_context *ctx, char *Password, int PasswordLen, 
         /* If the supplied Password fails as the user *and* owner password, maybe its in
          * the locale, not UTF-8, try converting to UTF-8
          */
-        code = pdfi_object_alloc(ctx, PDF_STRING, strlen(ctx->encryption.Password), (pdf_obj **)&P);
+        code = pdfi_object_alloc(ctx, PDF_STRING, PasswordLen, (pdf_obj **)&P);
         if (code < 0)
             return code;
         memcpy(P->data, Password, PasswordLen);
@@ -1407,10 +1409,13 @@ int pdfi_initialise_Decryption(pdf_context *ctx)
                 }
             }
             /* Revision 3 *may* be more than 40 bits of RC4 */
-            if (KeyLen != 0 && (KeyLen < 40 || KeyLen > 128 || KeyLen % 8 != 0)) {
-                pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
-                KeyLen = 128;
-            }
+            if (KeyLen != 0) {
+                if (KeyLen < 40 || KeyLen > 128 || KeyLen % 8 != 0) {
+                    pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
+                    KeyLen = 128;
+                }
+            } else
+                KeyLen = 40;
             if (ctx->encryption.StmF == CRYPT_NONE)
                 ctx->encryption.StmF = CRYPT_V2;
             if (ctx->encryption.StrF == CRYPT_NONE)
@@ -1421,7 +1426,7 @@ int pdfi_initialise_Decryption(pdf_context *ctx)
             if (ctx->encryption.StrF != CRYPT_IDENTITY || ctx->encryption.StmF != CRYPT_IDENTITY) {
                 /* Revision 4 is either AES or RC4, but its always 128-bits */
                 if (KeyLen != 0)
-                    pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
+                    pdfi_set_warning(ctx, 0, NULL, W_PDF_SPURIOUS_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
                 KeyLen = 128;
                 /* We can't set the encryption filter, so we have to hope the PDF file did */
                 code = check_password_preR5(ctx, ctx->encryption.Password, ctx->encryption.PasswordLen, KeyLen, 4);
@@ -1430,7 +1435,7 @@ int pdfi_initialise_Decryption(pdf_context *ctx)
         case 5:
             /* Set up the defaults if not already set */
             if (KeyLen != 0)
-                pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
+                pdfi_set_warning(ctx, 0, NULL, W_PDF_SPURIOUS_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
             KeyLen = 256;
             if (ctx->encryption.StmF == CRYPT_NONE)
                 ctx->encryption.StmF = CRYPT_AESV2;
@@ -1442,7 +1447,7 @@ int pdfi_initialise_Decryption(pdf_context *ctx)
             /* Set up the defaults if not already set */
             /* Revision 6 is always 256-bit AES */
             if (KeyLen != 0)
-                pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
+                pdfi_set_warning(ctx, 0, NULL, W_PDF_SPURIOUS_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
             KeyLen = 256;
             if (ctx->encryption.StmF == CRYPT_NONE)
                 ctx->encryption.StmF = CRYPT_AESV3;

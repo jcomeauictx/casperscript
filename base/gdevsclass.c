@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -396,6 +396,7 @@ int default_subclass_composite_front(gx_device *dev, gx_device **pcdev, const gs
                         psubclass_data->saved_finalize_method = NULL;
                         while (dev) {
                             memcpy(&(dev->color_info), &(dev->child->color_info), sizeof(gx_device_color_info));
+                            dev->num_planar_planes = dev->child->num_planar_planes;
                             dev = dev->parent;
                         }
                     }
@@ -422,6 +423,7 @@ int default_subclass_composite_front(gx_device *dev, gx_device **pcdev, const gs
                         (*pcdev)->parent = dev;
                         while (dev) {
                             memcpy(&dev->color_info, &(*pcdev)->color_info, sizeof(gx_device_color_info));
+                            dev->num_planar_planes = dev->child->num_planar_planes;
                             dev = dev->parent;
                         }
                     }
@@ -435,6 +437,7 @@ int default_subclass_composite_front(gx_device *dev, gx_device **pcdev, const gs
                     if (psubclass_data->pre_composite_device != NULL) {
                         while (dev) {
                             memcpy(&(dev->color_info), &(dev->child->color_info), sizeof(gx_device_color_info));
+                            dev->num_planar_planes = dev->child->num_planar_planes;
                             dev = dev->parent;
                         }
                     }
@@ -876,11 +879,20 @@ void default_subclass_finalize(const gs_memory_t *cmem, void *vptr)
     if (dev->finalize)
         dev->finalize(dev);
 
-    /* Use rc_decrement_only here not rc_decrement because rc_decrement zeroes the
-     * pointer if the count reaches 0. That would be disastrous for us because we
-     * rely on recursively calling finalize in order to fix up the chain of devices.
+    /* The only way we should get here is when the original device
+     * should be freed (because the subclassing device is pretending
+     * to be the original device). That being the case, all the child
+     * devices should have a reference count of 1 (referenced only by
+     * their parent). Anything else is an error.
      */
-    rc_decrement_only(dev->child, "de-reference child device");
+    if (dev->child != NULL) {
+        if (dev->child->rc.ref_count != 1) {
+            dmprintf(dev->memory, "Error: finalizing subclassing device while child refcount > 1\n");
+            while (dev->child->rc.ref_count != 1)
+                rc_decrement_only(dev->child, "de-reference child device");
+        }
+        rc_decrement(dev->child, "de-reference child device");
+    }
 
     if (psubclass_data) {
         gs_free_object(dev->memory->non_gc_memory, psubclass_data, "gx_epo_finalize(suclass data)");
@@ -889,10 +901,6 @@ void default_subclass_finalize(const gs_memory_t *cmem, void *vptr)
     if (dev->stype_is_dynamic)
         gs_free_const_object(dev->memory->non_gc_memory, dev->stype,
                              "default_subclass_finalize");
-    if (dev->parent)
-        dev->parent->child = dev->child;
-    if (dev->child)
-        dev->child->parent = dev->parent;
     if (dev->icc_struct)
         rc_decrement(dev->icc_struct, "finalize subclass device");
     if (dev->PageList)

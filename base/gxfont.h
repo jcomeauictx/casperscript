@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -97,6 +97,14 @@ typedef struct gs_font_info_s {
     gs_const_string FullName;
 #define FONT_INFO_EMBEDDING_RIGHTS 0x4000
     int EmbeddingRights;
+#define FONT_INFO_EMBEDDED 0x8000 /* Both the following are set by this */
+    /* Indicates the font was embedded in the (PDF!) input job */
+    int FontEmbedded;
+    /* Indicates the original font type from the PDF font object
+     * This may be different from the actual font type
+     * if FontEmbedded is true.
+     */
+    font_type orig_FontType;
 } gs_font_info_t;
 
 #define public_st_gs_font_info() /* in gsfont.c */\

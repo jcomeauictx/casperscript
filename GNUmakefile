@@ -2,19 +2,22 @@
 SHELL := /bin/bash
 CASPER ?= 1
 # review `install` recipe if using other CONFIG_ARGS
-INSTALL_PREFIX ?= $(HOME)
+INSTALL_PREFIX ?= /usr/local/casperscript
 CONFIG_ARGS ?= --with-x --prefix=$(INSTALL_PREFIX)
 ARCH := $(shell uname -m)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
-CS_VERSION ?= $(shell git tag)
+CS_VERSION ?= $(shell git describe)
 GSNAME := cs-$(CS_VERSION)
 CONFIG_ARGS += --with-gs=$(GSNAME)
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
 XCFLAGS += -DSYSLOG_DEBUGGING
 XCFLAGS += -DUSE_LIBREADLINE
+# fix problem with off64_t after merge with artifex-ghostpdl
+# https://stackoverflow.com/a/34853360/493161
+XCFLAGS += -Doff64_t=__off64_t
 # CHA prompt was an attempt to fix prompt on Termux, but it fails on xterm
 XCFLAGS += -DUSE_CHA_PROMPT
 #XCFLAGS += -DTEST_ZCASPER=1
@@ -23,8 +26,11 @@ XTRALIBS += $(CASPERLIBS)
 VDIFF_TESTDIRS := reference latest
 VDIFF_TESTFILE ?= cjk/iso2022.ps.1.pnm
 VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
+ifeq ($(SHOWENV),)
 export CASPER XTRALIBS
-export VDIFF_TESTFILES GSNAME # for `make env` check
+else
+export
+endif
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -35,13 +41,11 @@ endif
 all: $(CS_MAKEFILES)
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
-	if [ \! -e bin/cs.exe ]; then \
-		cd bin && ln -s $(GSNAME) cs.exe; \
-	fi
+	cd bin && ln -sf $(GSNAME) cs.exe
 	# make the same symlinks as for install, but in $(CWD)/bin
-	# we don't know what GSNAME is, so we just try 'em all and ignore errors
+	# NOTE: we're counting on GSNAME being unique per build!
 	cd bin && for symlink in cs gs ccs bccs; do \
-	 ln -s $(GSNAME) $$symlink || true; \
+	 ln -sf $(GSNAME) $$symlink; \
 	done
 install: $(CS_MAKEFILES)
 	make -f $< install
@@ -50,16 +54,20 @@ install: $(CS_MAKEFILES)
 	# cs "casperscript"
 	# ccs "console cs (cs -dNODISPLAY)"
 	# bccs "batch console cs"
-	# don't overwrite existing filenames but don't fail either (|| true)
+	# NOTE: GSNAME is unique for each build, so overwrite all aliases
 	cd $(INSTALL_PREFIX)/bin && for symlink in cs gs ccs bccs; do \
-	 ln -s $(GSNAME) $$symlink || true; \
+	 ln -sf $(GSNAME) $$symlink; \
 	done
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
 	./autogen.sh $(CONFIG_ARGS)
 env:
+ifeq ($(SHOWENV),)
+	$(MAKE) SHOWENV=1 $@
+else
 	$@
+endif
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)

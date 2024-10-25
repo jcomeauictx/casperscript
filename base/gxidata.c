@@ -22,6 +22,8 @@
 #include "gxcpath.h"
 #include "gximage.h"
 #include "gsicc_cache.h"
+#include "gxgstate.h"
+
 #ifdef WITH_CAL
 #include "cal.h"
 #endif
@@ -58,6 +60,11 @@ gx_image1_plane_data(gx_image_enum_common_t * info,
     bool bit_planar = penum->num_planes > penum->spp;
     int code;
 
+    /* Sanity check */
+    if (penum->pgs != NULL && penum->pgs->level < penum->pgs_level) {
+        code = gs_note_error(gs_error_undefinedresult);
+        goto out;
+    }
     if (height == 0) {
         *rows_used = 0;
         return 0;
@@ -97,66 +104,73 @@ gx_image1_plane_data(gx_image_enum_common_t * info,
         if (max_int - any_abs(penum->dda.row.y.step.dQ) > any_abs(penum->cur.y))
             dda_next(penum->dda.row.y);
 
-        if (penum->interpolate == interp_off) {
-            if (penum->skip_next_line) {
-                if (penum->skip_next_line(penum, dev))
-                    goto mt;
-            } else {
-                switch (penum->posture) {
-                    case image_portrait:
-                        {		/* Precompute integer y and height, */
-                            /* and check for clipping. */
-                            fixed yc = penum->cur.y,
-                                yn = dda_current(penum->dda.row.y);
+        if (penum->interpolate == interp_off && penum->skip_next_line && penum->skip_next_line(penum, dev)) {
+            goto mt;
+        } else if (penum->skip_next_line == NULL) {
+            /* Previously we skipped these calculations if we were interpolating.
+             * Bug 706881 shows us that we can't skip this in all cases, because
+             * the values are needed when halftoning for landscape files at least.
+             * Easiest to always perform the calculations. */
+            switch (penum->posture) {
+                case image_portrait:
+                    {    /* Precompute integer y and height, */
+                        /* and check for clipping. */
+                        fixed yc = penum->cur.y,
+                              yn = dda_current(penum->dda.row.y);
 
-                            if (yn < yc) {
-                                fixed temp = yn;
+                        if (yn < yc) {
+                            fixed temp = yn;
 
-                                yn = yc;
-                                yc = temp;
-                            }
-                            yc -= adjust;
+                            yn = yc;
+                            yc = temp;
+                        }
+                        yc -= adjust;
+                        yn += adjust;
+                        if (penum->interpolate == interp_off)
+                        {
                             if (yc >= penum->clip_outer.q.y)
                                 goto mt;
-                            yn += adjust;
                             if (yn <= penum->clip_outer.p.y)
                                 goto mt;
-                            penum->yci = fixed2int_pixround_perfect(yc);
-                            penum->hci = fixed2int_pixround_perfect(yn) - penum->yci;
-                            if (penum->hci == 0)
-                                goto mt;
-                            if_debug2m('b', penum->memory, "[b]yci=%d, hci=%d\n",
-                                       penum->yci, penum->hci);
                         }
-                        break;
-                    case image_landscape:
-                        {		/* Check for no pixel centers in x. */
-                            fixed xc = penum->cur.x,
-                                xn = dda_current(penum->dda.row.x);
+                        penum->yci = fixed2int_pixround_perfect(yc);
+                        penum->hci = fixed2int_pixround_perfect(yn) - penum->yci;
+                        if (penum->interpolate == interp_off && penum->hci == 0)
+                            goto mt;
+                        if_debug2m('b', penum->memory, "[b]yci=%d, hci=%d\n",
+                                   penum->yci, penum->hci);
+                    }
+                    break;
+                case image_landscape:
+                    {    /* Check for no pixel centers in x. */
+                        fixed xc = penum->cur.x,
+                              xn = dda_current(penum->dda.row.x);
 
-                            if (xn < xc) {
-                                fixed temp = xn;
+                        if (xn < xc) {
+                            fixed temp = xn;
 
-                                xn = xc;
-                                xc = temp;
-                            }
-                            xc -= adjust;
+                            xn = xc;
+                            xc = temp;
+                        }
+                        xc -= adjust;
+                        xn += adjust;
+                        if (penum->interpolate == interp_off)
+                        {
                             if (xc >= penum->clip_outer.q.x)
                                 goto mt;
-                            xn += adjust;
                             if (xn <= penum->clip_outer.p.x)
                                 goto mt;
-                            penum->xci = fixed2int_pixround_perfect(xc);
-                            penum->wci = fixed2int_pixround_perfect(xn) - penum->xci;
-                            if (penum->wci == 0)
-                                goto mt;
-                            if_debug2m('b', penum->memory, "[b]xci=%d, wci=%d\n",
-                                       penum->xci, penum->wci);
                         }
-                        break;
-                    case image_skewed:
-                        ;
-                }
+                        penum->xci = fixed2int_pixround_perfect(xc);
+                        penum->wci = fixed2int_pixround_perfect(xn) - penum->xci;
+                        if (penum->interpolate == interp_off && penum->wci == 0)
+                            goto mt;
+                        if_debug2m('b', penum->memory, "[b]xci=%d, wci=%d\n",
+                                   penum->xci, penum->wci);
+                    }
+                    break;
+                case image_skewed:
+                    ;
             }
         }
         if (0)
@@ -496,7 +510,10 @@ gx_image1_end_image(gx_image_enum_common_t * info, bool draw_last)
     /* it is not clear (to me) why these are freed explicitly instead
        of using reference counting */
     gs_free_object(mem, penum->rop_dev, "image RasterOp");
-    gs_free_object(mem, penum->clip_dev, "image clipper");
+
+    /* We do now reference count the clip device, see bug #706771 */
+    rc_decrement(penum->clip_dev, "gx_image1_end_image");
+    penum->clip_dev = NULL;
 
     if (scaler != 0) {
         (*scaler->templat->release) ((stream_state *) scaler);

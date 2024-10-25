@@ -108,7 +108,7 @@ static int read_xref_stream_entries(pdf_context *ctx, pdf_c_stream *s, int64_t f
         }
 
         entry = &ctx->xref_table->xref[i];
-        if (entry->object_num != 0)
+        if (entry->object_num != 0 && !entry->free)
             continue;
 
         entry->compressed = false;
@@ -1132,7 +1132,7 @@ int pdfi_read_xref(pdf_context *ctx)
 
 repair:
     (void)pdfi_loop_detector_cleartomark(ctx);
-    if (!ctx->repaired)
+    if (!ctx->repaired && !ctx->args.pdfstoponerror)
         return(pdfi_repair_file(ctx));
     return 0;
 }

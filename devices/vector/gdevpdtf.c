@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -717,7 +717,7 @@ pdf_resize_resource_arrays(gx_device_pdf *pdev, pdf_font_resource_t *pfres, int 
 }
 
 /* Get the object ID of a font resource. */
-long
+int64_t
 pdf_font_id(const pdf_font_resource_t *pdfont)
 {
     return pdf_resource_id((const pdf_resource_t *)pdfont);
@@ -745,8 +745,10 @@ pdf_font_resource_font(const pdf_font_resource_t *pdfont, bool complete)
 static bool
 font_is_symbolic(const gs_font *font)
 {
-    if (font->FontType == ft_composite)
-        return true;		/* arbitrary */
+    if (font->FontType == ft_composite || font->FontType == ft_CID_encrypted ||
+        font->FontType == ft_CID_user_defined || font->FontType == ft_CID_TrueType ||
+        font->FontType == ft_CID_bitmap)
+        return false;		/* arbitrary */
     switch (((const gs_font_base *)font)->nearest_encoding_index) {
     case ENCODING_INDEX_STANDARD:
     case ENCODING_INDEX_ISOLATIN1:
@@ -808,7 +810,7 @@ has_extension_glyphs(gs_font *pfont)
 
 pdf_font_embed_t
 pdf_font_embed_status(gx_device_pdf *pdev, gs_font *font, int *pindex,
-                      pdf_char_glyph_pair_t *pairs, int num_glyphs)
+                      pdf_char_glyph_pair_t *pairs, int num_glyphs, font_type *orig_type)
 {
     const gs_font_name *fn = &font->font_name;
     const byte *chars = fn->chars;
@@ -820,7 +822,7 @@ pdf_font_embed_status(gx_device_pdf *pdev, gs_font *font, int *pindex,
     gs_font_info_t info;
 
     memset(&info, 0x00, sizeof(gs_font_info_t));
-    code = font->procs.font_info(font, NULL, FONT_INFO_EMBEDDING_RIGHTS, &info);
+    code = font->procs.font_info(font, NULL, FONT_INFO_EMBEDDING_RIGHTS | FONT_INFO_EMBEDDED, &info);
     if (code == 0 && (info.members & FONT_INFO_EMBEDDING_RIGHTS)) {
         if (((info.EmbeddingRights == 0x0002) || (info.EmbeddingRights & 0x0200))
             && !IsInWhiteList ((const char *)chars, size)) {
@@ -841,7 +843,7 @@ pdf_font_embed_status(gx_device_pdf *pdev, gs_font *font, int *pindex,
             memcpy(name, font->font_name.chars, len);
             name[len] = 0;
             emprintf1(pdev->pdf_memory,
-                      "\nWarning: %s cannot be embedded because of licensing restrictions\n",
+                      "\nWarning: Font %s cannot be embedded because of licensing restrictions\n",
                       name);
             return FONT_EMBED_NO;
         }
@@ -873,15 +875,25 @@ pdf_font_embed_status(gx_device_pdf *pdev, gs_font *font, int *pindex,
              (embed_as_standard_called = true,
               (do_embed_as_standard = embed_as_standard(pdev, font, index, pairs, num_glyphs)))))
         /* Ignore NeverEmbed for a non-standard font with a standard name */
-        ) {
-        if (pdev->params.EmbedAllFonts || font_is_symbolic(font) ||
-            embed_list_includes(&pdev->params.AlwaysEmbed, chars, size))
-            return FONT_EMBED_YES;
+        )
+    {
+        if (embed_list_includes(&pdev->params.AlwaysEmbed, chars, size))
+                return FONT_EMBED_YES;
+        if (pdev->params.EmbedAllFonts) {
+            if (!(info.members & FONT_INFO_EMBEDDED) || info.FontEmbedded)
+                return FONT_EMBED_YES;
+        } else {
+            if (font_is_symbolic(font))
+                return FONT_EMBED_YES;
+        }
     }
     if (index >= 0 &&
         (embed_as_standard_called ? do_embed_as_standard :
          embed_as_standard(pdev, font, index, pairs, num_glyphs)))
         return FONT_EMBED_STANDARD;
+
+    if (info.members & FONT_INFO_EMBEDDED)
+        *orig_type = info.orig_FontType;
     return FONT_EMBED_NO;
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -181,8 +181,8 @@ const gx_device_bit gs_bitrgbtags_device =
         0,                              /* is open */
         0,                              /* max_fill_band */
         {                               /* color infor */
-            3,                          /* max_components */
-            3,                          /* num_components */
+            4,                          /* max_components */
+            4,                          /* num_components */
             GX_CINFO_POLARITY_ADDITIVE, /* polarity */
             32,                         /* depth */
             GX_CINFO_COMP_NO_INDEX,     /* gray index */
@@ -208,7 +208,7 @@ const gx_device_bit gs_bitrgbtags_device =
         (int)((float)(110) * (Y_DPI) / 10 + 0.5),/* height */
         0, /* Pad */
         0, /* log2_align_mod */
-        0, /* is_planar */
+        0, /* num_planar_planes */
         0, /* LeadingEdge */
         {
             (float)(((((int)((float)(85) * (X_DPI) / 10 + 0.5)) * 72.0 + 0.5) - 0.5) / (X_DPI)),
@@ -783,6 +783,22 @@ bittags_print_page(gx_device_printer * pdev, gp_file * prn_stream)
     for (i = 0; i <= line_count; i++, lnum += step) {
         if ((code = gdev_prn_get_bits(pdev, lnum, in, &data)) < 0)
             goto done;
+        {
+            /* The data is written internally as TTRRGGBB, where we want it written as: RRGGBBTT.
+             * Post process that here. */
+            int ls = line_size;
+            byte *d = data;
+            while (ls > 0)
+            {
+                byte t = d[0];
+                d[0] = d[1];
+                d[1] = d[2];
+                d[2] = d[3];
+                d[3] = t;
+                d += 4;
+                ls -= 4;
+            }
+        }
         if (!nul)
             gp_fwrite(data, 1, line_size, prn_stream);
     }

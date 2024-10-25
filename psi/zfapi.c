@@ -686,6 +686,8 @@ FAPI_FF_get_word(gs_fapi_font *ff, gs_fapi_font_feature var_id, int index, unsig
                     break;
                 }
                 for (i = 0; i < r_size(DBlend); i++) {
+                    /* When reading the real proc, we add a space between each entry */
+                    length++;
                     if (array_get(ff->memory, DBlend, i, &Element) < 0) {
                         *ret = 0;
                         break;
@@ -693,22 +695,22 @@ FAPI_FF_get_word(gs_fapi_font *ff, gs_fapi_font_feature var_id, int index, unsig
                     switch (r_btype(&Element)) {
                         case t_name:
                             name_string_ref(ff->memory, &Element, &string);
-                            length += r_size(&string) + 1;
+                            length += r_size(&string);
                             break;
                         case t_real:
                             gs_snprintf(Buffer, sizeof(Buffer), "%f", Element.value.realval);
-                            length += strlen(Buffer) + 1;
+                            length += strlen(Buffer);
                             break;
                         case t_integer:
                             gs_snprintf(Buffer, sizeof(Buffer), "%"PRIpsint, Element.value.intval);
-                            length += strlen(Buffer) + 1;
+                            length += strlen(Buffer);
                             break;
                         case t_operator:
                             {
                                 op_def const *op;
 
                                 op = op_index_def(r_size(&Element));
-                                length += strlen(op->oname + 1) + 1;
+                                length += strlen(op->oname + 1);
                             }
                             break;
                         default:
@@ -2493,8 +2495,8 @@ zFAPIrebuildfont(i_ctx_t *i_ctx_p)
     os_ptr op = osp;
     build_proc_refs build;
     gs_font *pfont;
-    int code = font_param(op - 1, &pfont);
-    gs_font_base *pbfont = (gs_font_base *) pfont;
+    int code;
+    gs_font_base *pbfont;
     ref *v;
     char *font_file_path = NULL;
     char FAPI_ID[20];
@@ -2506,8 +2508,12 @@ zFAPIrebuildfont(i_ctx_t *i_ctx_p)
     bool has_buildchar;
     int subfont;
 
+    check_op(3);
+    code = font_param(op - 1, &pfont);
     if (code < 0)
         return code;
+
+    pbfont = (gs_font_base *) pfont;
 
     check_type(*op, t_boolean);
     /* If someone has copied the font dictionary, we may still
@@ -3222,7 +3228,10 @@ FAPI_char(i_ctx_t *i_ctx_p, bool bBuildGlyph, ref *charstring)
     ref *v;
     char *font_file_path = NULL;
     gs_font *pfont;
-    int code = font_param(osp - 1, &pfont);
+    int code;
+
+    check_op(2);
+    code = font_param(osp - 1, &pfont);
 
     if (code == 0) {
         gs_font_base *pbfont = (gs_font_base *) pfont;
@@ -3345,6 +3354,7 @@ zFAPIBuildGlyph9(i_ctx_t *i_ctx_p)
     ref *rFDArray, f;
     int font_index;
 
+    check_op(2);
     check_type(op[0], t_integer);
     check_type(op[-1], t_dictionary);
     cid = op[0].value.intval;
@@ -3436,6 +3446,7 @@ zFAPIpassfont(i_ctx_t *i_ctx_p)
     ref reqstr;
     int subfont;
 
+    check_op(1);
     /* Normally embedded fonts have no Path, but if a CID font is
      * emulated with a TT font, and it is hooked with FAPI,
      * the path presents and is neccessary to access the full font data.

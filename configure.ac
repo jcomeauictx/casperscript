@@ -1,4 +1,4 @@
-dnl Copyright (C) 2001-2023 Artifex Software, Inc.
+dnl Copyright (C) 2001-2024 Artifex Software, Inc.
 dnl All Rights Reserved.
 dnl
 dnl This software is provided AS-IS with no warranty, either express or
@@ -750,6 +750,33 @@ SUBCONFIG_OPTS="--build=$build --host=$host"
 #fi
 
 dnl --------------------------------------------------
+dnl Check for NEON support
+dnl --------------------------------------------------
+save_cflags=$CFLAGS
+AC_MSG_CHECKING([neon support])
+CFLAGS="$save_cflags $OPT_CFLAGS -mfpu=neon -mcpu=cortex-a53"
+HAVE_NEON=""
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([#include "arm_neon.h"], [
+  int32x4_t round = vdupq_n_s32(10);
+  return(0);
+  ])],
+  [HAVE_NEON="-DHAVE_NEON"], [HAVE_NEON=""])
+
+AC_ARG_ENABLE([neon], AS_HELP_STRING([--disable-neon],
+       [Do not use neon instrinsics]), [
+             if test "x$enable_neon" = xno; then
+                HAVE_NEON=""
+             fi])
+
+if test "x$HAVE_NEON" != x; then
+  AC_MSG_RESULT(yes)
+else
+  AC_MSG_RESULT(no)
+fi
+CFLAGS=$save_cflags
+
+dnl --------------------------------------------------
 dnl Check for libraries
 dnl --------------------------------------------------
 
@@ -825,6 +852,7 @@ dnl Tesseract/Leptonica detection
 TESSERACTDIR=tesseract
 LEPTONICADIR=leptonica
 OCR_VERSION=0
+OCR_SHARED=0
 LEPTONICAINCLUDE=
 TESSERACTINCLUDE=
 TESSERACT_LIBS=
@@ -841,6 +869,7 @@ if test x$with_tesseract != xno; then
   if test -d $srcdir/tesseract && test -d $srcdir/leptonica; then
     AC_MSG_RESULT([yes])
     AC_LANG_PUSH(C++)
+    AC_PROG_CXX
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[return 0;]])],[HAVE_CXX_COMPILER=yes; AC_SUBST(CXX)],[HAVE_CXX_COMPILER=no])
     if test x$HAVE_CXX_COMPILER != xyes; then
       AC_MSG_WARN([Disabling tesseract as no working C++ compiler])
@@ -969,19 +998,21 @@ if test x$with_tesseract != xno; then
          [TESS_NEON="-mfpu=neon -mcpu=cortex-a53 -D__ARM_NEON__"],
          [TESS_NEON=""])
 
-        if test "x$TESS_NEON" != x; then
+        if test "x$TESS_NEON" != x && test "x$enable_neon" != xno; then
           AC_MSG_RESULT(yes)
           TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_NEON"
         else
           AC_MSG_RESULT(no)
+          TESS_NEON=""
         fi
 
         CXXFLAGS="$save_cxxflags"
 
         OCR_VERSION=1
+        OCR_SHARED=0
         OCR_DEVS="\$(DD)ocr.dev \$(DD)hocr.dev \$(DD)pdfocr8.dev \$(DD)pdfocr24.dev \$(DD)pdfocr32.dev"
-        LEPTONICAINCLUDE="include base/leptonica.mak"
-        TESSERACTINCLUDE="include base/tesseract.mak"
+        LEPTONICAINCLUDE="include \$(GLSRCDIR)/leptonica.mak"
+        TESSERACTINCLUDE="include \$(GLSRCDIR)/tesseract.mak"
         TESSERACT_LIBS="-lstdc++"
       else
         OCR_DEVS_WARNING_LINE1="OCR devices disabled due to incompatible compiler: tesseract requires a C++17 compatible compiler"
@@ -990,6 +1021,52 @@ if test x$with_tesseract != xno; then
     AC_LANG_POP()
   else
     AC_MSG_RESULT([no])
+    AC_MSG_CHECKING(for C++ compiler)
+
+    AC_LANG_PUSH(C++)
+    AC_PROG_CXX
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[return 0;]])],[HAVE_CXX_COMPILER=yes; AC_SUBST(CXX)],[HAVE_CXX_COMPILER=no])
+
+    if test x"$HAVE_CXX_COMPILER" != x"yes" ; then
+      AC_MSG_RESULT(no)
+      OCR_DEVS_WARNING_LINE1="Disabling tesseract (OCR devices) as no working C++ compiler"
+    else
+      save_cxxflags="$CXXFLAGS"
+      cxxflags_to_try="-stdlib=libstdc++"
+      CXXFLAGS_TO_USE=""
+
+      AC_MSG_CHECKING([supported C++ compiler flags])
+      for flag in $cxxflags_to_try ; do
+        CXXFLAGS="$CXXFLAGS $flag"
+
+        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <cstdlib>]], [[return 0;]])],[
+                echo "   $flag"; CXXFLAGS_TO_USE="$CXXFLAGS_TO_USE $flag"
+        ],[])
+
+        CXXFLAGS="$old_cflags"
+      done
+     TESS_CXXFLAGS="$save_cxxflags $CXXFLAGS_TO_USE"
+     AC_MSG_RESULT([done])
+
+      if test "x$PKGCONFIG" != x; then
+        AC_MSG_CHECKING(for tesseract >= 4.1.0 with pkg-config)
+        if $PKGCONFIG --atleast-version=4.1.0 tesseract; then
+          AC_MSG_RESULT([yes])
+          # A little naff: because we ultimately link through CC (rather than CXX)
+          # we have to explicitly add -lstdc++
+          TESSERACT_LIBS="`$PKGCONFIG --libs tesseract lept` -lstdc++"
+          TESS_CXXFLAGS="$TESS_CXXFLAGS `$PKGCONFIG --cflags tesseract lept`"
+          OCR_VERSION=1
+          OCR_SHARED=1
+          OCR_DEVS="\$(DD)ocr.dev \$(DD)hocr.dev \$(DD)pdfocr8.dev \$(DD)pdfocr24.dev \$(DD)pdfocr32.dev"
+          LEPTONICAINCLUDE="include \$(GLSRCDIR)/stub.mak"
+          TESSERACTINCLUDE="include \$(GLSRCDIR)/tessshared.mak"
+        else
+          AC_MSG_RESULT([no])
+        fi
+      fi
+    fi
+    AC_LANG_POP()
   fi
 fi
 
@@ -1000,6 +1077,7 @@ AC_SUBST(LEPTONICADIR)
 AC_SUBST(TESSERACTDIR)
 AC_SUBST(OCR_DEVS)
 AC_SUBST(OCR_VERSION)
+AC_SUBST(OCR_SHARED)
 AC_SUBST(TESS_AVX)
 AC_SUBST(TESS_AVX2)
 AC_SUBST(TESS_FMA)
@@ -1677,7 +1755,7 @@ if test x"$SHARE_LIBTIFF" = x"0" ; then
       if ! test -d "$LIBTIFFCONFDIR" ; then
         mkdir "$LIBTIFFCONFDIR"
       fi
-      cd "$LIBTIFFCONFDIR" && "$absolute_source_path/$LIBTIFFDIR/configure" $GS_TIFF_CONFIGURE_OPTS --disable-lerc --disable-jbig --disable-lzma --disable-zstd --disable-webp --disable-libdeflate $SUBCONFIG_OPTS
+      cd "$LIBTIFFCONFDIR" && "$absolute_source_path/$LIBTIFFDIR/configure" $GS_TIFF_CONFIGURE_OPTS --disable-sphinx --disable-pixarlog --disable-lerc --disable-jbig --disable-lzma --disable-zstd --disable-webp --disable-libdeflate $SUBCONFIG_OPTS
       status=$?
       if test $status -ne 0 ; then
         AC_MSG_ERROR([libtiff configure script failed], $status)
@@ -2226,7 +2304,7 @@ AC_SUBST(URF_DEV)
 AC_SUBST(SURFX_H)
 
 ENABLESO=
-AC_ARG_WITH([so], AS_HELP_STRING([--without-smartoffice],
+AC_ARG_WITH([so], AS_HELP_STRING([--without-so],
     [do not try to include SmartOffice support]))
 
 if test x$with_so != xno; then
@@ -2332,28 +2410,6 @@ if test x$WITH_CAL != x0; then
   #             fi])
 
   if test "x$HAVE_AVX2" != x; then
-    AC_MSG_RESULT(yes)
-  else
-    AC_MSG_RESULT(no)
-  fi
-
-  AC_MSG_CHECKING([neon support])
-  CFLAGS="$save_cflags $OPT_CFLAGS -mfpu=neon -mcpu=cortex-a53"
-  HAVE_NEON=""
-  AC_LINK_IFELSE(
-    [AC_LANG_PROGRAM([#include "arm_neon.h"], [
-    int32x4_t round = vdupq_n_s32(10);
-    return(0);
-    ])],
-    [HAVE_NEON="-DHAVE_NEON"], [HAVE_NEON=""])
-
-  #AC_ARG_ENABLE([neon], AS_HELP_STRING([--disable-neon],
-  #       [Do not use neon instrinsics]), [
-  #             if test "x$enable_neon" = xno; then
-  #                HAVE_NEON=""
-  #             fi])
-
-  if test "x$HAVE_NEON" != x; then
     AC_MSG_RESULT(yes)
   else
     AC_MSG_RESULT(no)
@@ -2712,7 +2768,7 @@ JPEG_DEVS='jpeg jpeggray jpegcmyk'
 
 PCX_DEVS='pcxmono pcxgray pcx16 pcx256 pcx24b pcxcmyk'
 PBM_DEVS='pbm pbmraw pgm pgmraw pgnm pgnmraw pnm pnmraw ppm ppmraw pkm pkmraw pksm pksmraw pam pamcmyk4 pamcmyk32 plan plang planm planc plank'
-PS_DEVS='psdf psdcmyk psdrgb psdcmyk16 psdrgb16 psdcmyktags psdcmyktags16 pdfwrite ps2write eps2write bbox txtwrite inkcov ink_cov psdcmykog fpng pdfimage8 pdfimage24 pdfimage32 PCLm PCLm8'
+PS_DEVS='psdf psdcmyk psdrgb psdcmyk16 psdrgb16 psdcmyktags psdrgbtags psdcmyktags16 pdfwrite ps2write eps2write bbox txtwrite inkcov ink_cov psdcmykog fpng pdfimage8 pdfimage24 pdfimage32 PCLm PCLm8'
 
 # Handle --with-extract-dir=EXTRACT_DIR - build extract library and docxwrite
 # device.
@@ -3078,13 +3134,14 @@ case $host in
     ;;
     *-darwin*)
       DYNAMIC_CFLAGS="-fPIC $DYNAMIC_CFLAGS"
-      GS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GS_SONAME_MAJOR_MINOR)"
-      PCL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(PCL_SONAME_MAJOR_MINOR)"
-      XPS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(XPS_SONAME_MAJOR_MINOR)"
-      PDL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GPDL_SONAME_MAJOR_MINOR)"
-      PDF_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(PDF_SONAME_MAJOR_MINOR)"
+      GS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GS_SONAME_MAJOR)"
+      PCL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(PCL_SONAME_MAJOR)"
+      XPS_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(XPS_SONAME_MAJOR)"
+      PDL_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(GPDL_SONAME_MAJOR)"
+      PDF_DYNAMIC_LDFLAGS="-dynamiclib -install_name $DARWIN_LDFLAGS_SO_PREFIX\$(PDF_SONAME_MAJOR)"
       DYNAMIC_LIBS=""
-      SO_LIB_EXT=".dylib"
+      SO_LIB_EXT=""
+      DLL_EXT=".dylib"
     ;;
     *-sun*|*-solaris*)
       if test x"$GCC" = x"yes"; then
@@ -3302,6 +3359,8 @@ AC_SUBST(HAVE_ISINF)
 
 AC_CHECK_FUNCS([fpclassify], [HAVE_FPCLASSIFY=-DHAVE_FPCLASSIFY])
 AC_SUBST(HAVE_FPCLASSIFY)
+
+AC_CHECK_FUNCS([snprintf], [GCFLAGS="$GCFLAGS -DHAVE_SNPRINTF"])
 
 AC_PROG_GCC_TRADITIONAL
 

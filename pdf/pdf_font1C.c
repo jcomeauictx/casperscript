@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2023 Artifex Software, Inc.
+/* Copyright (C) 2019-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -537,21 +537,36 @@ s16(const byte *p)
 #endif /* not currently used */
 
 static inline int
-u16(const byte *p)
+u16(const byte *p, const byte *e, int *ret)
 {
-    return (p[0] << 8) | p[1];
+    if (p + 1 > e) {
+        *ret = 0;
+        return_error(gs_error_invalidfont);
+    }
+    *ret = (p[0] << 8) | p[1];
+    return 0;
 }
 
 static inline int
-u24(const byte *p)
+u24(const byte *p, const byte *e, int *ret)
 {
-    return (p[0] << 16) | (p[1] << 8) | p[2];
+    if (p + 2 > e) {
+        *ret = 0;
+        return_error(gs_error_invalidfont);
+    }
+    *ret = (p[0] << 16) | (p[1] << 8) | p[2];
+    return 0;
 }
 
 static inline int
-u32(const byte *p)
+u32(const byte *p, const byte *e, int *ret)
 {
-    return (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
+    if (p + 3 > e) {
+        *ret = 0;
+        return_error(gs_error_invalidfont);
+    }
+    *ret = (p[0] << 24) | (p[1] << 16) | (p[2] << 8) | p[3];
+    return 0;
 }
 
 
@@ -562,17 +577,24 @@ subrbias(int count)
 }
 
 static int
-uofs(const byte *p, int offsize)
+uofs(const byte *p, const byte *e, int offsize, int *ret)
 {
-    if (offsize == 1)
-        return p[0];
+    if (p >= e) {
+        *ret = 0;
+        return_error(gs_error_invalidfont);
+    }
+    if (offsize == 1) {
+        *ret = p[0];
+        return 0;
+    }
     if (offsize == 2)
-        return u16(p);
+        return u16(p, e, ret);
     if (offsize == 3)
-        return u24(p);
+        return u24(p, e, ret);
     if (offsize == 4)
-        return u32(p);
-    return 0;
+        return u32(p, e, ret);
+
+    return_error(gs_error_invalidfont);
 }
 
 static int
@@ -606,10 +628,14 @@ expert_subset_charset_proc(const byte *p, const byte *pe, unsigned int i)
 static int
 format0_charset_proc(const byte *p, const byte *pe, unsigned int i)
 {
+    int code, ret;
     if (p + 2 * i > pe)
         return gs_error_rangecheck;
 
-    return u16(p + 2 * i);
+    if ((code = u16(p + 2 * i, pe, &ret)) < 0) {
+        return code;
+    }
+    return ret;
 }
 
 static int
@@ -621,7 +647,9 @@ format1_charset_proc(const byte *p, const byte *pe, unsigned int i)
     while (p < pe - 3) {
         unsigned int first, count;
 
-        first = (unsigned int)u16(p);
+        code = (unsigned int)u16(p, pe, (int *)&first);
+        if (code < 0)
+            break;
         count = (unsigned int)p[2] + 1;
 
         if (i < cid + count) {
@@ -643,8 +671,13 @@ format2_charset_proc(const byte *p, const byte *pe, unsigned int i)
     while (p < pe - 4) {
         unsigned int first, count;
 
-        first = u16(p);
-        count = u16(p + 2) + 1;
+        code = u16(p, pe, (int *)&first);
+        if (code >= 0)
+            code = u16(p + 2, pe, (int *)&count);
+        if (code < 0)
+            break;
+
+        count += 1;
 
         if (i < cid + count) {
             code = first + i - cid;
@@ -666,15 +699,22 @@ static int
 format3_fdselect_proc(const byte *p, const byte *pe, unsigned int i)
 {
     unsigned int n_ranges;
+    int code;
 
-    n_ranges = u16(p);
+    if ((code = u16(p, pe, (int *)&n_ranges)) < 0)
+        return code;
+
     p += 2;
 
     while (n_ranges-- && p + 5 <= pe) {
         unsigned int first, last;
 
-        first = u16(p);
-        last = u16(p + 3);
+        code = u16(p, pe, (int *)&first);
+        if (code >= 0)
+            code = u16(p + 3, pe, (int *)&last);
+
+        if (code < 0)
+            break;
 
         if (i >= first && i < last) {
             return (int)(*(p + 2));
@@ -693,7 +733,7 @@ pdfi_read_cff_real(byte *p, byte *e, float *val)
 
     /* b0 was 30 */
 
-    while (txt < buf + (sizeof buf) - 3 && p < e) {
+    while (txt < buf + (sizeof buf) - 5 && p < e) {
         int b, n;
 
         b = *p++;
@@ -1194,13 +1234,16 @@ static byte *
 pdfi_count_cff_index(byte *p, byte *e, int *countp)
 {
     int count, offsize, last;
+    int code;
 
     if (p + 3 > e) {
         gs_throw(-1, "not enough data for index header");
         return 0;
     }
 
-    count = u16(p);
+    if ((code = u16(p, e, &count)) < 0)
+        return NULL;
+
     p += 2;
     *countp = count;
 
@@ -1220,11 +1263,11 @@ pdfi_count_cff_index(byte *p, byte *e, int *countp)
     }
 
     p += count * offsize;
-    last = uofs(p, offsize);
+    code = uofs(p, e, offsize, &last);
     p += offsize;
     p--;                        /* stupid offsets */
 
-    if (last < 0) {
+    if (last < 0 || code < 0) {
         gs_throw(-1, "corrupt index");
         return 0;
     }
@@ -1248,7 +1291,7 @@ pdfi_count_cff_index(byte *p, byte *e, int *countp)
 static byte *
 pdfi_find_cff_index(byte *p, byte *e, int idx, byte ** pp, byte ** ep)
 {
-    int count, offsize, sofs, eofs, last;
+    int code, count, offsize, sofs, eofs, last;
 
     if (p == NULL)
         return 0;
@@ -1258,7 +1301,9 @@ pdfi_find_cff_index(byte *p, byte *e, int idx, byte ** pp, byte ** ep)
         return 0;
     }
 
-    count = u16(p);
+    if (u16(p, e, &count) < 0)
+        return NULL;
+
     p += 2;
     if (count == 0)
         return 0;
@@ -1280,9 +1325,16 @@ pdfi_find_cff_index(byte *p, byte *e, int idx, byte ** pp, byte ** ep)
         return 0;
     }
 
-    sofs = uofs(p + idx * offsize, offsize);
-    eofs = uofs(p + (idx + 1) * offsize, offsize);
-    last = uofs(p + count * offsize, offsize);
+    code = uofs(p + idx * offsize, e,  offsize, &sofs);
+    if (code >= 0)
+        code = uofs(p + (idx + 1) * offsize, e, offsize, &eofs);
+    if (code >= 0)
+        code = uofs(p + count * offsize, e, offsize, &last);
+
+    if (code < 0) {
+        gs_throw(-1, "not enough data for index data");
+        return 0;
+    }
 
     p += count * offsize;
     p += offsize;
@@ -1391,7 +1443,7 @@ pdfi_cff_build_encoding(pdf_context *ctx, pdfi_gs_cff_font_priv *ptpriv, cff_fon
         code = pdfi_name_alloc(ctx, (byte *) enctouse, strlen(enctouse), (pdf_obj **) &enm);
         if (code >= 0) {
             pdfi_countup(enm);
-            code = pdfi_create_Encoding(ctx, (pdf_obj *) enm, NULL, (pdf_obj **) &font->Encoding);
+            code = pdfi_create_Encoding(ctx, (pdf_font *)font, (pdf_obj *) enm, NULL, (pdf_obj **) &font->Encoding);
             pdfi_countdown(enm);
         }
     }
@@ -1579,7 +1631,8 @@ pdfi_cff_build_encoding(pdf_context *ctx, pdfi_gs_cff_font_priv *ptpriv, cff_fon
 
             for (i = 0; i < n_supp && code >= 0; i++) {
                 charcode = p[1 + 3 * i];
-                sid = u16(p + 2 + 3 * i);
+                code = u16(p + 2 + 3 * i, e, (int *)&sid);
+                if (code < 0) continue;
 
                 if ((code = pdfi_make_name_from_sid(ctx, &gname, font, offsets, sid)) < 0) {
                     char buf[40];
@@ -2054,7 +2107,10 @@ pdfi_alloc_cff_cidfont(pdf_context *ctx, pdf_cidfont_type0 ** font, uint32_t obj
     pfont->procs.decode_glyph = pdfi_cidfont_decode_glyph;
     pfont->procs.define_font = gs_no_define_font;
     pfont->procs.make_font = gs_no_make_font;
-    pfont->procs.font_info = gs_default_font_info;
+
+    cffcidfont->default_font_info = gs_default_font_info;
+    pfont->procs.font_info = pdfi_default_font_info;
+
     pfont->procs.glyph_info = gs_default_glyph_info;
     pfont->procs.glyph_outline = pdfi_cff_glyph_outline;
     pfont->procs.build_char = NULL;
@@ -2063,8 +2119,8 @@ pdfi_alloc_cff_cidfont(pdf_context *ctx, pdf_cidfont_type0 ** font, uint32_t obj
 
     pfont->cidata.glyph_data = pdfi_cff_cid_glyph_data;
 
-    pfont->encoding_index = 1;          /****** WRONG ******/
-    pfont->nearest_encoding_index = 1;          /****** WRONG ******/
+    pfont->encoding_index = ENCODING_INDEX_UNKNOWN;
+    pfont->nearest_encoding_index = ENCODING_INDEX_UNKNOWN;
 
     pfont->client_data = (void *)cffcidfont;
 
@@ -2138,7 +2194,10 @@ pdfi_alloc_cff_font(pdf_context *ctx, pdf_font_cff ** font, uint32_t obj_num, bo
     pfont->procs.decode_glyph = pdfi_decode_glyph;
     pfont->procs.define_font = gs_no_define_font;
     pfont->procs.make_font = gs_no_make_font;
-    pfont->procs.font_info = gs_default_font_info;
+
+    cfffont->default_font_info = gs_default_font_info;
+    pfont->procs.font_info = pdfi_default_font_info;
+
     pfont->procs.glyph_info = gs_default_glyph_info;
     pfont->procs.glyph_outline = pdfi_cff_glyph_outline;
     pfont->procs.build_char = NULL;
@@ -2153,8 +2212,8 @@ pdfi_alloc_cff_font(pdf_context *ctx, pdf_font_cff ** font, uint32_t obj_num, bo
     pfont->data.interpret = gs_type2_interpret;
     pfont->data.lenIV = -1;
 
-    pfont->encoding_index = 1;          /****** WRONG ******/
-    pfont->nearest_encoding_index = 1;          /****** WRONG ******/
+    pfont->encoding_index = ENCODING_INDEX_UNKNOWN;
+    pfont->nearest_encoding_index = ENCODING_INDEX_UNKNOWN;
 
     pfont->client_data = (void *)cfffont;
 
@@ -2175,6 +2234,8 @@ pdfi_init_cff_font_priv(pdf_context *ctx, pdfi_gs_cff_font_priv *cffpriv,
     cffpriv->pdfcffpriv.ctx = ctx;
     cffpriv->pdfcffpriv.type = PDF_FONT;
     cffpriv->pdfcffpriv.pdfi_font_type = e_pdf_font_cff;
+    cffpriv->client_data = (void *)(&cffpriv->pdfcffpriv);
+    cffpriv->pdfcffpriv.pfont = (gs_font_base *)cffpriv;
     /* Dummy value for dummy object */
     cffpriv->pdfcffpriv.refcnt = 0xf0f0f0f0;
     cffpriv->pdfcffpriv.cffdata = buf;
@@ -2211,8 +2272,10 @@ pdfi_init_cff_font_priv(pdf_context *ctx, pdfi_gs_cff_font_priv *cffpriv,
     cffpriv->procs.glyph_name = ctx->get_glyph_name;
     cffpriv->procs.decode_glyph = pdfi_decode_glyph;
     cffpriv->procs.define_font = gs_no_define_font;
-    cffpriv->procs.make_font = gs_no_make_font;
-    cffpriv->procs.font_info = gs_default_font_info;
+
+    cffpriv->pdfcffpriv.default_font_info = gs_default_font_info;
+    cffpriv->procs.font_info = pdfi_default_font_info;
+
     cffpriv->procs.glyph_info = gs_default_glyph_info;
     cffpriv->procs.glyph_outline = pdfi_cff_glyph_outline;
     cffpriv->procs.build_char = NULL;
@@ -2227,8 +2290,8 @@ pdfi_init_cff_font_priv(pdf_context *ctx, pdfi_gs_cff_font_priv *cffpriv,
     cffpriv->type1data.interpret = gs_type2_interpret;
     cffpriv->type1data.lenIV = -1;
 
-    cffpriv->encoding_index = 1;          /****** WRONG ******/
-    cffpriv->nearest_encoding_index = 1;          /****** WRONG ******/
+    cffpriv->encoding_index = ENCODING_INDEX_UNKNOWN;
+    cffpriv->nearest_encoding_index = ENCODING_INDEX_UNKNOWN;
 }
 
 int
@@ -2245,11 +2308,13 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
     byte *fbuf = pfbuf;
 
     if (!memcmp(fbuf, "OTTO", 4)) {
-        int i, ntables = u16(fbuf + 4);
+        int i, ntables;
         byte *p;
         uint32_t toffs = 0, tlen = 0;
 
-        if (ntables > 64)
+        code = u16(fbuf + 4, fbuf + fbuflen, &ntables);
+
+        if (code < 0 || ntables > 64)
             return_error(gs_error_invalidfont);
 
         for (i = 0; i < ntables; i++) {
@@ -2258,8 +2323,12 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 break;
 
             if (!memcmp(p, "CFF ", 4)) {
-                toffs = u32(p + 8);
-                tlen = u32(p + 12);
+                code = u32(p + 8, fbuf + fbuflen, (int *)&toffs);
+                if (code >= 0)
+                    code = u32(p + 12, fbuf + fbuflen, (int *)&tlen);
+                if (code < 0) {
+                    toffs = tlen = 0;
+                }
                 break;
             }
         }
@@ -2403,15 +2472,18 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
 
                         code = pdfi_object_alloc(ctx, PDF_BUFFER, 0, (pdf_obj **)&cffcid->cidtogidmap);
                         if (code < 0) {
+                            pdfi_countdown(obj);
                             goto error;
                         }
                         pdfi_countup(cffcid->cidtogidmap);
                         code = pdfi_stream_to_buffer(ctx, (pdf_stream *)obj, &d, &sz);
                         if (code < 0) {
+                            pdfi_countdown(obj);
                             goto error;
                         }
                         code = pdfi_buffer_set_data((pdf_obj *)cffcid->cidtogidmap, d, (int32_t)sz);
                         if (code < 0) {
+                            pdfi_countdown(obj);
                             goto error;
                         }
                     }
@@ -2424,15 +2496,11 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 }
                 pfont->cidata.common.MaxCID = pfont->cidata.common.CIDCount - 1;
 
-                code = pdfi_dict_knownget_type(ctx, font_dict, "DW", PDF_INT, (pdf_obj **) &obj);
-                if (code > 0) {
-                    cffcid->DW = ((pdf_num *) obj)->value.i;
-                    pdfi_countdown(obj);
-                    obj = NULL;
-                }
-                else {
+                code = pdfi_dict_knownget_number(ctx, font_dict, "DW", &cffcid->DW);
+                if (code <= 0) {
                     cffcid->DW = 1000;
                 }
+
                 code = pdfi_dict_knownget_type(ctx, font_dict, "DW2", PDF_ARRAY, (pdf_obj **) &obj);
                 if (code > 0) {
                     cffcid->DW2 = (pdf_array *) obj;
@@ -2632,15 +2700,11 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 }
                 pfont->cidata.common.MaxCID = pfont->cidata.common.CIDCount - 1;
 
-                code = pdfi_dict_knownget_type(ctx, font_dict, "DW", PDF_INT, (pdf_obj **) &obj);
-                if (code > 0) {
-                    cffcid->DW = ((pdf_num *) obj)->value.i;
-                    pdfi_countdown(obj);
-                    obj = NULL;
-                }
-                else {
+                code = pdfi_dict_knownget_number(ctx, font_dict, "DW", &cffcid->DW);
+                if (code <= 0) {
                     cffcid->DW = 1000;
                 }
+
                 code = pdfi_dict_knownget_type(ctx, font_dict, "DW2", PDF_ARRAY, (pdf_obj **) &obj);
                 if (code > 0) {
                     cffcid->DW2 = (pdf_array *) obj;
@@ -2751,7 +2815,7 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                     code = gs_error_undefined;
                 if (code == 1) {
                     if ((cfffont->descflags & 4) != 0 && pdfi_type_of(tmp) == PDF_DICT) {
-                        code = pdfi_create_Encoding(ctx, tmp, (pdf_obj *)cffpriv.pdfcffpriv.Encoding, (pdf_obj **) &cfffont->Encoding);
+                        code = pdfi_create_Encoding(ctx, (pdf_font *)cfffont, tmp, (pdf_obj *)cffpriv.pdfcffpriv.Encoding, (pdf_obj **) &cfffont->Encoding);
                         if (code >= 0) {
                             pdfi_countdown(cffpriv.pdfcffpriv.Encoding);
                             cffpriv.pdfcffpriv.Encoding = NULL;
@@ -2759,7 +2823,7 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                         }
                     }
                     else if ((pdfi_type_of(tmp) == PDF_NAME || pdfi_type_of(tmp) == PDF_DICT)) {
-                        code = pdfi_create_Encoding(ctx, tmp, NULL, (pdf_obj **) &cfffont->Encoding);
+                        code = pdfi_create_Encoding(ctx, (pdf_font *)cfffont, tmp, NULL, (pdf_obj **) &cfffont->Encoding);
                         if (code >= 0) {
                             pdfi_countdown(cffpriv.pdfcffpriv.Encoding);
                             cffpriv.pdfcffpriv.Encoding = NULL;
@@ -2782,6 +2846,8 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 if (code <= 0) {
                     cfffont->Encoding = cffpriv.pdfcffpriv.Encoding;
                     cffpriv.pdfcffpriv.Encoding = NULL;
+                    cfffont->pfont->encoding_index = cffpriv.encoding_index;
+                    cfffont->pfont->nearest_encoding_index = cffpriv.nearest_encoding_index;
                 }
 
                 /* Since the underlying font stream can be shared between font descriptors,
@@ -2830,6 +2896,9 @@ error:
             pdfi_countdown(cffpriv.pdfcffpriv.ordering);
             pdfi_countdown(cffpriv.pdfcffpriv.Encoding);
             if (cffpriv.FontType == ft_CID_encrypted) {
+                if (ppdfont != NULL && ppdfont->pfont != NULL) {
+                    ((gs_font_cid0 *)ppdfont->pfont)->cidata.FDArray = NULL;
+                }
                 gs_free_object(ctx->memory, cffpriv.cidata.FDArray, "pdfi_read_cff_font(gs_font FDArray, error)");
             }
         }
@@ -2839,6 +2908,7 @@ error:
                 goto error;
             }
 
+            pdfi_font_set_orig_fonttype(ctx, (pdf_font *)ppdfont);
             code = gs_definefont(ctx->font_dir, (gs_font *) ppdfont->pfont);
 
             if (code >= 0)
@@ -2862,6 +2932,26 @@ error:
     pdfi_countdown(registry);
 
     if (code < 0) {
+        tmp = NULL;
+        if (font_dict != NULL) {
+            if (pdfi_dict_get(ctx, font_dict, ".Path", &tmp) >= 0)
+            {
+                char fname[gp_file_name_sizeof + 1];
+                pdf_string *fobj = (pdf_string *)tmp;
+
+                memcpy(fname, fobj->data, fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length);
+                fname[fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length] = '\0';
+
+                pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_cff_font", "Error reading CFF font file %s\n", fname);
+            }
+            else {
+                pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_cff_font", "Error reading embedded Type1C font object %u\n", font_dict->object_num);
+            }
+        }
+        else {
+            pdfi_set_error(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_truetype_font", "Error reading font\n");
+        }
+        pdfi_countdown(tmp);
         *ppdffont = NULL;
         return_error(gs_error_invalidfont);
     }
@@ -2989,13 +3079,13 @@ pdfi_copy_cff_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, pd
     tmp = NULL;
     code = pdfi_dict_knownget(ctx, font_dict, "Encoding", &tmp);
     if (code == 1) {
-        if ((pdfi_type_of(tmp) == PDF_NAME || pdfi_type_of(tmp) == PDF_DICT) && (font->descflags & 4) == 0) {
-            code = pdfi_create_Encoding(ctx, tmp, NULL, (pdf_obj **) & font->Encoding);
+        if ((font->descflags & 4) != 0 && pdfi_type_of(tmp) == PDF_DICT) {
+            code = pdfi_create_Encoding(ctx, (pdf_font *)font, tmp, NULL, (pdf_obj **) & font->Encoding);
             if (code >= 0)
                 code = 1;
         }
-        else if (pdfi_type_of(tmp) == PDF_DICT && (font->descflags & 4) != 0) {
-            code = pdfi_create_Encoding(ctx, tmp, (pdf_obj *)spdffont->Encoding, (pdf_obj **) &font->Encoding);
+        else if ((pdfi_type_of(tmp) == PDF_NAME || pdfi_type_of(tmp) == PDF_DICT)) {
+            code = pdfi_create_Encoding(ctx, (pdf_font *)font, tmp, (pdf_obj *)spdffont->Encoding, (pdf_obj **) &font->Encoding);
             if (code >= 0)
                 code = 1;
         }
@@ -3018,8 +3108,6 @@ pdfi_copy_cff_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, pd
     /* Since various aspects of the font may differ (widths, encoding, etc)
        we cannot reliably use the UniqueID/XUID for copied fonts.
      */
-    if (uid_is_XUID(&font->pfont->UID))
-        uid_free(&font->pfont->UID, font->pfont->memory, "pdfi_read_type1_font");
     uid_set_invalid(&font->pfont->UID);
 
     if (ctx->args.ignoretounicode != true) {
@@ -3041,6 +3129,7 @@ pdfi_copy_cff_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, pd
     }
     font->ToUnicode = tmp;
 
+    pdfi_font_set_orig_fonttype(ctx, (pdf_font *)font);
     code = gs_definefont(ctx->font_dir, (gs_font *) font->pfont);
     if (code < 0) {
         goto error;

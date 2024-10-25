@@ -1,4 +1,4 @@
-;  Copyright (C) 2001-2023 Artifex Software, Inc.
+;  Copyright (C) 2001-2024 Artifex Software, Inc.
 ;  All Rights Reserved.
 ;
 ;  This software is provided AS-IS with no warranty, either express or
@@ -37,6 +37,7 @@
 ; Newer nsis releases deprecate ansi encoding, require Unicode
 Unicode True
 
+!include 'FileFunc.nsh'
 !include 'LogicLib.nsh'
 
 SetCompressor /SOLID /FINAL lzma
@@ -159,20 +160,34 @@ Page custom OldVersionsPageCreate
 
 !insertmacro MUI_LANGUAGE "English"
 
-Function OldVersionsPageCreate
-  !insertmacro MUI_HEADER_TEXT "Previous Ghostscript Installations" "Optionally run the uninstallers for previous Ghostscript installations$\nClick $\"Cancel$\" to stop uninstalling previous installs"
+Function RemoveOld
   StrCpy $0 0
   loop:
     EnumRegKey $1 HKLM "Software\Artifex\GPL Ghostscript" $0
     StrCmp $1 "" done
     IntOp $0 $0 + 1
-    MessageBox MB_YESNOCANCEL|MB_ICONQUESTION "Uninstall Ghostscript Version $1?" IDNO loop IDCANCEL done
     Var /GLOBAL uninstexe
     ReadRegStr $uninstexe HKLM "Software\Microsoft\Windows\CurrentVersion\Uninstall\GPL Ghostscript $1" "UninstallString"
-    ExecWait "$uninstexe"
-    Goto loop
-  done:
 
+    IfSilent silent noisey
+
+    silent:
+      ExecWait "$uninstexe /S"
+      Goto loopEnd
+
+    noisey:
+      MessageBox MB_YESNOCANCEL|MB_ICONQUESTION "Uninstall Ghostscript Version $1?" IDNO loop IDCANCEL done
+      ExecWait "$uninstexe"
+      Goto loopEnd
+
+    LoopEnd:
+      Goto loop
+  done:
+FunctionEnd
+
+Function OldVersionsPageCreate
+  !insertmacro MUI_HEADER_TEXT "Previous Ghostscript Installations" "Optionally run the uninstallers for previous Ghostscript installations$\nClick $\"Cancel$\" to stop uninstalling previous installs"
+  Call RemoveOld
 FunctionEnd
 
 Function RedistInstCreate
@@ -180,6 +195,7 @@ Function RedistInstCreate
     ${If} $0 == 3010
       StrCpy $RebootRequired "yes"
     ${EndIf}
+    Delete "$INSTDIR\${VCREDIST}"
 FunctionEnd
 
 !searchparse /ignorecase /noerrors "${TARGET}" w WINTYPE
@@ -245,14 +261,19 @@ File /oname=${VCREDIST} .\${VCREDIST}
 !endif
 
 WriteRegStr HKEY_LOCAL_MACHINE "Software\GPL Ghostscript\${VERSION}" "GS_DLL" "$INSTDIR\bin\gsdll${WINTYPE}.dll"
+WriteRegStr HKEY_LOCAL_MACHINE "Software\Aladdin Ghostscript\${VERSION}" "GS_DLL" "$INSTDIR\bin\gsdll${WINTYPE}.dll"
 
 !if "${COMPILE_INITS}" == "0"
 WriteRegStr HKEY_LOCAL_MACHINE "Software\GPL Ghostscript\${VERSION}" "GS_LIB" "$INSTDIR\Resource\Init;$INSTDIR\bin;$INSTDIR\lib;$INSTDIR\fonts"
+WriteRegStr HKEY_LOCAL_MACHINE "Software\Aladdin Ghostscript\${VERSION}" "GS_LIB" "$INSTDIR\Resource\Init;$INSTDIR\bin;$INSTDIR\lib;$INSTDIR\fonts"
 !else
 WriteRegStr HKEY_LOCAL_MACHINE "Software\GPL Ghostscript\${VERSION}" "GS_LIB" "$INSTDIR\bin;$INSTDIR\lib;$INSTDIR\fonts"
+WriteRegStr HKEY_LOCAL_MACHINE "Software\Aladdin Ghostscript\${VERSION}" "GS_LIB" "$INSTDIR\bin;$INSTDIR\lib;$INSTDIR\fonts"
 !endif
 
 WriteRegStr HKEY_LOCAL_MACHINE "Software\Artifex\GPL Ghostscript\${VERSION}" "" "$INSTDIR"
+WriteRegStr HKEY_LOCAL_MACHINE "Software\Artifex\Aladdin Ghostscript\${VERSION}" "" "$INSTDIR"
+
 WriteRegStr HKEY_LOCAL_MACHINE "Software\Microsoft\Windows\CurrentVersion\Uninstall\GPL Ghostscript ${VERSION}" "DisplayName" "GPL Ghostscript"
 WriteRegStr HKEY_LOCAL_MACHINE "Software\Microsoft\Windows\CurrentVersion\Uninstall\GPL Ghostscript ${VERSION}" "UninstallString" '"$INSTDIR\uninstgs.exe"'
 WriteRegStr HKEY_LOCAL_MACHINE "Software\Microsoft\Windows\CurrentVersion\Uninstall\GPL Ghostscript ${VERSION}" "Publisher" "Artifex Software Inc."
@@ -300,6 +321,7 @@ FunctionEnd
 Function .onInit
     SetSilent normal
     StrCpy $RebootRequired "no"
+
 !if "${WINTYPE}" == "64"
     SetRegView 64
     ${IfNot} ${RunningX64}
@@ -307,12 +329,23 @@ Function .onInit
         Abort
     ${EndIf}
 !endif
-
     System::Call 'kernel32::CreateMutexA(i 0, i 0, t "Ghostscript${VERSION}Installer") i .r1 ?e'
     Pop $R0
     StrCmp $R0 0 +3
     MessageBox MB_OK "The Ghostscript ${VERSION} installer is already running." /SD IDOK
     Abort
+
+    IfSilent Uninst CarryOn
+
+    Uninst:
+      ${GetParameters} $0
+      ClearErrors
+      ${GetOptions} $0 "/U" $1
+      ${IfNot} ${Errors}
+        Call RemoveOld
+      ${EndIF}
+
+    CarryOn:
 FunctionEnd
 
 Function Un.onInit
@@ -336,8 +369,12 @@ Delete   "$INSTDIR\uninstgs.exe"
     SetRegView 64
 !endif
 DeleteRegKey HKEY_LOCAL_MACHINE "Software\Artifex\GPL Ghostscript\${VERSION}"
+DeleteRegKey HKEY_LOCAL_MACHINE "Software\Artifex\Aladdin Ghostscript\${VERSION}"
+
 DeleteRegKey HKEY_LOCAL_MACHINE "Software\Microsoft\Windows\CurrentVersion\Uninstall\GPL Ghostscript ${VERSION}"
+
 DeleteRegKey HKEY_LOCAL_MACHINE "Software\GPL Ghostscript\${VERSION}"
+DeleteRegKey HKEY_LOCAL_MACHINE "Software\Aladdin Ghostscript\${VERSION}"
 RMDir /r "$INSTDIR\doc"
 RMDir /r "$INSTDIR\examples"
 RMDir /r "$INSTDIR\lib"
