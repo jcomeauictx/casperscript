@@ -372,6 +372,8 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 #ifdef BUILD_CASPERSCRIPT
     char buffer[PATH_MAX + 256];
     char *temp;
+    char prefix[5];  /* gs, cs, ccs, or bccs, plus final \0 */
+    char *s;
 #endif
     char *argp[1024];
     int code;
@@ -385,6 +387,13 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     DISCARD(strcpy(canonicalpath[2], argv0));
     programdirectory = dirname(canonicalpath[1]);
     programname = chop_extension(basename(canonicalpath[2]));
+    strncpy(prefix, programname, 4);
+    if ((s = strchr(prefix, 's')) != NULL) *++s = '\0';
+    else {
+        errprintf(minst->heap,
+            "prefix %s must be one of: gs, cs, ccs, bccs\n", prefix);
+        return_error(gs_error_Fatal);
+    }
     strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
     developmentlibs = realpath(buffer, canonicalpath[3]);
     syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s, dev %s",
