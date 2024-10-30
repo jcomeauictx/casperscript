@@ -8,7 +8,7 @@ ARCH := $(shell uname -m)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
-CS_VERSION ?= $(shell git describe --dirty --broken || git describe --tags)
+CS_VERSION ?= $(shell git rev-parse --short HEAD)
 GSNAME := cs-$(CS_VERSION)
 CONFIG_ARGS += --with-gs=$(GSNAME)
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
