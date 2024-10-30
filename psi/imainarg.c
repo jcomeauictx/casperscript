@@ -131,6 +131,7 @@ char *argv0 = canonicalpath[0];
 char *programdirectory = canonicalpath[1];
 char *programname = canonicalpath[2];
 char *developmentlibs = canonicalpath[3];
+char prefix[8]; /* gs, cs, ccs, or bccs, plus final \0 */
 #endif
 
 /* ------ Main program ------ */
@@ -178,20 +179,20 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     /* assuming the use of bccs from the shebang line, which means that
      * the Linux kernel will already have appended the filename and any
      * supplied args. */
-    if (strcmp(programname, "bccs") == 0) {
+    if (strcmp(prefix, "bccs") == 0) {
         argc = prependargs(argc, argv, argp, bccsprepend, bccsprepended);
         argv = argp;
     }
-    if (endswith(programname, "cs")) {
+    if (endswith(prefix, "cs")) {
         argc = prependargs(argc, argv, argp, csprepend, csprepended);
         argv = argp;
     }
-    if (endswith(programname, "ccs")) {
+    if (endswith(prefix, "ccs")) {
         /* "console" casperscript doesn't use an X window */
         argc = prependargs(argc, argv, argp, ccsprepend, ccsprepended);
         argv = argp;
     }
-    if (strcmp(programname, "bccs") == 0) {  /* go back and put -q first */
+    if (strcmp(prefix, "bccs") == 0) {  /* go back and put -q first */
         argc = prependargs(argc, argv, argp, bccsprepend2, bccsprepended2);
         argv = argp;
     }
@@ -372,7 +373,6 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 #ifdef BUILD_CASPERSCRIPT
     char buffer[PATH_MAX + 256];
     char *temp;
-    char prefix[5];  /* gs, cs, ccs, or bccs, plus final \0 */
     char *s;
 #endif
     char *argp[1024];
