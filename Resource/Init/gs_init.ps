@@ -664,26 +664,26 @@ currentdict /.execute .undef
 	/promptname /programname where {pop programname} {(gs)} ifelse
 	dup (gs) eq {pop (GS)} if def
 	% steal from casperscript things that may not be available yet
-	/strlen {  % anystring - strlen  % length to first null (\000)
+	/.strlen {  % anystring - strlen  % length to first null (\000)
 		% if no nulls, entire length of string (same as `length`)
 		(\000) search {3 1 roll pop pop length} {length} ifelse
 	} bind def
-	/append { % stringbuffer string - combined
+	/.append {  % stringbuffer string -
 		% add (concatenate) string to buffer without shortening buffer
 		% (a\000\000) (b) append -> (ab\000)
-		1 index dup strlen  % offset to first empty place in buffer
+		1 index .strlen  % offset to first empty place in buffer
 		% stack now: buffer string buffer offset
-		3 2 roll putinterval
+		exch putinterval
 	} bind def
-	/stradd {  % string1 string2 - combined
+	/.stradd {  % string1 string2 - combined
 		% add (concatenate) two strings: (a) (b) stradd -> (ab)
-		2 copy strlen exch strlen add string  % make new empty string
-		3 2 roll append exch append
+		2 copy .strlen exch .strlen add string  % make new empty string
+		dup 4 -1 roll .append exch .append
 	} bind def
 	count  % get current stack count
         promptname
-        exch dup 0 ne {exch (<) stradd exch 6 string cvs stradd} {pop} ifelse
-        (>) stradd /promptmessage exch def
+        exch dup 0 ne {exch (<) .stradd exch 6 string cvs .stradd} {pop} ifelse
+        (>) .stradd /promptmessage exch def
 	promptmessage print flush
 } bind def
 /prompt	{ flush flushpage //systemdict /NOPROMPT get not { //.promptmsg exec} if } bind def
