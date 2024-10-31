@@ -678,7 +678,7 @@ currentdict /.execute .undef
 	/.stradd {  % string1 string2 - combined
 		% add (concatenate) two strings: (a) (b) stradd -> (ab)
 		2 copy .strlen exch .strlen add string  % make new empty string
-		dup 4 -1 roll .append exch .append
+		dup 4 -1 roll .append dup 3 -1 roll .append
 	} bind def
 	count  % get current stack count
         promptname
