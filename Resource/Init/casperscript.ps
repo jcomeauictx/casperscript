@@ -78,12 +78,14 @@ casperdict begin
     % if no nulls, entire length of string (same as `length`)
     (\000) search {3 1 roll pop pop length} {length} ifelse
   } bind def
-  /append {  % stringbuffer string - combined
+  /append {  % stringbuffer string -
     % add (concatenate) string to buffer without shortening buffer
     % (a\000\000) (b) append -> (ab\000)
-    1 index dup strlen  % offset to first empty place in buffer
+    % NOTE: must keep a reference to stringbuffer on stack or in userdict
+    % or it will disappear after operation
+    1 index strlen  % offset to first empty place in buffer
     % stack now: buffer string buffer offset
-    3 2 roll putinterval
+    exch putinterval
   } bind def
   /inc {  % name -
     % increments variable, e.g. `/a 1 def /a inc a =` shows `2`
@@ -105,12 +107,12 @@ casperdict begin
   /stradd {  % string1 string2 - combined
     % add (concatenate) two strings: (a) (b) stradd -> (ab)
     2 copy strlen exch strlen add string  % make new empty string
-    3 2 roll append exch append
+    dup 4 -1 roll append exch append
   } bind def
   /strmul {  % string multiplier - string
     % multiply a string as does Python: (a) 5 strmul -> (aaaaa)
     1 index strlen 1 index mul string  % string multiplier buffer
-    exch {1 index append} repeat
+    exch {dup 2 index append} repeat
     exch pop
   } bind def
   /add {  % redefine add to include stradd
