@@ -9,7 +9,6 @@
 % NOTE: for this to work, don't do anything in this file that *presupposes*
 % any casperscript extensions.
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
-/# /#! load def  % also enable # comments
 /.silent -112 def  % gs_error_silent in base/gserrors.h
 % PLRM recommends only allocating enough for immediate needs with `dict`
 % it will grow as needed (languagelevels 2+)

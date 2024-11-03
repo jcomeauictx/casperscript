@@ -945,6 +945,9 @@ currentdict /.makeinternaldict .undef
 /=only	{ (%stdout) (w) file exch write=only } .internalbind odef
 /=	{ =only (\n) print } .internalbind def
 /=print	/=only load def
+% casperscript: define stderr equivalents of the above
+/#only  { (%stderr) (w) file exch write=only } .internalbind odef
+/#	{ #only (\n) #only } .internalbind def
 % Temporarily define == as = for the sake of runlibfile0.
 /== /= load def
 
@@ -1486,6 +1489,9 @@ end
 /write== {1 index exch write==only (\n) writestring} .internalbind def
 /==only { (%stdout) (w) file exch write==only } .internalbind def
 /== {==only (\n) print} .internalbind def
+% casperscript stderr equivalents of the above
+/##only { (%stderr) (w) file exch write==only } .internalbind def
+/## {##only (\n) #only} .internalbind def
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
 /.dict /write==only load 0 get dup length 2 add dict .copydict dup
@@ -1515,7 +1521,9 @@ end
 /write=== {1 index exch write===only (\n) writestring} .internalbind def
 /===only { (%stdout) (w) file exch write===only } .internalbind def
 /=== { ===only (\n) print } .internalbind def
-
+% casperscript stderr equivalents of the above
+/###only { (%stderr) (w) file exch write===only } .internalbind def
+/### { ###only (\n) #only } .internalbind def
 % Create the initialization queue.
 1183615869 internaldict dup
 /.delayed_init_queue 10 dict put
