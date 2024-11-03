@@ -1488,6 +1488,8 @@ end
 /== {==only (\n) print} .internalbind def
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
+% casperscript: fix for recursive references
+/.recursivecheck 10 dict def
 /.dict /write==only load 0 get dup length 2 add dict .copydict dup
 
 begin def

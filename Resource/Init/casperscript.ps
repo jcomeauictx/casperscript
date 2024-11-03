@@ -10,6 +10,8 @@
 % any casperscript extensions.
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
 % define #, ##, and ### as stderr equivalents of =, ==, and ===
+% NOTE: ghostscript buffers stderr until after program exit
+% casperscript needs to fix this behavior for #, ##, ### to work properly
 /#only  { (%stderr) (w) file exch write=only } bind def
 /#	{ #only (\n) #only } bind def
 /##only { (%stderr) (w) file exch write==only } bind def
@@ -79,6 +81,10 @@ casperdict begin
   /=stack (  -
     one-line version of pstack) docstring {
     count array astore dup == aload pop
+  } bind def
+  /#stack (  -
+    one-line version of pstack, but to stderr) docstring {
+    count array astore dup ## aload pop
   } bind def
   /strlen {  % anystring - strlen  % length to first null (\000)
     % if no nulls, entire length of string (same as `length`)
