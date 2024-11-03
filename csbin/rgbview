@@ -1,18 +1,18 @@
 #!/usr/src/jcomeauictx/casperscript/bin/cs -S --
-# adapted from https://stackoverflow.com/a/15167678/493161
+% adapted from https://stackoverflow.com/a/15167678/493161
 /inches {72 mul} def
 /pagewidth currentpagedevice /PageSize get aload pop /pageheight exch def def
 (page width and height: ) print [pagewidth pageheight] ==
-# pull random data if file not specified
+% pull random data if file not specified
 /infile sys.argc 1 gt {sys.argv 1 get} {(/dev/urandom)} ifelse def
-# use all printable area on page if width not specified
+% use all printable area on page if width not specified
 /imagewidth sys.argc 2 gt
   {sys.argv 2 get}
   {pagewidth 1 inches sub}
   ifelse cvi def
-# calculate unspecified height from image size if available
-# otherwise use all prinable area on page
-# can specify as zero if you want it calculated, and use flip argument too
+% calculate unspecified height from image size if available
+% otherwise use all prinable area on page
+% can specify as zero if you want it calculated, and use flip argument too
 /imageheight sys.argc 3 gt {sys.argv 3 get cvi} {0} ifelse def
 (imageheight: ) print imageheight =
 imageheight 0 eq
@@ -23,9 +23,9 @@ imageheight 0 eq
  }
  if
 128 string (image size: %d %d) [imagewidth imageheight] sprintf {=} if
-/bits 8 def  # maybe someday make it support different bits/sample
-# specify 'flip' if bytes are in normal PostScript (bottom-up) order
-# flip can be 'flip' (v), 'flop' (h), 'both'
+/bits 8 def  % maybe someday make it support different bits/sample
+% specify 'flip' if bytes are in normal PostScript (bottom-up) order
+% flip can be 'flip' (v), 'flop' (h), 'both'
 /flip sys.argc 4 gt {sys.argv 4 get} {(none)} ifelse def
 128 string (displaying %s with width %d, height %d, %d bits per color)
 [infile imagewidth imageheight bits] sprintf {==} {pop} ifelse
@@ -36,9 +36,9 @@ imageheight 0 eq
     /Width imagewidth
     /Height imageheight
     /ImageMatrix <<
-      # (none) actually flips the image while displaying, since postscript
-      # displays bottom-up while RGB data is typically top-down
-      # this is to match ImageMagick `display` options.
+      % (none) actually flips the image while displaying, since postscript
+      % displays bottom-up while RGB data is typically top-down
+      % this is to match ImageMagick `display` options.
       (none) [imagewidth 0 0 imageheight neg 0 imageheight]
       (flip) [imagewidth 0 0 imageheight 0 0]
       (flop) [imagewidth neg 0 0 imageheight imagewidth 0]
@@ -52,42 +52,42 @@ imageheight 0 eq
   >> def
 
 save
-# RGB image data is, presumably, ordinarily stored top to bottom, left to
-# right; but PostScript draws from bottom to top unless the CTM (Current
-# Transformation Matrix), ImageMatrix, or `scale` operator change this.
-# It turns out the images in the PDF files I'm using already expect the
-# bottom-to-top rendering, having the bytes for the bottom line at the
-# very end of the file.
+% RGB image data is, presumably, ordinarily stored top to bottom, left to
+% right; but PostScript draws from bottom to top unless the CTM (Current
+% Transformation Matrix), ImageMatrix, or `scale` operator change this.
+% It turns out the images in the PDF files I'm using already expect the
+% bottom-to-top rendering, having the bytes for the bottom line at the
+% very end of the file.
 
 0.5 inches 0.5 inches moveto currentpoint translate
 
-# fill the page as best we can, keeping the 1:1 aspect ratio
+% fill the page as best we can, keeping the 1:1 aspect ratio
 /imageratio imageheight imagewidth div def
 /pageratio pageheight pagewidth div def
 /heightratio pageheight imageheight div def
 /widthratio pagewidth imagewidth div def
-# first see if it will fit without shrinking it
+% first see if it will fit without shrinking it
 (stack before scale: ) = pstack
 <<
-  (true true)  # both height and width too large, shrink so larger fits
+  (true true)  % both height and width too large, shrink so larger fits
     {heightratio widthratio gt
       {1 heightratio div}
       {1 widthratio div}
       ifelse}
   (true false) {1 heightratio div}
   (false true) {1 widthratio div}
-  (false false)  # will fit in both dimensions, expand to fit page?
-    # for now we'll leave it alone
+  (false false)  % will fit in both dimensions, expand to fit page?
+    % for now we'll leave it alone
     {1}
 >>
 heightratio 1 lt 8 string cvs ( ) + widthratio 1 lt 8 string cvs + dup ==
  get exec
 (scale factor: ) print =
-# expand to fit printable width
+% expand to fit printable width
 pagewidth 1 inches sub dup imageratio mul 2 copy scale 2 array astore
 128 string (scale: %f %f) 3 -1 roll sprintf {==} {pop} ifelse
 rgbimage
 /DeviceRGB setcolorspace image
 restore
 showpage
-# vim: tabstop=8 expandtab shiftwidth=2 softtabstop=2
+% vim: tabstop=8 expandtab shiftwidth=2 softtabstop=2
