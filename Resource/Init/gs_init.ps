@@ -1488,11 +1488,21 @@ end
 /== {==only (\n) print} .internalbind def
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
-.currentglobal false .setglobal  % put .dict in local VM
-/.dict /write==only load 0 get dup length 4 add dict .copydict dup
-% (added 4 slots for the following definitions)
-begin def
-  /.recursivecheck 256 dict def  % arbitrary size
+% casperscript: fix for recursive references
+.currentglobal false .setglobal  % put .recursivecheck dict in local VM
+userdict /.recursivecheck 20 dict put
+.setglobal
+/.dict /write==only load 0 get dup length 3 add dict .copydict dup
+% (added 3 slots for the following definitions)
+% at this point the stack contains: /.dict and 2 copies of
+% << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
+%    /arraytype -packedarray- /packedarraytype -packedarray-
+%    /.dict -dict- /.cvp -packedarray- /.p -packedarray >>
+% .cvp takes -file- -object-, prints a representation of -object-, and leaves
+%   -file- on stack.
+% .p takes -file- -string-, prints string, and leaves -file- on stack
+begin def  % `begin` takes final dict off stack, and `def` eats /.dict -dict-
+% stack is now empty, and dict is being built until `end`.
   /erase  % -dict- -
         { dup {pop 1 index exch undef} forall pop } .internalbind def
   /dicttype
@@ -1525,7 +1535,7 @@ begin def
 }
   .internalbind
 end
-exch .setglobal  % back to `.currentglobal` value from above
+
 /write===only exch def
 /write=== {1 index exch write===only (\n) writestring} .internalbind def
 /===only { (%stdout) (w) file exch write===only } .internalbind def
