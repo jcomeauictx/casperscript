@@ -1490,7 +1490,7 @@ end
 % in readable form and doesn't truncate strings.
 % casperscript: fix for recursive references
 .currentglobal false .setglobal  % put .recursivecheck dict in local VM
-userdict /.recursivecheck 20 dict put
+userdict /.recursivecheck 256 dict put
 .setglobal
 /.dict /write==only load 0 get dup length 3 add dict .copydict dup
 % (added 3 slots for the following definitions)
