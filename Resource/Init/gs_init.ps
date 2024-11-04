@@ -1488,12 +1488,11 @@ end
 /== {==only (\n) print} .internalbind def
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
+.currentglobal false .setglobal  % put .dict in local VM
 /.dict /write==only load 0 get dup length 4 add dict .copydict dup
 % (added 4 slots for the following definitions)
 begin def
-  .currentglobal false .setglobal  % put .recursivecheck dict in local VM
   /.recursivecheck 256 dict def  % arbitrary size
-  .setglobal
   /erase  % -dict- -
         { dup {pop 1 index exch undef} forall pop } .internalbind def
   /dicttype
@@ -1526,7 +1525,7 @@ begin def
 }
   .internalbind
 end
-
+exch .setglobal  % back to `.currentglobal` value from above
 /write===only exch def
 /write=== {1 index exch write===only (\n) writestring} .internalbind def
 /===only { (%stdout) (w) file exch write===only } .internalbind def
