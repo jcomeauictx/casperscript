@@ -1489,35 +1489,19 @@ end
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
 % casperscript: fix for recursive references
-userdict /.recursivecheck 20 dict put
-/.dict /write==only load 0 get dup length 3 add dict .copydict dup
-% (added 3 slots for the following definitions)
-% at this point the stack contains: /.dict and 2 copies of
-% << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
-%    /arraytype -packedarray- /packedarraytype -packedarray-
-%    /.dict -dict- /.cvp -packedarray- /.p -packedarray >>
-% .cvp takes -file- -object-, prints a representation of -object-, and leaves
-%   -file- on stack.
-% .p takes -file- -string-, prints string, and leaves -file- on stack
-begin def  % `begin` takes final dict off stack, and `def` eats /.dict -dict-
-% stack is now empty, and dict is being built until `end`.
-  /erase  % -dict- -
-        { dup {pop 1 index exch undef} forall pop } .internalbind def
+/.recursivecheck 10 dict def
+/.dict /write==only load 0 get dup length 2 add dict .copydict dup
+
+begin def
   /dicttype
-        { dup .recursivecheck exch known
-           { .cvp
+        { dup rcheck
+           { (<< ) .p1
+              { 2 index 3 -1 roll .print pop ( ) .p1
+                1 index exch .print pop ( ) .p
+              }
+             forall (>>) .p
            }
-           { dup rcheck
-              { dup .recursivecheck exch true put
-                (<< ) .p1
-                 { 2 index 3 -1 roll .print pop ( ) .p1
-                   1 index exch .print pop ( ) .p
-                 }
-                forall (>>) .p
-              }
-              { .cvp
-              }
-             ifelse
+           { .cvp
            }
           ifelse
         } .internalbind def
@@ -1525,12 +1509,7 @@ begin def  % `begin` takes final dict off stack, and `def` eats /.dict -dict-
         { 1 index exch 2 .writecvp
         } .internalbind def
 
-{//.dict begin
-  .recursivecheck erase
-  .print pop
-  .recursivecheck erase
-  end
-}
+{//.dict begin .print pop end}
   .internalbind
 end
 
