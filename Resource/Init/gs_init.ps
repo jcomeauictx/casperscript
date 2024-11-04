@@ -1489,9 +1489,9 @@ end
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
 % casperscript: fix for recursive references
-/.recursivecheck 10 dict def  % writable dict cannot be in .dict
+userdict /.recursivecheck 20 dict put
 /.dict /write==only load 0 get dup length 3 add dict .copydict dup
-% (added entries for the following keys and values)
+% (added 3 slots for the following definitions)
 % at this point the stack contains: /.dict and 2 copies of
 % << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
 %    /arraytype -packedarray- /packedarraytype -packedarray-
