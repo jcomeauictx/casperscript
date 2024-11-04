@@ -1489,27 +1489,47 @@ end
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
 % casperscript: fix for recursive references
-/.recursivecheck 10 dict def
 /.dict /write==only load 0 get dup length 2 add dict .copydict dup
-
-begin def
+% (added two entries, one for /dicttype and one for /stringtype)
+% at this point the stack contains: /.dict and 2 copies of
+% << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
+%    /arraytype -packedarray- /packedarraytype -packedarray-
+%    /.dict -dict- /.cvp -packedarray- /.p -packedarray >>
+% .cvp takes -file- -object-, prints a representation of -object-, and leaves
+%   -file- on stack.
+% .p takes -file- -string-, prints string, and leaves -file- on stack
+begin def  % `begin` takes final dict off stack, and `def` eats /.dict -dict-
+% stack is now empty, and dict is being built until `end`.
+  /.recursivecheck 10 dict
+  /erase  % -dict- -
+        { dup {pop 1 index exch undef} forall pop } .internalbind def
   /dicttype
-        { dup rcheck
-           { (<< ) .p1
-              { 2 index 3 -1 roll .print pop ( ) .p1
-                1 index exch .print pop ( ) .p
-              }
-             forall (>>) .p
-           }
+        { dup .recursivecheck exch known
            { .cvp
            }
+           { dup .recursivecheck exch true put
+             dup rcheck
+              { (<< ) .p1
+                 { 2 index 3 -1 roll .print pop ( ) .p1
+                   1 index exch .print pop ( ) .p
+                 }
+                forall (>>) .p
+              }
+              { .cvp
+              }
+             ifelse
           ifelse
         } .internalbind def
   /stringtype
         { 1 index exch 2 .writecvp
         } .internalbind def
 
-{//.dict begin .print pop end}
+{//.dict begin
+  .recursivecheck erase
+  .print pop
+  .recursivecheck erase
+  end
+}
   .internalbind
 end
 
