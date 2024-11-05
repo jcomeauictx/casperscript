@@ -42,6 +42,16 @@ end  % forthdict
 /casperdict 64 dict def
 casperdict begin
   % add some generally useful words without polluting systemdict
+  /docstrings 16 dict def  % casperscript addition
+  /help { % casperscript adds context-specific help {
+    count 0 eq
+      {help}  % original ghostscript "help"
+      {dup docstrings exch known {docstrings exch get} if}
+      ifelse
+    {print (\n) print flush} stopped {
+      (no help for /) print 64 string cvs print (\n) print flush
+    } if
+  } bind def
   /docstring {  % name string - name
     % intended to be used just after /name and before function definition
     docstrings 2 index  % name string dict name
@@ -79,12 +89,29 @@ casperdict begin
     exch load def
   } bind def
   /=stack (  -
-    one-line version of pstack) docstring {
+    one-line version of pstack using =only) docstring {
+    count array astore dup ([ ) print count array astore dup
+    {=only ( ) print} forall (]) = aload pop
+  } bind def
+  /==stack (  -
+    =stack using ==) docstring {
     count array astore dup == aload pop
   } bind def
+  /===stack (  -
+    =stack using ===) docstring {
+    count array astore dup === aload pop
+  } bind def
   /#stack (  -
-    one-line version of pstack, but to stderr) docstring {
+    =stack, but to stderr) docstring {
     count array astore dup ## aload pop
+  } bind def
+  /##stack (  -
+    #stack using ##) docstring {
+    count array astore dup ## aload pop
+  } bind def
+  /###stack (  -
+    #stack using ###) docstring {
+    count array astore dup ### aload pop
   } bind def
   /strlen {  % anystring - strlen  % length to first null (\000)
     % if no nulls, entire length of string (same as `length`)
