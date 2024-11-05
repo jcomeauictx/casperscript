@@ -90,3 +90,5 @@ ghostscript:
 	$(MAKE) CASPER= all install
 caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
+gscasper:
+	$(GSCASPER)
