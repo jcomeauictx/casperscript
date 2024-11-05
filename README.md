@@ -26,9 +26,6 @@ Too complicated.
 
 John Comeau jc@unternet.net 2023-03-21
 
-# links
-[Information for Ghostscript developers](https://ghostscript.com/docs/9.54.0/Develop.htm)
-
 # quickstart
 
 Go to digitalocean.com, set up an account if you don't have one already, and
@@ -59,3 +56,7 @@ cs examples/tiger.eps  # should show a beautiful color cartoon tiger
 ```
 
 Don't forget to go back to digitalocean.com and delete (Destroy) your droplet!
+
+# developer info
+* [Information for Ghostscript developers](https://ghostscript.com/docs/9.54.0/Develop.htm)
+* error printing macros in base/std.h
