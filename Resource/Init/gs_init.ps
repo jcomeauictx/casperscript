@@ -1490,7 +1490,7 @@ end
 % in readable form and doesn't truncate strings.
 % casperscript: fix for recursive references
 .currentglobal false .setglobal  % put .recursivecheck dict in local VM
-userdict /.recursivecheck 20 dict put
+userdict /.recursivecheck 256 dict put
 .setglobal
 /.dict /write==only load 0 get dup length 3 add dict .copydict dup
 % (added 3 slots for the following definitions)
@@ -1498,10 +1498,7 @@ userdict /.recursivecheck 20 dict put
 % << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
 %    /arraytype -packedarray- /packedarraytype -packedarray-
 %    /.dict -dict- /.cvp -packedarray- /.p -packedarray >>
-% .cvp takes -file- -object-, prints a representation of -object-, and leaves
-%   -file- on stack.
-% .p takes -file- -string-, prints string, and leaves -file- on stack
-begin def  % `begin` takes final dict off stack, and `def` eats /.dict -dict-
+begin def  % `begin` takes new dict off stack, and `def` eats /.dict -dict-
 % stack is now empty, and dict is being built until `end`.
   /erase  % -dict- -
         { dup {pop 1 index exch undef} forall pop } .internalbind def
