@@ -24,6 +24,10 @@ used for division and '#' for comments, on a per-file basis (so real
 postscript code can still be run), but that's going to take a back seat.
 Too complicated.
 
+*PLEASE NOTE* that casperscript is optimized for utility, not safety; it
+uses the `-dNOSAFER` option to ghostscript, thus it is not suitable for
+server-side applications. See <https://blog.redteam-pentesting.de/2023/ghostscript-overview/> for some of the reasons why.
+
 John Comeau jc@unternet.net 2023-03-21
 
 # quickstart
