@@ -296,7 +296,7 @@ end  % casperdict
   % first copy above dictionaries into userdict
   forthdict userdict copy casperdict exch copy pop
   % put a minimal `sys.argv` into userdict in case a script is not being run
-  userdict /sys.argv [argv0] put
+  userdict /sys.argv {[argv0] put} stopped {pop [(gs)] put} if
   userdict /sys.argc 1 put
   % now enable top-down programming method
   topdown
