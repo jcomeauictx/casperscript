@@ -26,6 +26,8 @@ XTRALIBS += $(CASPERLIBS)
 VDIFF_TESTDIRS := reference latest
 VDIFF_TESTFILE ?= cjk/iso2022.ps.1.pnm
 VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
+GSCASPER := /usr/bin/gs -dNOSAFER -dNODISPLAY
+CASPERTEST ?= (Resource/Init/casperscript.ps) run casper 0.0 cvbool =
 ifeq ($(SHOWENV),)
 export CASPER XTRALIBS
 else
@@ -86,3 +88,5 @@ help:
 ghostscript:
 	-$(MAKE) distclean
 	$(MAKE) CASPER= all install
+caspertest:
+	echo '$(CASPERTEST)' | $(GSCASPER)
