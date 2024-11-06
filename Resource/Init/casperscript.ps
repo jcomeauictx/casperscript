@@ -159,7 +159,7 @@ casperdict begin
     % from the Guru, Don Lancaster, at https://www.tinaja.com/glib/strconv.pdf
     % (he called it `makestring`)) docstring {
     dup length string dup /NullEncode filter
-    3 -1 roll {1 index exch write} forall pop
+    3 -1 roll {1 index exch write} forall flushfile
   } bind def
   /array.fromstring (  % string - array
     convert string to array, also from Don Lancaster) docstring {
