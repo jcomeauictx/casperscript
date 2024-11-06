@@ -12,12 +12,12 @@
 % define #, ##, and ### as stderr equivalents of =, ==, and ===
 % NOTE: ghostscript buffers stderr until after program exit
 % casperscript needs to fix this behavior for #, ##, ### to work properly
-/#only  {(%stderr) (w) file dup 3 -1 roll write=only flushfile} bind def
-/#	{#only (\n) #only} bind def
-/##only {(%stderr) (w) file dup 3 -1 roll write==only flushfile} bind def
+/#only  { (%stderr) (w) file exch write=only } bind def
+/#	{ #only (\n) #only } bind def
+/##only { (%stderr) (w) file exch write==only } bind def
 /## {##only (\n) #only} bind def
-/###only {(%stderr) (w) file dup 3 -1 roll write===only flushfile} bind def
-/### {###only (\n) #only} bind def
+/###only { (%stderr) (w) file exch write===only } bind def
+/### { ###only (\n) #only } bind def
 /.silent -112 def  % gs_error_silent in base/gserrors.h
 % PLRM recommends only allocating enough for immediate needs with `dict`
 % it will grow as needed (languagelevels 2+)
@@ -103,9 +103,8 @@ casperdict begin
   } bind def
   /#stack (  -
     =stack, but to stderr) docstring {
-    % for simplicity, uses an extra space with opening and closing brackets
-    count array astore dup ([ ) #only
-    {#only ( ) #only} forall (]) # aload pop
+    count array astore dup ([ ) print
+    {#only ( ) print} forall (]) # aload pop
   } bind def
   /##stack (  -
     #stack using ##) docstring {
@@ -140,34 +139,6 @@ casperdict begin
   } bind def
   /chr {  % single-character string from number
     1 string dup 0 4 -1 roll put
-  } bind def
-  % NOTE: maybe string functions should all have the form string.something?
-  /string.clear (  % string -
-    empty string by replacing all characters with \\000) docstring {
-    dup length string 0 exch putinterval
-  } bind def
-  /string.random (  % length - string
-    returns string with random binary contents) docstring {
-    string (/dev/urandom) (r) file exch readstring pop
-  } bind def
-  /array.clear (  % array -
-    empty array by replacing all items with null) docstring {
-    dup length array 0 exch putinterval
-  } bind def
-  /string.fromarray (  % array - string
-    convert array of numbers from 0 through 255 into string
-    % from the Guru, Don Lancaster, at https://www.tinaja.com/glib/strconv.pdf
-    % (he called it `makestring`)) docstring {
-    dup length string dup /NullEncode filter
-    3 -1 roll {1 index exch write} forall flushfile
-  } bind def
-  /array.fromstring (  % string - array
-    convert string to array, also from Don Lancaster) docstring {
-    [ exch {} forall ]
-  } bind def
-  /array.random (  % length - array
-    array with random contents, numbers from 0 through 255) docstring {
-    string.random array.fromstring
   } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
