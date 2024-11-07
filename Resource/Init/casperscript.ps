@@ -147,6 +147,14 @@ casperdict begin
     empty string by replacing all characters with \\000) docstring {
     dup length string 0 exch putinterval
   } bind def
+  /string.random (  % length - string
+    returns string with random binary contents) docstring {
+    string (/dev/urandom) (r) file exch readstring pop
+  } bind def
+  /array.clear (  % array -
+    empty array by replacing all items with null) docstring {
+    dup length array 0 exch putinterval
+  } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
