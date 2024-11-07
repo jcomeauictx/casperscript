@@ -142,6 +142,11 @@ casperdict begin
   /chr {  % single-character string from number
     1 string dup 0 4 -1 roll put
   } bind def
+  % NOTE: maybe string functions should all have the form string.something?
+  /string.clear (  % string -
+    empty string by replacing all characters with \\000) docstring {
+    dup length string 0 exch putinterval
+  } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
