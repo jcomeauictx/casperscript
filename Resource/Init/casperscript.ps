@@ -155,6 +155,13 @@ casperdict begin
     empty array by replacing all items with null) docstring {
     dup length array 0 exch putinterval
   } bind def
+  /string.fromarray (  % array - string
+    convert array of numbers from 0 through 255 into string
+    % `makestring` from the Guru, Don Lancaster,
+    % at https://www.tinaja.com/glib/strconv.pdf) docstring {
+    dup length string dup /NullEncode filter
+    3 -1 roll {1 index exch write} forall flushfile
+  } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
