@@ -42,12 +42,15 @@ else
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
 all: $(CS_MAKEFILES)
+	[ -e "$<" ] || $(MAKE) $<
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
 	cd bin && ln -sf $(GSNAME) cs.exe
 	# make the same symlinks as for install, but in $(CWD)/bin
 	# NOTE: we're counting on GSNAME being unique per build!
 	cd bin && for symlink in cs gs ccs bccs; do \
+	 [ -f $$symlink-$(CS_VERSION) ] || \
+	  ln -sf $(GSNAME) $$symlink-$(CS_VERSION); \
 	 ln -sf $(GSNAME) $$symlink; \
 	done
 install: $(CS_MAKEFILES)
@@ -59,6 +62,8 @@ install: $(CS_MAKEFILES)
 	# bccs "batch console cs"
 	# NOTE: GSNAME is unique for each build, so overwrite all aliases
 	cd $(INSTALL_PREFIX)/bin && for symlink in cs gs ccs bccs; do \
+	 [ -f $$symlink-$(CS_VERSION) ] || \
+	  ln -sf $(GSNAME) $$symlink-$(CS_VERSION); \
 	 ln -sf $(GSNAME) $$symlink; \
 	done
 Makefile: | configure
