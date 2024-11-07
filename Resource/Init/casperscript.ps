@@ -104,8 +104,9 @@ casperdict begin
   } bind def
   /#stack (  -
     =stack, but to stderr) docstring {
-    count array astore dup ([ ) print
-    {#only ( ) print} forall (]) # aload pop
+    % for simplicity, uses an extra space with opening and closing brackets
+    count array astore dup ([ ) #only
+    {#only ( ) #only} forall (]) # aload pop
   } bind def
   /##stack (  -
     #stack using ##) docstring {
