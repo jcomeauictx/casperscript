@@ -64,3 +64,7 @@ Don't forget to go back to digitalocean.com and delete (Destroy) your droplet!
 # developer info
 * [Information for Ghostscript developers](https://ghostscript.com/docs/9.54.0/Develop.htm)
 * error printing macros in base/std.h
+* if you, as I do, use vim as editor *and* name your casperscript files with
+  a .cs extension, putting `syntax=postscr` in your modeline will fix the
+  syntax highlighting, e.g.:
+  `% vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2 syntax=postscr`
