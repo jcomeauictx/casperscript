@@ -155,6 +155,13 @@ casperdict begin
     empty array by replacing all items with null) docstring {
     dup length array 0 exch putinterval
   } bind def
+  /string.fromarray (  % array - string
+    convert array of numbers from 0 through 255 into string
+    from the Guru, Don Lancaster, at https://www.tinaja.com/glib/strconv.pdf
+    (he called it `makestring`)) docstring {
+    dup length string dup /NullEncode filter
+    3 -1 roll {1 index exch write} forall flushfile
+  } bind def
   /array.fromstring (  % string - array
     convert string to array, also from Don Lancaster) docstring {
     [ exch {} forall ]
