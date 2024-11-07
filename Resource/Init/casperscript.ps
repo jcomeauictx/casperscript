@@ -170,6 +170,11 @@ casperdict begin
     array with random contents, numbers from 0 through 255) docstring {
     string.random array.fromstring
   } bind def
+  /string.split (  % string - array
+    similar to python's str.split, but treats all [(\\000)-( )]
+    characters as default whitespace) docstring {
+    [ 1 index length 0 1 3 -1 roll ##stack
+  } bind def
   /strtruncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
