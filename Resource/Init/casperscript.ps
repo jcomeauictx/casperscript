@@ -13,11 +13,11 @@
 % NOTE: ghostscript buffers stderr until after program exit
 % casperscript needs to fix this behavior for #, ##, ### to work properly
 /#only  {(%stderr) (w) file dup 3 -1 roll write=only flushfile} bind def
-/#	{ #only (\n) #only } bind def
-/##only { (%stderr) (w) file exch write==only } bind def
+/#	{#only (\n) #only} bind def
+/##only {(%stderr) (w) file dup 3 -1 roll write==only flushfile} bind def
 /## {##only (\n) #only} bind def
 /###only { (%stderr) (w) file exch write===only } bind def
-/### { ###only (\n) #only } bind def
+/### {###only (\n) #only} bind def
 /.silent -112 def  % gs_error_silent in base/gserrors.h
 % PLRM recommends only allocating enough for immediate needs with `dict`
 % it will grow as needed (languagelevels 2+)
