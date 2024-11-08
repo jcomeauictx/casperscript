@@ -90,11 +90,11 @@ ghostscript:
 	$(MAKE) CASPER= all install
 caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
-gscasper:
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
 	mv $(<D)/$@ .
 %:	| $(CS_MAKEFILES)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
+gscasper:
 	$(GSCASPER)
