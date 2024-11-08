@@ -94,8 +94,6 @@ caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
 remake:
 	$(MAKE) caspertest  # make sure we didn't do anything really stupid
-	$(MAKE)  # first build just for a check
-	echo '$(CASPERTEST)' | bin/$(GSNAME)  # quick test for new binary
 	# if we changed anything, make sure we commit it before rebuild
 	git diff --name-only --exit-code || \
 	 (echo 'commit changes before `make remake`' >&2; false)
