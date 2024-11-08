@@ -89,6 +89,10 @@ casperdict begin
     alias currentname to newname) docstring {
     exch load def
   } bind def
+  /ctrl (  (c) - (^C)
+    generate control character from given character) docstring {
+    ord 32 64 or not and chr
+  } bind def
   /=stack (  -
     one-line version of pstack using ==) docstring {
     count array astore dup == aload pop
