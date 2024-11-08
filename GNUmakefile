@@ -76,12 +76,6 @@ ifeq ($(SHOWENV),)
 else
 	$@
 endif
-%:	*/%.c
-	[ "$<" ] || (echo Nothing to do >&2; false)
-	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
-	mv $(<D)/$@ .
-%:	| $(CS_MAKEFILES)
-	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
 vdiff: vdiff.cs $(VDIFF_TESTFILES)
 	./$^
 /tmp/vdiff.pdf: vdiff.cs $(VDIFF_TESTFILES)
@@ -97,4 +91,10 @@ ghostscript:
 caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
 gscasper:
+%:	*/%.c
+	[ "$<" ] || (echo Nothing to do >&2; false)
+	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
+	mv $(<D)/$@ .
+%:	| $(CS_MAKEFILES)
+	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
 	$(GSCASPER)
