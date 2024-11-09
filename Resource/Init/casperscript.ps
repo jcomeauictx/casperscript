@@ -182,10 +182,10 @@ casperdict begin
     array with random contents, numbers from 0 through 255) docstring {
     string.random array.fromstring
   } bind def
-  /string.split (  string delimiter - array
+  /string.split (  array string delimiter - array
     similar to python's str.split, but treats all [(\\000)-( )]
     characters as default whitespace) docstring {
-    8 array 3 1 roll #stack  % NOTE: make this array a lot larger for production
+    #stack
     dup length 0 gt #stack
       { % delimiter is not empty string, need to search for it
         {2 copy #stack search #stack
