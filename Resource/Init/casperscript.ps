@@ -126,8 +126,8 @@ casperdict begin
   } bind def
   /array.append (  array any -
     replace the first `null` element in array with `any`) docstring {
-    (array.append: ) # #stack 1 index length 1 sub 0 1 3 -1 roll
-    {2 index 1 index (array.append before get: ) # #stack get null eq
+    1 index length 1 sub 0 1 3 -1 roll
+    {2 index 1 index get null eq
       {exch put exit}
       {pop}
       ifelse
@@ -185,19 +185,16 @@ casperdict begin
   /string.split (  array string delimiter - array
     similar to python's str.split, but treats all [(\\000)-( )]
     characters as default whitespace) docstring {
-    #stack
-    dup length 0 gt #stack
+    dup length 0 gt
       { % delimiter is not empty string, need to search for it
-        {2 copy #stack search #stack
+        {2 copy search
           {% post match pre true
-            5 index exch array.append #stack pop 3 -1 roll pop exch #stack
-            (array now contains `pre`, and `post` replaced `string`?) #
+            5 index exch array.append pop 3 -1 roll pop exch
           }
           {% string false
-            3 index exch #stack array.append #stack (array contains final segment?) #
+            3 index exch array.append
             pop pop exit
           }
-          (just before ifelse: ) #only #stack
           ifelse
         }
         loop
@@ -208,7 +205,7 @@ casperdict begin
           {1 index exch 0 put}
           {pop}
           ifelse
-        } for #stack
+        } for
         % now call recursively, but using (\000) as delimiter
         (\000) string.split
       }
