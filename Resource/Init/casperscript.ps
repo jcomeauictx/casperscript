@@ -185,14 +185,15 @@ casperdict begin
     characters as default whitespace) docstring {
     8 array 3 1 roll #stack  % make this array a lot larger for production
     dup length 0 gt #stack
-      {exch 2 copy exch #stack search #stack
-        {
+      {
+        {exch 2 copy exch #stack search #stack
           {% post match pre true
-            5 index exch array.append #stack
+            5 index exch array.append #stack pop exch pop #stack
           }
           {% string false
             3 index array.append #stack exit
           }
+          (just before ifelse: ) #only #stack
           ifelse
         }
         loop
@@ -202,7 +203,8 @@ casperdict begin
           {1 index exch 0 put}
           {pop}
           ifelse
-        } for #stack}
+        } for #stack
+      }
       ifelse
   } bind def
   /strtruncate {  % stringbuffer - string
