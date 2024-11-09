@@ -115,20 +115,22 @@ casperdict begin
     % if no nulls, entire length of string (same as `length`)
     (\000) search {3 1 roll pop pop length} {length} ifelse
   } bind def
-  /string.append {  % stringbuffer string -
-    % add (concatenate) string to buffer without shortening buffer
-    % (a\000\000) (b) append -> (ab\000)
-    % NOTE: must keep a reference to stringbuffer on stack or in userdict
-    % or it will disappear after operation
+  /string.append (  stringbuffer string -
+    add (concatenate) string to buffer without shortening buffer
+    (a\\000\\000) (b) append -> (ab\\000)
+    NOTE: must keep a reference to stringbuffer on stack or in userdict
+    or it will disappear after operation) docstring {
     1 index strlen  % offset to first empty place in buffer
     % stack now: buffer string buffer offset
     exch putinterval
   } bind def
-  /array.append (  array any - array
-    create an array one bucket larger, and append `any` to it.) docstring {
-    1 index length dup 1 add array /result exch def
-    exch result 3 1 roll put
-    result 0 3 -1 roll putinterval result
+  /array.append (  array any -
+    replace the first `null` element in array with `any`) docstring {
+    1 index length 1 sub 0 1 3 -1 roll #stack
+    {2 index 1 index get null eq #stack
+      {exch put exit} if
+    }
+    for #stack
   } bind def
   /inc {  % name -
     % increments variable, e.g. `/a 1 def /a inc a =` shows `2`
