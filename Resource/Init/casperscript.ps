@@ -21,8 +21,8 @@
 /.silent -112 def  % gs_error_silent in base/gserrors.h
 % PLRM recommends only allocating enough for immediate needs with `dict`
 % it will grow as needed (languagelevels 2+)
-% NOTE though: does this apply? isn't it languagelevel 1 at this point?!
-/forthdict 16 dict def
+% NOTE though: this does not apply here! it's languagelevel 1 at this point!
+/forthdict 128 dict def
 forthdict begin
   % add some helpful words from FORTH, starting with `words`
   /dictwords {  % dict -
@@ -40,10 +40,10 @@ forthdict begin
   } bind def
 end  % forthdict
 
-/casperdict 64 dict def
+/casperdict 256 dict def
 casperdict begin
   % add some generally useful words without polluting systemdict
-  /docstrings 16 dict def  % casperscript addition
+  /docstrings 1024 dict def  % casperscript addition
   /help { % casperscript adds context-specific help {
     count 0 eq
       {help}  % original ghostscript "help"
