@@ -209,6 +209,8 @@ casperdict begin
           {pop}
           ifelse
         } for #stack
+        % now call recursively, but using (\000) as delimiter
+        (\000) string.split
       }
       ifelse
   } bind def
