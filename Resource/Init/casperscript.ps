@@ -211,9 +211,21 @@ casperdict begin
       }
       ifelse
   } bind def
-  /strtruncate {  % stringbuffer - string
+  /string.truncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
+  } bind def
+  /array.truncate ( array - array
+    truncate array to first `null` item) docstring {
+      /nullcount 0 def
+      dup
+      {null eq
+        {exit}
+        {/nullcount inc}
+        ifelse
+      }
+      forall
+      0 nullcount getinterval
   } bind def
   /stradd {  % string1 string2 - combined
     % add (concatenate) two strings: (a) (b) stradd -> (ab)
@@ -232,8 +244,8 @@ casperdict begin
   /mul {  % redefine mul to include strmul
     {mul} stopped {strmul} if
   } bind def
-  /truncate {  % redefine truncate to include strtruncate
-    {truncate} stopped {strtruncate} if
+  /truncate {  % redefine truncate to include string.truncate
+    {truncate} stopped {string.truncate} if
   } bind def
   /strcopy {  % string - copyofstring
     % true copy as opposed to a reference
