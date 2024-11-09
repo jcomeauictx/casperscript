@@ -10,6 +10,8 @@ GSNAME := gs
 ifneq ($(strip $(CASPER)),)
 CS_VERSION ?= $(shell git rev-parse --short HEAD)
 GSNAME := cs-$(CS_VERSION)
+GSBUILDNAME ?= $(shell awk -F= '$$1 == "GS" {print $$2}' config.log | tr -d "'")
+GS_BUILDVERSION := $(shell string=$(GSBUILDNAME); echo $${string##*-})
 CONFIG_ARGS += --with-gs=$(GSNAME)
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
@@ -42,6 +44,7 @@ else
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
 all: $(CS_MAKEFILES)
+	@echo building casperscript version $(CS_VERSION)
 	[ -e "$<" ] || $(MAKE) $<
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
@@ -92,11 +95,12 @@ gscasper:
 	$(GSCASPER)
 caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
-remake:
-	$(MAKE) caspertest  # make sure we didn't do anything really stupid
+remake: # unlike `rebuild`, just uses last build's version number
+	$(MAKE) CS_VERSION=$(GS_BUILDVERSION)
+rebuild: remake caspertest
 	# if we changed anything, make sure we commit it before rebuild
 	git diff --name-only --exit-code || \
-	 (echo 'commit changes before `make remake`' >&2; false)
+	 (echo 'commit changes before `make rebuild`' >&2; false)
 	$(MAKE) distclean all install  # after all that, we can rebuild
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
