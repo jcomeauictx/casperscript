@@ -126,9 +126,11 @@ casperdict begin
   } bind def
   /array.append (  array any -
     replace the first `null` element in array with `any`) docstring {
-    1 index length 1 sub 0 1 3 -1 roll
-    {2 index 1 index get null eq
-      {exch put exit} if
+    (array.append: ) # #stack 1 index length 1 sub 0 1 3 -1 roll
+    {2 index 1 index (array.append before get: ) # #stack get null eq
+      {exch put exit}
+      {pop}
+      ifelse
     }
     for
   } bind def
@@ -192,8 +194,8 @@ casperdict begin
             (array now contains `pre`, and `post` replaced `string`?) #
           }
           {% string false
-            3 index array.append #stack (array now contains final segment?) #
-            exit
+            3 index exch #stack array.append #stack (array contains final segment?) #
+            pop pop exit
           }
           (just before ifelse: ) #only #stack
           ifelse
