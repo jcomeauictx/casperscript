@@ -198,6 +198,11 @@ casperdict begin
       forall
       0 nullcount getinterval
   } bind def
+  /string.count (  string char - charcount
+    equivalent to python's str.count except here `char` is integer) docstring {
+    /charcount zero exch {1 index eq {/charcount inc} if} forall
+    pop charcount
+  } bind def
   /string.split (  array string delimiter - array
     similar to python's str.split, but treats all [(\\000)-( )]
     characters as default whitespace) docstring {
