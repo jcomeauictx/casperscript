@@ -182,6 +182,22 @@ casperdict begin
     array with random contents, numbers from 0 through 255) docstring {
     string.random array.fromstring
   } bind def
+  /string.truncate {  % stringbuffer - string
+    % remove trailing nulls at end of stringbuffer
+    0 1 index strlen getinterval
+  } bind def
+  /array.truncate ( array - array
+    truncate array to first `null` item) docstring {
+      /nullcount 0 def
+      dup
+      {null eq
+        {exit}
+        {/nullcount inc}
+        ifelse
+      }
+      forall
+      0 nullcount getinterval
+  } bind def
   /string.split (  array string delimiter - array
     similar to python's str.split, but treats all [(\\000)-( )]
     characters as default whitespace) docstring {
@@ -210,22 +226,7 @@ casperdict begin
         (\000) string.split
       }
       ifelse
-  } bind def
-  /string.truncate {  % stringbuffer - string
-    % remove trailing nulls at end of stringbuffer
-    0 1 index strlen getinterval
-  } bind def
-  /array.truncate ( array - array
-    truncate array to first `null` item) docstring {
-      /nullcount 0 def
-      dup
-      {null eq
-        {exit}
-        {/nullcount inc}
-        ifelse
-      }
-      forall
-      0 nullcount getinterval
+    array.truncate  % get rid of any nulls following string contents
   } bind def
   /stradd {  % string1 string2 - combined
     % add (concatenate) two strings: (a) (b) stradd -> (ab)
