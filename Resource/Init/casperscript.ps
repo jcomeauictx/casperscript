@@ -1,8 +1,3 @@
-% put all casperscript stuff into local VM
-/.currentglobal where
- {pop .currentglobal //false .setglobal}
- {currentglobal //false setglobal}
- ifelse
 % top-level definitions go into systemdict
 % NOTE: cannot use <<>> format for dicts, use `n dict def`, `begin`, `end`.
 % NOTE: interpreter is languagelevel 1 at load time.
@@ -408,9 +403,4 @@ end  % casperdict
   % now enable top-down programming method
   topdown
 } bind def
-% set back to previous (global or local) VM setting
-/.setglobal where
-  {pop .setglobal}
-  {setglobal}
-  ifelse
 % vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
