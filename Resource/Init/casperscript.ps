@@ -198,10 +198,21 @@ casperdict begin
       forall
       0 nullcount getinterval
   } bind def
-  /string.count (  string char - charcount
-    equivalent to python's str.count except here `char` is integer) docstring {
-    /charcount zero exch {1 index eq {/charcount inc} if} forall
-    pop charcount
+  /string.count (  string substring - count
+    roughly equivalent to python's str.count) docstring {
+    /counter zero
+    dup length <<
+      0 {pop length 1 add}  % python returns len(string) + 1 in this case
+      1 {#stack ord exch {1 index eq {/counter inc} if} forall}
+    >> exch {get exec} stopped {
+      pop  % get rid of dict
+      {2 copy search #stack % post match pre true, or string false
+        {/counter inc pop pop 3 -1 roll pop exch}
+        {pop pop exit}
+        ifelse
+      } loop
+    } if
+    pop counter
   } bind def
   /string.split (  array string delimiter - array
     similar to python's str.split, but treats all [(\\000)-( )]
