@@ -203,18 +203,19 @@ casperdict begin
     /counter zero
     dup length
       [
-        {pop length 1 add}  % python returns len(string) + 1 in '' case
-        {ord exch {1 index eq {/counter inc} if} forall}
+        % python returns len(string) + 1 in '' case
+        {pop length 1 add /counter exch def}
+        {ord exch {1 index eq {/counter inc} if} forall pop}
       ]
     exch {get exec} stopped { #stack
       pop pop % get rid of array and searchstring length
       {2 copy search #stack % post match pre true, or string false
         {/counter inc pop pop 3 -1 roll pop exch}
-        {pop pop exit}
+        {pop pop pop exit}
         ifelse
       } loop
     } if
-    pop counter
+    counter
   } bind def
   /string.split (  array string delimiter - array
     similar to python's str.split, but treats all [(\\000)-( )]
