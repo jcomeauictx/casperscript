@@ -10,8 +10,7 @@
 % any casperscript extensions.
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
 % define #, ##, and ### as stderr equivalents of =, ==, and ===
-% NOTE: ghostscript buffers stderr until after program exit
-% casperscript needs to fix this behavior for #, ##, ### to work properly
+% NOTE: ghostscript buffers stderr, so we have to `flushfile` on write to it
 /#only  {(%stderr) (w) file dup 3 -1 roll write=only flushfile} bind def
 /#	{#only (\n) #only} bind def
 /##only {(%stderr) (w) file dup 3 -1 roll write==only flushfile} bind def
@@ -246,6 +245,19 @@ casperdict begin
       }
       ifelse
     array.truncate  % get rid of any nulls following string contents
+  } bind def
+  /string.join (  array delimiter - string
+    join array of strings with delimiter to create string) docstring {
+    1024 dup mul string  % buffer for string creation
+    2 index length 2 sub 0 1 3 -1 roll  % set up for `for` loop
+      { % array delimiter buffer arrayindex
+        3 index exch get 1 index exch string.append  % array element appended
+        dup 2 index string.append  % delimiter appended
+      } for
+    3 1 roll pop  % discard delimiter
+    dup length 1 sub get  % grab final string from array
+    1 index exch string.append  % add to buffer
+    string.truncate  % get rid of trailing null bytes
   } bind def
   /stradd {  % string1 string2 - combined
     % add (concatenate) two strings: (a) (b) stradd -> (ab)
