@@ -259,6 +259,25 @@ casperdict begin
     1 index exch string.append  % add to buffer
     string.truncate  % get rid of trailing null bytes
   } bind def
+  /string.iscapital (  string - iscapital
+    somewhat similar to Python str.istitle()
+    but only checks first letter of first word
+    and only known to work with ASCII characters) docstring {
+    0 get dup 32 not and eq
+  } bind def
+  /array.last (  array - any
+    returns final element of array.
+    will /rangecheck on empty array) docstring {
+    dup length 1 sub get
+  } bind def
+  /string.isheader (  string - isheader
+    similar to Python str.istitle()
+    but only checks first and final words for capitalization,
+    and ensures no periods (.) in it) docstring {
+    dup ( ) string.count 1 add array 1 index () string.split
+    dup array.last string.iscapital exch 0 get string.iscapital and
+    exch (.) string.count 0 eq and
+  } bind def
   /stradd {  % string1 string2 - combined
     % add (concatenate) two strings: (a) (b) stradd -> (ab)
     2 copy strlen exch strlen add string  % make new empty string
