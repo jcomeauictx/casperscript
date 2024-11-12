@@ -201,11 +201,13 @@ casperdict begin
   /string.count (  string substring - count
     roughly equivalent to python's str.count) docstring {
     /counter zero
-    dup length <<
-      0 {pop length 1 add}  % python returns len(string) + 1 in this case
-      1 {#stack ord exch {1 index eq {/counter inc} if} forall}
-    >> exch {get exec} stopped {
-      pop  % get rid of dict
+    dup length
+      [
+        {pop length 1 add}  % python returns len(string) + 1 in '' case
+        {ord exch {1 index eq {/counter inc} if} forall}
+      ]
+    exch {get exec} stopped { #stack
+      pop pop % get rid of array and searchstring length
       {2 copy search #stack % post match pre true, or string false
         {/counter inc pop pop 3 -1 roll pop exch}
         {pop pop exit}
