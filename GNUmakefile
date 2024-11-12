@@ -102,6 +102,9 @@ rebuild: remake caspertest
 	git diff --name-only --exit-code || \
 	 (echo 'commit changes before `make rebuild`' >&2; false)
 	$(MAKE) distclean all install  # after all that, we can rebuild
+push:
+	git push  # to default repository
+	git push githost  # to personal repository
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
