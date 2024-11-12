@@ -207,9 +207,9 @@ casperdict begin
         {pop length 1 add /counter exch def}
         {ord exch {1 index eq {/counter inc} if} forall pop}
       ]
-    exch {get exec} stopped { #stack
+    exch {get exec} stopped {
       pop pop % get rid of array and searchstring length
-      {2 copy search #stack % post match pre true, or string false
+      {2 copy search  % post match pre true, or string false
         {/counter inc pop pop 3 -1 roll pop exch}
         {pop pop pop exit}
         ifelse
