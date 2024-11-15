@@ -330,16 +330,15 @@ casperdict begin
   } bind def
   /cvbool {  % something - boolean
     % convert anything (well, some things) to boolean
-    /booldict 3 dict def
-    booldict begin
-      /nulltype {pop false} def
-      /integertype {0 ne} def
-      /realtype {0 ne} def
-    end  % booldict
-    dup type dup booldict exch known
-      {booldict exch get exec}
+    3 dict begin
+    /nulltype {pop false} def
+    /integertype {0 ne} def
+    /realtype {0 ne} def
+    dup type dup currentdict exch known
+      {currentdict exch get exec}
       {pop length 0 ne}
       ifelse
+    end
   } bind def
   /pagewidth {currentpagedevice /PageSize get 0 get} bind def
   /pageheight {currentpagedevice /PageSize get 1 get} bind def
