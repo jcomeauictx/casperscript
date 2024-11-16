@@ -72,6 +72,8 @@ casperdict begin
         /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
          1 - + def  % 32 times 3, plus 2 dots
         /extract {  % dottedname - any flag  % for use by `topdown`
+          % NOTE we cannot use /undefined for the thrown error
+          % or it will result in an infinite loop and /stackoverflow
           mark 1 index length string 2 index exch cvs  % name to string
           dup (.) #stack string.count #stack 1 add array #stack exch #stack (.) string.split  % string to array
           dup 0 get cvn where not
@@ -80,14 +82,14 @@ casperdict begin
           exch {{cvn get} forall} stopped
             {cleartomark /undefinedresult signalerror} if
           #stack
-          exch pop exch pop exec
+          exch pop exch pop {exec} stopped {/undefinedresult signalerror} if
         } bind def
-    % assume dotted name is dict.dict.any
         errordict /.undefined errordict /undefined get put
+        % assume dotted name is dict.dict.any
         errordict begin
           /undefined {
             dup type /nametype eq exch dup xcheck 3 -1 roll and
-              {(\(/) print =only ( not yet defined\)) =}
+              {{extract} stopped {(\(/) print =only ( not yet defined\)) =}} if
               {pop /.undefined signalerror}
             ifelse
           } bind def
