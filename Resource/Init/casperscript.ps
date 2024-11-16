@@ -82,17 +82,17 @@ casperdict begin
           exch {{cvn get} forall} stopped
             {cleartomark /undefinedresult signalerror} if
           #stack
-          exch pop (stack on leaving extract: ) #only #stack
-          %{exec (after exec: ) #only #stack} stopped {/undefinedresult signalerror} if
+          exch pop exch pop (stack on leaving extract: ) #only #stack
+          {exec (after exec: ) #only #stack} stopped {/undefinedresult signalerror} if
         } bind def
         errordict /.undefined errordict /undefined get put
         % assume dotted name is dict.dict.any
         errordict begin
           /undefined {
             dup type /nametype eq exch dup xcheck 3 -1 roll and
-              {{extract} stopped {#stack (\(/) print =only ( not yet defined\)) =}} if
+              {{extract} stopped {#stack (\(/) print =only ( not yet defined\)) =} if}
               {pop /.undefined signalerror}
-            ifelse
+              ifelse
           } bind def
         end
       }
