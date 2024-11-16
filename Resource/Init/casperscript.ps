@@ -199,6 +199,7 @@ casperdict begin
   } bind def
   /string.count (  string substring - count
     roughly equivalent to python's str.count) docstring {
+    1 dict begin
     /counter zero
     dup length
       [
@@ -215,6 +216,7 @@ casperdict begin
       } loop
     } if
     counter
+    end
   } bind def
   /string.split (  array string delimiter - array
     similar to python's str.split, but treats all [(\\000)-( )]
