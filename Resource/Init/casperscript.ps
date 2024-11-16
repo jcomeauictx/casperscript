@@ -63,15 +63,26 @@ casperdict begin
     % phase of development, showing a placeholder for undefined words.
     % NEW as of 2023-08-16: parses dot-notation names to allow for syntax
     % like `os.path.split`
-    % the following uppercase constants should maybe be placed outside
-    % this definition once tested
     errordict /.undefined known
       {(topdown already initialized) =}
       {
+        % the following definitions go into containing dict
         /MAX_DOT_DEPTH 3 def
         /MAX_CASPER_NAME_LENGTH 32 def
         /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
          1 - + def  % 32 times 3, plus 2 dots
+        /extract {  % dottedname - any flag  % for use by `topdown`
+          mark 1 index length string 2 index exch cvs  % name to string
+          dup (.) #stack string.count #stack 1 add array #stack exch #stack (.) string.split  % string to array
+          dup 0 get cvn where not
+            {cleartomark /undefinedresult signalerror} if
+          % if we reached this point, containing dict for element 0 is on stack
+          exch {{cvn get} forall} stopped
+            {cleartomark /undefinedresult signalerror} if
+          #stack
+          exch pop exch pop exec
+        } bind def
+    % assume dotted name is dict.dict.any
         errordict /.undefined errordict /undefined get put
         errordict begin
           /undefined {
@@ -351,10 +362,12 @@ casperdict begin
   } bind def
   /.import {  % /dictname -
     % unconditionally import dict
+    2 dict begin  % for local variables
     /dottedname 1 index 64 string cvs (.) + def  % dotted name of imported dict
     /filename dottedname (cs) + def  % we look for file with .cs extension
     dup 5 dict def load
     begin filename runlibfile end  % loads file into dict of same name
+    end
   } bind def
   /import {  % /dictname reimport -
     % import the dict
@@ -406,6 +419,9 @@ casperdict begin
         {reversed ()}  % pathwithnoext ''
       ifelse
       %(pstack after posixpath.splitext:) = pstack
+    } bind def
+    /exists {  % pathspec - flag
+      mark exch status {cleartomark true} {false} ifelse
     } bind def
   end  % posixpath
   os /path posixpath put
