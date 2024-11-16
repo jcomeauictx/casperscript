@@ -90,7 +90,7 @@ casperdict begin
         errordict begin
           /undefined {
             dup type /nametype eq exch dup xcheck 3 -1 roll and
-              {{extract} stopped {#stack (\(/) print =only ( not yet defined\)) =}} if
+              {(\(/) print =only ( not yet defined\)) =}
               {pop /.undefined signalerror}
             ifelse
           } bind def
