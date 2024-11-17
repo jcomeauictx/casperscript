@@ -17,8 +17,10 @@
 #endif
 
 #ifndef DEBUG_SPLITARGS
-// nullify fprintf if not debugging
-#define fprintf(...) {}
+// turn fprintf into syslog if not debugging
+#define stderr (LOG_USER | LOG_DEBUG)
+#define fprintf(...) syslog(...)
+#define dump(...)
 #endif
 
 const char signal[] = "-S ";
@@ -28,7 +30,7 @@ const char delimiters[] = " \t";  /* space or tab only ones expected */
 int splitargs(int argc, char **argv, char **argp) {
     char *substring;  /* for string which may be split */
     int i = 1, j = 1;
-    syslog(LOG_USER | LOG_DEBUG, "starting splitargs()");
+    fprintf(stderr, "starting splitargs()\n");
     /* store argv[0], the program name, first */
     argp[0] = argv[0];
     if (argc > 1 && strncmp(signal, argv[i], offset) == 0) {
@@ -38,7 +40,7 @@ int splitargs(int argc, char **argv, char **argp) {
         }
     }
     for (; i < argc; i++, j++) argp[j] = argv[i];
-    syslog(LOG_USER | LOG_DEBUG, "ending splitargs()");
+    fprintf(stderr, "ending splitargs()\n");
     return j;
 }
 
@@ -52,10 +54,12 @@ int prependopts(int argc, char **argv, char **argp, char **prepend, int new) {
     /* argp is now [(bin/ccs)] */
     /* any existing args must first be moved to their previous position + new */
     for (i = argc + new, j = argc; j > 1;) argp[--i] = argv[--j];
-    syslog(LOG_USER | LOG_DEBUG, "prepending %d new options", new);
+    fprintf(stderr, "prepending %d new options\n", new);
     for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
     /* argp is now [(bin/ccs) (-dARG)] */
-    return argc + new;
+    argc += new;
+    fprintf(stderr, "dumping revised options after prependopts\n");
+    return argc;
 }
 
 int appendopts(int argc, char **argv, char **argp, char **append, int new) {
@@ -101,7 +105,10 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
                 j, argp[j], i, append[i]);
         argp[j] = append[i];
     }
-    return argc + new;
+    fprintf(stderr, "dumping revised options after appendopts\n");
+    argc += new;
+    dump(argc, argp);
+    return argc;
 }
 #ifdef TEST_SPLITARGS
 int main(int argc, char **argv) {
@@ -110,17 +117,22 @@ int main(int argc, char **argv) {
     int prepended = sizeof(prepend) / sizeof(char *);
     char *append[] = {(char *)"-app0", (char *)"-app1", (char *)"--"};
     int appended = sizeof(append) / sizeof(char *);
-    int i;
     fprintf(stderr, "dumping original argv (argc %d)\n", argc);
-    for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
+    dump(argc, argv);
     argc = splitargs(argc, argv, argp); argv = argp;
     fprintf(stderr, "dumping new but unchanged argv (argc %d)\n", argc);
-    for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
+    dump(argc, argv);
     argc = prependopts(argc, argv, argp, prepend, prepended); argv = argp;
     fprintf(stderr, "dumping new prepended argv (argc %d)\n", argc);
-    for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
+    dump(argc, argv);
     argc = appendopts(argc, argv, argp, append, appended); argv = argp;
     fprintf(stderr, "dumping new appended argv (argc %d)\n", argc);
+    dump(argc, argv);
+    return 0;
+}
+
+int dump(int argc, char **argv) {
+    int i;
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     return 0;
 }
