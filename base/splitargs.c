@@ -11,6 +11,16 @@
 #include "gssyslog.h"
 #include "splitargs.h"
 
+#ifdef TEST_SPLITARGS
+/* you can, e.g., `make XCFLAGS="-DDEBUG_SPLITARGS=1" remake` */
+#define DEBUG_SPLITARGS 1
+#endif
+
+#ifndef DEBUG_SPLITARGS
+// nullify fprintf if not debugging
+#define fprintf(...) {}
+#endif
+
 const char signal[] = "-S ";
 const size_t offset = sizeof(signal) - 1;
 const char delimiters[] = " \t";  /* space or tab only ones expected */
@@ -55,7 +65,7 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     fprintf(stderr, "appending %d new options to existing %d\n", new, argc);
     for (i = 0, j = 0; i < argc; i++, j++) {
         fprintf(stderr, "arg %d is \"%s\"\n", i, argv[i]);
-        if (strcmp(argv[i], "--") == 0 && end_of_options == 0) {
+        if (strcmp(argv[i], "--") == 0 && end_of_options == 0 && new > 0) {
             fprintf(stderr, "found end of options, moving from %d to %d\n",
                     j, j + new);
             if (strcmp(append[new - 1], "--") == 0) {  // don't add 2nd "--"
@@ -70,13 +80,23 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
         argp[j] = argv[i];
     }
     if (end_of_options > 0) {
-        argp[end_of_options + new] = argp[end_of_options];
+        fprintf(stderr,
+                "moving end of options \"%s\" from argv[%d] to argp[%d]\n",
+                argv[end_of_options], end_of_options, end_of_options + new
+               );
+        argp[end_of_options + new] = argv[end_of_options];
     } else {
+        fprintf(stderr, "setting end_of_options from 0 to %d\n", argc);
         end_of_options = argc;
     }
     fprintf(stderr, "appending new options starting offset %d\n",
             end_of_options);
-    for (i = 0; i < new; i++) argp[i + end_of_options] = append[i];
+    for (i = 0; i < new; i++) {
+        j = i + end_of_options;
+        fprintf(stderr, "argp[%d] (\"%s\") = append[%d] (\"%s\")\n",
+                j, argp[j], i, append[i]);
+        argp[j] = append[i];
+    }
     return argc + new;
 }
 #ifdef TEST_SPLITARGS

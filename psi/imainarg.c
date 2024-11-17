@@ -160,14 +160,18 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     const char *arg;
 #ifdef BUILD_CASPERSCRIPT
     char *argp[1024];
-    char *bccsprepend[] = {(char *)"--"};
-    int bccsprepended = sizeof(bccsprepend) / sizeof (char *);
     char *ccsprepend[] = {(char *)"-dNODISPLAY"};
     int ccsprepended = sizeof(ccsprepend) / sizeof(char *);
-    char *csprepend[] = {(char *)"-dNOSAFER", (char *)"-C"};
+    char *csprepend[] = {(char *)"-dNOSAFER"};
     int csprepended = sizeof(csprepend) / sizeof(char *);
-    char *bccsprepend2[] = {(char *)"-q", (char *)"-dBATCH"};
-    int bccsprepended2 = sizeof(bccsprepend2) / sizeof(char *);
+    char *bccsprepend[] = {(char *)"-q", (char *)"-dBATCH"};
+    int bccsprepended = sizeof(bccsprepend) / sizeof(char *);
+    char *ccsappend[] = {};
+    int ccsappended = sizeof(ccsappend) / sizeof(char *);
+    char *csappend[] = {(char *)"-C"};
+    int csappended = sizeof(csappend) / sizeof(char *);
+    char *bccsappend[] = {};
+    int bccsappended = sizeof(bccsappend) / sizeof (char *);
 #endif
     arg_list args;
     int code;
@@ -182,18 +186,20 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     if (strcmp(prefix, "bccs") == 0) {
         argc = prependopts(argc, argv, argp, bccsprepend, bccsprepended);
         argv = argp;
+        argc = appendopts(argc, argv, argp, bccsappend, bccsappended);
+        argv = argp;
     }
     if (endswith(prefix, "cs")) {
         argc = prependopts(argc, argv, argp, csprepend, csprepended);
+        argv = argp;
+        argc = appendopts(argc, argv, argp, csappend, csappended);
         argv = argp;
     }
     if (endswith(prefix, "ccs")) {
         /* "console" casperscript doesn't use an X window */
         argc = prependopts(argc, argv, argp, ccsprepend, ccsprepended);
         argv = argp;
-    }
-    if (strcmp(prefix, "bccs") == 0) {  /* go back and put -q first */
-        argc = prependopts(argc, argv, argp, bccsprepend2, bccsprepended2);
+        argc = appendopts(argc, argv, argp, ccsappend, ccsappended);
         argv = argp;
     }
     syslog(LOG_USER | LOG_DEBUG, "modified argv follows");

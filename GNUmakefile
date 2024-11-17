@@ -31,6 +31,7 @@ VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
 GSCASPER := /usr/bin/gs -dNOSAFER -dNODISPLAY
 TESTCASPER ?= 0.0 cvbool =
 CASPERTEST ?= (Resource/Init/casperscript.ps) run casper $(TESTCASPER)
+CSBIN ?= $(wildcard csbin/*)
 ifeq ($(SHOWENV),)
 export CASPER XTRALIBS
 else
@@ -84,6 +85,10 @@ vdiff: vdiff.cs $(VDIFF_TESTFILES)
 /tmp/vdiff.pdf: vdiff.cs $(VDIFF_TESTFILES)
 	bin/gs -dNOSAFER -sDEVICE=pdfwrite -sOutputFile=$@ \
 	 -sPAPERSIZE=ledger -C -- $^ 1
+test_csbin: $(CSBIN)
+	for binfile in $+; do \
+	 ./$$binfile one two three; \
+	done
 tests:
 	make -f regression.mak
 help:
@@ -109,6 +114,7 @@ test_splitargs:
 	XCFLAGS=-DTEST_SPLITARGS=1 $(MAKE) splitargs
 	./splitargs -option0 -option1 -- arg0 arg1
 	./splitargs -option0 -option1 -option2
+	./splitargs -option0 --
 	@echo 'Must `make distclean` before attempting new build' >&2
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
