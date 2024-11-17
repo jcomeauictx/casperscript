@@ -63,8 +63,8 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
      * also, don't allow adding 2nd "--" */
     int i, j, end_of_options = 0;
     if (new == 0) {
-        fprintf(stderr, "nothing to append to existing %d args\n");
-        return 0;
+        fprintf(stderr, "nothing to append to existing %d args\n", argc);
+        return argc;
     }
     fprintf(stderr, "appending %d new options to existing %d\n", new, argc);
     for (i = 0, j = 0; i < argc; i++, j++) {
