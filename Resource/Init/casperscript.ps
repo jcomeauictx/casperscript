@@ -420,7 +420,7 @@ casperdict begin
       %(pstack after posixpath.splitext:) = pstack
     } bind def
     /exists {  % pathspec - flag
-      mark exch status {cleartomark true} {false} ifelse
+      mark exch status {cleartomark true} {pop false} ifelse
     } bind def
   end  % posixpath
   os /path posixpath put
