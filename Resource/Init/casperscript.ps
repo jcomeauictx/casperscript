@@ -66,12 +66,8 @@ casperdict begin
     errordict /.undefined known
       {(topdown already initialized) =}
       {
-        % the following definitions go into containing dict
-        /MAX_DOT_DEPTH 3 def
-        /MAX_CASPER_NAME_LENGTH 32 def
-        /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
-         1 - + def  % 32 times 3, plus 2 dots
-        /extract {  % dottedname - any flag  % for use by `topdown`
+        % this needs to go into always-available dictionary (userdict?)
+        /.extract {  % dottedname - any flag  % for use by `topdown`
           % assume dotted name pattern is dict.dict.procedure
           % NOTE we cannot use /undefined for the thrown error
           % or it will result in an infinite loop and /stackoverflow
@@ -79,18 +75,17 @@ casperdict begin
           dup (.) string.count 1 add array
           exch (.) string.split  % string to array
           dup 0 get cvn where not
-            {cleartomark /undefinedresult signalerror} if
+            {cleartomark /.undefined signalerror} if
           % if we reached this point, containing dict for element 0 is on stack
           exch {{cvn get} forall} stopped
-            {cleartomark dup /undefinedresult signalerror} if
-          exch pop exch pop
-          {exec} stopped {/undefinedresult signalerror} if
+            {cleartomark dup /.undefined signalerror} if
+          exch pop exch pop exec
         } bind def
         errordict /.undefined errordict /undefined get put
         errordict begin
           /undefined {
             dup type /nametype eq exch dup xcheck 3 -1 roll and
-              {{extract} stopped {(\(/) print =only ( not yet defined\)) =} if}
+              {{.extract} stopped {(\(/) print =only ( not yet defined\)) =} if}
               {pop /.undefined signalerror}
               ifelse
           } bind def
