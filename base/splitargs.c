@@ -49,16 +49,20 @@ int prependopts(int argc, char **argv, char **argp, char **prepend, int new) {
      * move it up to another position. also, since argv and argp may be
      * the *same pointer*, things must be done so as to avoid overwriting */
     int i, j;
+    fprintf(stderr, "prependopts called with %d args\n", new);
     /* simplest case: argc is 1, argv is [(bin/ccs)], new is [(-dARG)] */
-    argp[0] = argv[0];
-    /* argp is now [(bin/ccs)] */
-    /* any existing args must first be moved to their previous position + new */
-    for (i = argc + new, j = argc; j > 1;) argp[--i] = argv[--j];
-    fprintf(stderr, "prepending %d new options\n", new);
-    for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
-    /* argp is now [(bin/ccs) (-dARG)] */
-    argc += new;
-    fprintf(stderr, "dumping revised options after prependopts\n");
+    if (new > 0) {
+        argp[0] = argv[0];
+        /* argp is now [(bin/ccs)] */
+        /* any existing args must first be moved to their previous position + new */
+        for (i = argc + new, j = argc; j > 1;) argp[--i] = argv[--j];
+        fprintf(stderr, "prepending %d new options\n", new);
+        for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
+        /* argp is now [(bin/ccs) (-dARG)] */
+        argc += new;
+        fprintf(stderr, "dumping revised options after prependopts\n");
+        dump(argc, argv);
+    }
     return argc;
 }
 
@@ -66,6 +70,7 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     /* this needs to take arg "--" specially; no options should come after it
      * also, don't allow adding 2nd "--" */
     int i, j, end_of_options = 0;
+    fprintf(stderr, "appendopts called with %d args\n", new);
     if (new == 0) {
         fprintf(stderr, "nothing to append to existing %d args\n", argc);
         return argc;
@@ -105,8 +110,8 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
                 j, argp[j], i, append[i]);
         argp[j] = append[i];
     }
-    fprintf(stderr, "dumping revised options after appendopts\n");
     argc += new;
+    fprintf(stderr, "dumping revised options after appendopts\n");
     dump(argc, argp);
     return argc;
 }
