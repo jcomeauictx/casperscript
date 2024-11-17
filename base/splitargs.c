@@ -15,13 +15,14 @@
 /* you can, e.g., `XCFLAGS=-DDEBUG_SPLITARGS=1 make remake` */
 #define DEBUG_SPLITARGS 1
 #else
-#define dump(...)
 #endif
 
-#ifndef DEBUG_SPLITARGS
+#ifdef DEBUG_SPLITARGS
+#else
 // turn fprintf into syslog if not debugging
 #define stderr (LOG_USER | LOG_DEBUG)
 #define fprintf(...) syslog(...)
+#define dump(...)
 #endif
 
 const char signal[] = "-S ";
@@ -139,7 +140,8 @@ int main(int argc, char **argv) {
     dump(argc, argv);
     return 0;
 }
-
+#endif
+#ifdef DEBUG_SPLITARGS
 int dump(int argc, char **argv) {
     int i;
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
