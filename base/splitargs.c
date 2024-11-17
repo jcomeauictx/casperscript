@@ -49,6 +49,7 @@ int prependargs(int argc, char **argv, char **argp, char **prepend, int new) {
 }
 
 int appendargs(int argc, char **argv, char **argp, char **append, int new) {
+    /* this needs to take arg "--" specially; no options should come after it */
     int i;
     syslog(LOG_USER | LOG_DEBUG, "appending %d new args", new);
     for (i = 0; i < argc; i++) argp[i] = argv[i];
