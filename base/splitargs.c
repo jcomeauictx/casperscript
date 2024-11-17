@@ -62,6 +62,10 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     /* this needs to take arg "--" specially; no options should come after it
      * also, don't allow adding 2nd "--" */
     int i, j, end_of_options = 0;
+    if (new == 0) {
+        fprintf(stderr, "nothing to append to existing %d args\n");
+        return 0;
+    }
     fprintf(stderr, "appending %d new options to existing %d\n", new, argc);
     for (i = 0, j = 0; i < argc; i++, j++) {
         fprintf(stderr, "arg %d is \"%s\"\n", i, argv[i]);
@@ -92,7 +96,7 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     fprintf(stderr, "appending new options starting offset %d\n",
             end_of_options);
     for (i = 0; i < new; i++) {
-        j = i + end_of_options;
+        j = i + end_of_options;  // this is *original* end, not the new one
         fprintf(stderr, "argp[%d] (\"%s\") = append[%d] (\"%s\")\n",
                 j, argp[j], i, append[i]);
         argp[j] = append[i];
