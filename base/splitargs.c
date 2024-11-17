@@ -12,15 +12,16 @@
 #include "splitargs.h"
 
 #ifdef TEST_SPLITARGS
-/* you can, e.g., `make XCFLAGS="-DDEBUG_SPLITARGS=1" remake` */
+/* you can, e.g., `XCFLAGS=-DDEBUG_SPLITARGS=1 make remake` */
 #define DEBUG_SPLITARGS 1
+#else
+#define dump(...)
 #endif
 
 #ifndef DEBUG_SPLITARGS
 // turn fprintf into syslog if not debugging
 #define stderr (LOG_USER | LOG_DEBUG)
 #define fprintf(...) syslog(...)
-#define dump(...)
 #endif
 
 const char signal[] = "-S ";
@@ -61,7 +62,7 @@ int prependopts(int argc, char **argv, char **argp, char **prepend, int new) {
         /* argp is now [(bin/ccs) (-dARG)] */
         argc += new;
         fprintf(stderr, "dumping revised options after prependopts\n");
-        dump(argc, argv);
+        dump(argc, argp);
     }
     return argc;
 }
@@ -124,13 +125,16 @@ int main(int argc, char **argv) {
     int appended = sizeof(append) / sizeof(char *);
     fprintf(stderr, "dumping original argv (argc %d)\n", argc);
     dump(argc, argv);
-    argc = splitargs(argc, argv, argp); argv = argp;
+    argc = splitargs(argc, argv, argp);
+    argv = argp;  // NOTE: we're equating the two pointers, could be problems!
     fprintf(stderr, "dumping new but unchanged argv (argc %d)\n", argc);
     dump(argc, argv);
-    argc = prependopts(argc, argv, argp, prepend, prepended); argv = argp;
+    argc = prependopts(argc, argv, argp, prepend, prepended);
+    argv = argp;
     fprintf(stderr, "dumping new prepended argv (argc %d)\n", argc);
     dump(argc, argv);
-    argc = appendopts(argc, argv, argp, append, appended); argv = argp;
+    argc = appendopts(argc, argv, argp, append, appended);
+    argv = argp;
     fprintf(stderr, "dumping new appended argv (argc %d)\n", argc);
     dump(argc, argv);
     return 0;
