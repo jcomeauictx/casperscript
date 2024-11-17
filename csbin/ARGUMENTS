@@ -1,2 +1,2 @@
-#! bin/bccs
+#! bin/bccs --
 ARGUMENTS {print ( ) print} forall (\n) print

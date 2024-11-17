@@ -1,2 +1,2 @@
-#! bin/bccs
+#! bin/bccs --
 /defaultdevice cvx -112 .quit
