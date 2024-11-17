@@ -120,5 +120,6 @@ test_splitargs:
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
 	mv $(<D)/$@ .
+	rm -f $(<:.c=.o)
 %:	| $(CS_MAKEFILES)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
