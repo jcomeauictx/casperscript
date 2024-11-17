@@ -105,6 +105,11 @@ rebuild: remake caspertest
 push:
 	git push  # to default repository
 	git push githost  # to personal repository
+test_splitargs:
+	XCFLAGS=-DTEST_SPLITARGS=1 $(MAKE) splitargs
+	./splitargs -option0 -option1 -- arg0 arg1
+	./splitargs -option0 -option1 -option2
+	@echo 'Must `make distclean` before attempting new build' >&2
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)

@@ -32,8 +32,8 @@ int splitargs(int argc, char **argv, char **argp) {
     return j;
 }
 
-int prependargs(int argc, char **argv, char **argp, char **prepend, int new) {
-    /* unlike appendargs, "prepend" has to treat argv[0] specially, and not
+int prependopts(int argc, char **argv, char **argp, char **prepend, int new) {
+    /* unlike appendopts, "prepend" has to treat argv[0] specially, and not
      * move it up to another position. also, since argv and argp may be
      * the *same pointer*, things must be done so as to avoid overwriting */
     int i, j;
@@ -42,38 +42,61 @@ int prependargs(int argc, char **argv, char **argp, char **prepend, int new) {
     /* argp is now [(bin/ccs)] */
     /* any existing args must first be moved to their previous position + new */
     for (i = argc + new, j = argc; j > 1;) argp[--i] = argv[--j];
-    syslog(LOG_USER | LOG_DEBUG, "prepending %d new args", new);
+    syslog(LOG_USER | LOG_DEBUG, "prepending %d new options", new);
     for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
     /* argp is now [(bin/ccs) (-dARG)] */
     return argc + new;
 }
 
-int appendargs(int argc, char **argv, char **argp, char **append, int new) {
-    /* this needs to take arg "--" specially; no options should come after it */
-    int i;
-    syslog(LOG_USER | LOG_DEBUG, "appending %d new args", new);
-    for (i = 0; i < argc; i++) argp[i] = argv[i];
-    for (i = argc; i < argc + new; i++) argp[i] = append[i - argc];
+int appendopts(int argc, char **argv, char **argp, char **append, int new) {
+    /* this needs to take arg "--" specially; no options should come after it
+     * also, don't allow adding 2nd "--" */
+    int i, j, end_of_options = 0;
+    fprintf(stderr, "appending %d new options to existing %d\n", new, argc);
+    for (i = 0, j = 0; i < argc; i++, j++) {
+        fprintf(stderr, "arg %d is \"%s\"\n", i, argv[i]);
+        if (strcmp(argv[i], "--") == 0 && end_of_options == 0) {
+            fprintf(stderr, "found end of options, moving from %d to %d\n",
+                    j, j + new);
+            if (strcmp(append[new - 1], "--") == 0) {  // don't add 2nd "--"
+                fprintf(stderr, "oops, make that last number %d\n",
+                        j + new - 1);
+                new -= 1;
+            }
+            end_of_options = j;
+            j += new;
+            continue;
+        }
+        argp[j] = argv[i];
+    }
+    if (end_of_options > 0) {
+        argp[end_of_options + new] = argp[end_of_options];
+    } else {
+        end_of_options = argc;
+    }
+    fprintf(stderr, "appending new options starting offset %d\n",
+            end_of_options);
+    for (i = 0; i < new; i++) argp[i + end_of_options] = append[i];
     return argc + new;
 }
 #ifdef TEST_SPLITARGS
 int main(int argc, char **argv) {
     char *argp[1024];  /* likely overkill but still well under 1 MB */
-    char *prepend[] = {(char *)"pre0", (char *)"pre1"};
+    char *prepend[] = {(char *)"-pre0", (char *)"-pre1"};
     int prepended = sizeof(prepend) / sizeof(char *);
-    char *append[] = {(char *)"app0", (char *)"app1"};
+    char *append[] = {(char *)"-app0", (char *)"-app1", (char *)"--"};
     int appended = sizeof(append) / sizeof(char *);
     int i;
     fprintf(stderr, "dumping original argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     argc = splitargs(argc, argv, argp); argv = argp;
-    fprintf(stderr, "dumping new argv (argc %d)\n", argc);
+    fprintf(stderr, "dumping new but unchanged argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
-    argc = prependargs(argc, argv, argp, prepend, prepended); argv = argp;
-    fprintf(stderr, "dumping new argv (argc %d)\n", argc);
+    argc = prependopts(argc, argv, argp, prepend, prepended); argv = argp;
+    fprintf(stderr, "dumping new prepended argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
-    argc = appendargs(argc, argv, argp, append, appended); argv = argp;
-    fprintf(stderr, "dumping new argv (argc %d)\n", argc);
+    argc = appendopts(argc, argv, argp, append, appended); argv = argp;
+    fprintf(stderr, "dumping new appended argv (argc %d)\n", argc);
     for (i = 0; i < argc; i++) fprintf(stderr, "argv[%d]: %s\n", i, argv[i]);
     return 0;
 }

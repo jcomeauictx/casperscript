@@ -180,20 +180,20 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
      * the Linux kernel will already have appended the filename and any
      * supplied args. */
     if (strcmp(prefix, "bccs") == 0) {
-        argc = prependargs(argc, argv, argp, bccsprepend, bccsprepended);
+        argc = prependopts(argc, argv, argp, bccsprepend, bccsprepended);
         argv = argp;
     }
     if (endswith(prefix, "cs")) {
-        argc = prependargs(argc, argv, argp, csprepend, csprepended);
+        argc = prependopts(argc, argv, argp, csprepend, csprepended);
         argv = argp;
     }
     if (endswith(prefix, "ccs")) {
         /* "console" casperscript doesn't use an X window */
-        argc = prependargs(argc, argv, argp, ccsprepend, ccsprepended);
+        argc = prependopts(argc, argv, argp, ccsprepend, ccsprepended);
         argv = argp;
     }
     if (strcmp(prefix, "bccs") == 0) {  /* go back and put -q first */
-        argc = prependargs(argc, argv, argp, bccsprepend2, bccsprepended2);
+        argc = prependopts(argc, argv, argp, bccsprepend2, bccsprepended2);
         argv = argp;
     }
     syslog(LOG_USER | LOG_DEBUG, "modified argv follows");
