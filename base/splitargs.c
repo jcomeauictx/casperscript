@@ -101,9 +101,9 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
         if (strcmp(append[new - 1], "--") == 0) {
             fprintf(stderr, "dropping 2nd `==`\n");
             new -= 1;
-        } else {
-            end = argc;
         }
+    } else {
+        end = argc;
     }
     for (i = 0, j = 0; i < end; i++, j++) {
         fprintf(stderr, "arg %d is \"%s\"\n", i, argv[i]);
@@ -113,9 +113,9 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
      * including the `--`, if there was one. anything left to move will
      * need to be done far-to-near, to avoid overwriting options or args */
     if (end < argc) {
-        for (i = argc, j = argc + new; i >= end; i--, j--) {
-            fprintf(stderr, "moving argc[%d] (\"%s\") to index %d\n",
-                    i, argv[i], j);
+        for (i = argc - 1, j = argc - 1 + new; i >= end; i--, j--) {
+            fprintf(stderr, "moving argc[%d] (\"%s\") to index %d (\"%s\")\n",
+                    i, argv[i], j, argp[j]);
             argp[j] = argv[i];
         }
     }
