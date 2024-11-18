@@ -42,6 +42,8 @@ int splitargs(int argc, char **argv, char **argp) {
         }
     }
     for (; i < argc; i++, j++) argp[j] = argv[i];
+    fprintf(stderr, "dumping new but unchanged argv (argc %d)\n", argc);
+    dump(j, argp);
     fprintf(stderr, "ending splitargs()\n");
     return j;
 }
@@ -56,7 +58,8 @@ int prependopts(int argc, char **argv, char **argp, char **prepend, int new) {
     if (new > 0) {
         argp[0] = argv[0];
         /* argp is now [(bin/ccs)] */
-        /* any existing args must first be moved to their previous position + new */
+        /* any existing args must first be moved to their
+         * previous position + new */
         for (i = argc + new, j = argc; j > 1;) argp[--i] = argv[--j];
         fprintf(stderr, "prepending %d new options\n", new);
         for (i = 0; i < new; i++) argp[i + 1] = prepend[i];
@@ -90,7 +93,7 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
             }
             end_of_options = j;
             j += new;
-            continue;
+            break;
         }
         argp[j] = argv[i];
     }
@@ -128,16 +131,10 @@ int main(int argc, char **argv) {
     dump(argc, argv);
     argc = splitargs(argc, argv, argp);
     argv = argp;  // NOTE: we're equating the two pointers, could be problems!
-    fprintf(stderr, "dumping new but unchanged argv (argc %d)\n", argc);
-    dump(argc, argv);
     argc = prependopts(argc, argv, argp, prepend, prepended);
     argv = argp;
-    fprintf(stderr, "dumping new prepended argv (argc %d)\n", argc);
-    dump(argc, argv);
     argc = appendopts(argc, argv, argp, append, appended);
     argv = argp;
-    fprintf(stderr, "dumping new appended argv (argc %d)\n", argc);
-    dump(argc, argv);
     return 0;
 }
 #endif
