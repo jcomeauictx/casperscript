@@ -85,7 +85,7 @@ vdiff: vdiff.cs $(VDIFF_TESTFILES)
 /tmp/vdiff.pdf: vdiff.cs $(VDIFF_TESTFILES)
 	bin/gs -dNOSAFER -sDEVICE=pdfwrite -sOutputFile=$@ \
 	 -sPAPERSIZE=ledger -C -- $^ 1
-csbin_tests: $(CSBIN)
+test_csbin: $(CSBIN)
 	for binfile in $+; do \
 	 ./$$binfile one two three; \
 	done
@@ -114,10 +114,12 @@ test_splitargs:
 	XCFLAGS=-DTEST_SPLITARGS=1 $(MAKE) splitargs
 	./splitargs -option0 -option1 -- arg0 arg1
 	./splitargs -option0 -option1 -option2
+	./splitargs -option0 --
 	@echo 'Must `make distclean` before attempting new build' >&2
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
 	mv $(<D)/$@ .
+	rm -f $(<:.c=.o)
 %:	| $(CS_MAKEFILES)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
