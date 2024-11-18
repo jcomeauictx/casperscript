@@ -20,8 +20,7 @@
 #ifdef DEBUG_SPLITARGS
 #else
 // turn fprintf into syslog if not debugging
-#define stderr (LOG_USER | LOG_DEBUG)
-#define fprintf(...) syslog(...)
+#define fprintf(device, args...) syslog(LOG_USER | LOG_DEBUG, args)
 #define dump(...)
 #endif
 
