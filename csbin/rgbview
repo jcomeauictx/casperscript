@@ -1,4 +1,4 @@
-#!/usr/src/jcomeauictx/casperscript/bin/cs -S --
+#! bin/cs -S -q --
 % adapted from https://stackoverflow.com/a/15167678/493161
 /inches {72 mul} def
 /pagewidth currentpagedevice /PageSize get aload pop /pageheight exch def def
