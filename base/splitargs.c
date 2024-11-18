@@ -76,7 +76,7 @@ int find_end_of_options(int argc, char **argv) {
     for (; i < argc; i++) {
         fprintf(stderr, "arg %d is \"%s\"\n", i, argv[i]);
         if (strcmp(argv[i], "--") == 0) {
-            fprintf(stderr, "found end of options at index %d\n", i)
+            fprintf(stderr, "found end of options at index %d\n", i);
             found = 1;
             break;
         }
@@ -99,7 +99,7 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     fprintf(stderr, "appending %d new options to existing %d\n", new, argc);
     if ((end = find_end_of_options(argc, argv)) > -1) {
         if (strcmp(append[new - 1], "--") == 0) {
-            fprintf(stderr, "dropping 2nd `==`");
+            fprintf(stderr, "dropping 2nd `==`\n");
             new -= 1;
         } else {
             end = argc;
@@ -112,10 +112,16 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     /* at this point, we have forward-moved everything up to but not
      * including the `--`, if there was one. anything left to move will
      * need to be done far-to-near, to avoid overwriting options or args */
-    fprintf(stderr, "appending new options starting offset %d\n",
-            end_of_options);
+    if (end < argc) {
+        for (i = argc, j = argc + new; i >= end; i--, j--) {
+            fprintf(stderr, "moving argc[%d] (\"%s\") to index %d\n",
+                    i, argv[i], j);
+            argp[j] = argv[i];
+        }
+    }
+    fprintf(stderr, "appending new options starting offset %d\n", end);
     for (i = 0; i < new; i++) {
-        j = i + end_of_options;  // this is *original* end, not the new one
+        j = i + end;
         fprintf(stderr, "argp[%d] (\"%s\") = append[%d] (\"%s\")\n",
                 j, argp[j], i, append[i]);
         argp[j] = append[i];
