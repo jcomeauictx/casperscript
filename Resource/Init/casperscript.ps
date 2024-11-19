@@ -375,13 +375,19 @@ casperdict begin
     currentdict 2 index known  % stack: /dictname reimport known
       {  % already in dict, so make sure correct type
         1 index load type /dicttype eq
-          {{(reimporting) = .import} {=only ( already imported) =} ifelse}
-          {1 index dup =only ( already exists and is not a dict) =
-           /typecheck signalerror}
+          {
+            {(reimporting) # .import}
+            {#only ( already imported) #}
+            ifelse
+          }
+          {
+            1 index dup #only ( already exists and is not a dict) #
+            /typecheck signalerror
+          }
           ifelse
       }
       {pop .import}  % not already in dict
-    ifelse
+      ifelse
   } bind def
 
   %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
