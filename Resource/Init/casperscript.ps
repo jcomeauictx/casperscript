@@ -265,10 +265,17 @@ casperdict begin
       { % array delimiter buffer arrayindex
         3 index exch get 1 index exch string.append  % array element appended
         dup 2 index string.append  % delimiter appended
-      } for
+      }
+      for
     3 1 roll pop  % discard delimiter
-    dup length 1 sub get  % grab final string from array
-    1 index exch string.append  % add to buffer
+    dup length dup 0 gt
+      {
+        1 sub get  % grab final string from array
+        1 index exch string.append  % add to buffer
+      }
+      {pop pop}
+      ifelse
+    %(stack before string.truncate: ) #only #stack
     string.truncate  % get rid of trailing null bytes
   } bind def
   /string.iscapital (  string - iscapital
