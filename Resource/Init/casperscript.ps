@@ -102,6 +102,13 @@ casperdict begin
     generate control character from given character) docstring {
     ord 32 64 or not and chr
   } bind def
+  /font.size (  font - size
+    guesses font size as being the x scale of the font) docstring {
+    dup /FontMatrix get 0 get
+    exch {/OrigFont get /FontMatrix get 0 get div} stopped
+    % see PLRM `scalefont` explanation
+    {pop (font ) #only ##only ( not scaled yet) # pop 1.0} if
+  } bind def
   /=stack (  -
     one-line version of pstack using ==) docstring {
     count array astore dup == aload pop
