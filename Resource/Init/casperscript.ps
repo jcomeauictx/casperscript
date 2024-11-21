@@ -311,6 +311,20 @@ casperdict begin
     will /rangecheck on empty array) docstring {
     dup length 1 sub get
   } bind def
+  /array.first ( array - any
+    returns first element of array.
+    (not really needed; only for symmetry with array.last)) docstring {
+    0 get
+  } bind def
+  /array.putlast ( array any -
+    put an element into last bucket of array) docstring {
+    1 index length 1 sub exch put
+  } bind def
+  /array.putfirst ( array any -
+    put an element into first bucket of array
+    (only for symmetry with array.putlast)) docstring {
+    0 exch put
+  } bind def
   /string.isheader (  string - isheader
     similar to Python str.istitle()
     but only checks first and final words for capitalization,
