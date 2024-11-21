@@ -115,14 +115,13 @@ casperdict begin
     % first put the part of the stack in play into an array
     1 add array astore
     % now get the first and last elements
-    dup 0 get exch dup dup length 1 sub get
+    dup array.first 1 index array.last
     % store the final element in slot 0
-    exch dup 3 -1 roll 0 exch put
+    2 index exch array.putfirst
     % and the first element in slot arraylength-1
-    dup dup length 1 sub 4 -1 roll put
+    1 index exch array.putlast
     % now put the modified array back on the stack, tossing the copy
     aload pop
-    % surely there's a better way!
   } bind def
   /=stack (  -
     one-line version of pstack using ==) docstring {
