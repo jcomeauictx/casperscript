@@ -109,6 +109,21 @@ casperdict begin
     % see PLRM `scalefont` explanation
     {pop (font ) #only ##only ( not scaled yet) # pop 1.0} if
   } bind def
+  /swap ( index -
+    swap TOS with item at index (before placing said index on stack---
+    same as index itself works)) docstring {
+    % first put the part of the stack in play into an array
+    1 add array astore
+    % now get the first and last elements
+    dup 0 get exch dup dup length 1 sub get
+    % store the final element in slot 0
+    exch dup 3 -1 roll 0 exch put
+    % and the first element in slot arraylength-1
+    dup dup length 1 sub 4 -1 roll put
+    % now put the modified array back on the stack, tossing the copy
+    aload pop
+    % surely there's a better way!
+  } bind def
   /=stack (  -
     one-line version of pstack using ==) docstring {
     count array astore dup == aload pop
