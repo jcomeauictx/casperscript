@@ -187,8 +187,11 @@ casperdict begin
   % NOTE: maybe string functions should all have the form string.something?
   /substring ( string or array [startindex endindex?] - substring or subarray
     like javascript, endindex if given is 1 + actual index) docstring {
-    dup 0 get  % startindex
+    dup 0 get 0 max  % startindex, no less than 0
+    2 index length min  % clamped on high side to length
     exch {1 get} stopped {pop pop 1 index length} if  % endindex or length
+    2 index length min  % clamp maxindex to length
+    1 index max  % and clamp on low side to startindex
     % now we have on stack: string startindex endindex
     1 index sub getinterval
   } bind def
