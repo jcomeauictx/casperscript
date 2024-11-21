@@ -185,6 +185,14 @@ casperdict begin
     (\000\t\n\f\r ) def
   /Space ( ) ord def
   % NOTE: maybe string functions should all have the form string.something?
+  /substring ( string or array [startindex endindex?] - substring or subarray
+    like javascript, endindex if given is 1 + actual index) docstring {
+    dup 0 get  % startindex
+    exch {1 get} stopped {pop pop 1 index length} if  % endindex or length
+    % now we have on stack: string startindex endindex
+    1 index sub getinterval
+  } bind def
+  /substring /subarray alias  % usable on arrays as well
   /string.clear (  string -
     empty string by replacing all characters with \\000) docstring {
     dup length string 0 exch putinterval
