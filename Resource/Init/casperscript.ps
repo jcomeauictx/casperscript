@@ -1,4 +1,6 @@
-% top-level definitions go into systemdict
+{.currentglobal //false .setglobal} stopped {currentglobal //false setglobal} if
+userdict begin
+% top-level definitions go into userdict (formerly systemdict)
 % NOTE: cannot use <<>> format for dicts, use `n dict def`, `begin`, `end`.
 % NOTE: interpreter is languagelevel 1 at load time.
 % HINT: test changes using `/usr/bin/gs -dNOSAFER -dNODISPLAY`,
@@ -509,4 +511,6 @@ end  % casperdict
   % now enable top-down programming method
   topdown
 } bind def
+end  % userdict
+{.setglobal} stopped {setglobal} if
 % vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
