@@ -396,6 +396,36 @@ casperdict begin
     0 1 255 {dup chr currentdict 3 1 roll put} for
     0 1 255 {dup chr cvn exch currentdict 3 1 roll put} for
   end def
+  /cmp  (  n1 n2 - -1, 0, or 1 depending on the comparison
+    like the Python2 operator that was removed in Python3) docstring {
+      2 copy eq
+        {0}
+        {2 copy lt
+          {-1}
+          {1}
+          ifelse
+        }
+        ifelse
+      3 1 roll pop pop
+  } bind def
+  /range  ( [starts? stops steps?] - [range]
+    like the Python2 operator, returns an array of numbers) docstring {
+    % NOTE: postscript has `start` and `stop` operators/procedures!
+    3 dict begin
+    {dup 1 get /stops exch def  dup 0 get /starts exch def} stopped
+      {pop pop dup 0 get /stops exch def  /starts 0 def} if
+    {dup 2 get /steps exch def} stopped {pop pop /steps 1 def} if
+    (starts: ) #only starts #only
+    (, stops: ) #only stops #only
+    (, steps: ) #only steps #only
+    (, stack: ) #only #stack
+    (discarding array: ) #only ##  % discard starts-stops-steps array
+    [starts steps stops {} for]  % postscript has increment in middle, not end
+    % pythonic range excludes `stops` whereas postscript includes it
+    {dup length 1 sub 0 exch getinterval} stopped {[]} if
+    #stack
+    end
+  } bind def
   /string.lower (  STRING - string
     like Python str.lower(), converts entire string to lowercase
     (but only known to work for ASCII)) docstring {
