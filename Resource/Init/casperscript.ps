@@ -382,6 +382,13 @@ casperdict begin
     3 index length exch sub  % index of possible match
     3 index exch 3 -1 roll getinterval eq exch pop
   } bind def
+  % make a dictionary to translate symbols to numbers and back
+  % not sure how to go about this in a way that's more useful than
+  % `ord` and `chr`, but will figure it out eventually
+  /latin1 256 dict dup begin
+    0 1 255 {dup chr currentdict 3 1 roll put} for
+    0 1 255 {dup chr exch currentdict 3 1 roll put} for
+  end def
   /string.lower (  STRING - string
     like Python str.lower(), converts entire string to lowercase
     (but only known to work for ASCII)) docstring {
