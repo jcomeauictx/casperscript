@@ -115,6 +115,7 @@ test_splitargs:
 	./splitargs -option0 -option1 -- arg0 arg1
 	./splitargs -option0 -option1 -option2
 	./splitargs -option0 --
+	./splitargs -option - arg1
 	@echo 'Must `make distclean` before attempting new build' >&2
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
