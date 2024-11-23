@@ -70,11 +70,21 @@ int prependopts(int argc, char **argv, char **argp, char **prepend, int new) {
     return argc;
 }
 
+int marks_end_of_options(char *arg) {
+    /* check if arg matches "-", "--", "-@", or "-+", any of which
+     * serve to mark the end of options (and the start of arguments) */
+    int ended = 0;  // assume false
+    if (strlen(arg) < 3 &&
+        arg[0] == '-' &&
+        strchr("-@+", arg[strlen(arg) - 1]) != NULL) ended = 1;
+    return ended;
+}
+
 int find_end_of_options(int argc, char **argv) {
     int i = 0, found = 0;
     for (; i < argc; i++) {
         fprintf(stderr, "arg %d is \"%s\"\n", i, argv[i]);
-        if (strcmp(argv[i], "--") == 0) {
+        if (marks_end_of_options(argv[i])) {
             fprintf(stderr, "found end of options at index %d\n", i);
             found = 1;
             break;
@@ -88,7 +98,7 @@ int find_end_of_options(int argc, char **argv) {
 }
 int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     /* this needs to take arg "--" specially; no options should come after it
-     * also, don't allow adding 2nd "--" */
+     * also, after finding "-", "--", "-@" or "-+", don't allow another */
     int i, j, end = 0;
     fprintf(stderr, "appendopts called with %d args\n", new);
     if (new == 0) {
@@ -97,8 +107,9 @@ int appendopts(int argc, char **argv, char **argp, char **append, int new) {
     }
     fprintf(stderr, "appending %d new options to existing %d\n", new, argc);
     if ((end = find_end_of_options(argc, argv)) > -1) {
-        if (strcmp(append[new - 1], "--") == 0) {
-            fprintf(stderr, "dropping 2nd `==`\n");
+        while (new && marks_end_of_options(append[new - 1])) {
+            fprintf(stderr, "dropping `%s`, end of options already found\n",
+                    append[new - 1]);
             new -= 1;
         }
     } else {
