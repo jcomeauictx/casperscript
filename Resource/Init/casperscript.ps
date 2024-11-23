@@ -407,7 +407,7 @@ casperdict begin
     like Python str.upper(), converts entire string to uppercase
     (but only known to work for ASCII)) docstring {
     dup length dup string exch 0 1 3 -1 roll 1 sub
-    {dup 3 index exch get 32 not and 2 index 3 1 roll put} for
+    {dup 3 index exch get 32 not #stack and #stack 2 index 3 1 roll put} for
     exch pop
   } bind def
   /add /+ alias  % allow use of `+` for `add`
