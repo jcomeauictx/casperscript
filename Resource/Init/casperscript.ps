@@ -382,6 +382,13 @@ casperdict begin
     3 index length exch sub  % index of possible match
     3 index exch 3 -1 roll getinterval eq exch pop
   } bind def
+  /string.lower (  STRING - string
+    like Python str.lower(), converts entire string to lowercase
+    (but only known to work for ASCII)) docstring {
+    dup length dup string exch 0 1 3 -1 roll 1 sub
+    {dup 3 index exch get 32 or 2 index 3 1 roll put} for
+    exch pop
+  } bind def
   /add /+ alias  % allow use of `+` for `add`
   /sub /- alias  % allow use of `-` for `sub`
   /mul /* alias  % allow use of `*` for `mul`
