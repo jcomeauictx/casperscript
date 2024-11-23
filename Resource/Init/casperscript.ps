@@ -1,6 +1,6 @@
+% top-level definitions go into userdict (formerly systemdict), and local VM
 {.currentglobal //false .setglobal} stopped {currentglobal //false setglobal} if
 userdict begin
-% top-level definitions go into userdict (formerly systemdict)
 % NOTE: cannot use <<>> format for dicts, use `n dict def`, `begin`, `end`.
 % NOTE: interpreter is languagelevel 1 at load time.
 % HINT: test changes using `/usr/bin/gs -dNOSAFER -dNODISPLAY`,
@@ -345,29 +345,42 @@ casperdict begin
     dup array.last string.iscapital exch 0 get string.iscapital and
     exch (.) string.count 0 eq and
   } bind def
-  /stradd {  % string1 string2 - combined
-    % add (concatenate) two strings: (a) (b) stradd -> (ab)
+  /string.add {  % string1 string2 - combined
+    % add (concatenate) two strings: (a) (b) string.add -> (ab)
     2 copy strlen exch strlen add string  % make new empty string
     dup 4 -1 roll string.append dup 3 -1 roll string.append
   } bind def
-  /strmul {  % string multiplier - string
-    % multiply a string as does Python: (a) 5 strmul -> (aaaaa)
+  /string.mul {  % string multiplier - string
+    % multiply a string as does Python: (a) 5 string.mul -> (aaaaa)
     1 index strlen 1 index mul string  % string multiplier buffer
     exch {dup 2 index string.append} repeat
     exch pop
   } bind def
-  /add {  % redefine add to include stradd
-    {add} stopped {stradd} if
+  /add {  % redefine add to include string.add
+    {add} stopped {string.add} if
   } bind def
-  /mul {  % redefine mul to include strmul
-    {mul} stopped {strmul} if
+  /mul {  % redefine mul to include string.mul
+    {mul} stopped {string.mul} if
   } bind def
   /truncate {  % redefine truncate to include string.truncate
     {truncate} stopped {string.truncate} if
   } bind def
-  /strcopy {  % string - copyofstring
+  /string.copy {  % string - copyofstring
     % true copy as opposed to a reference
     dup length string copy
+  } bind def
+  /string.startswith (  string seek - flag
+    like Python str.startswith) docstring {
+    search
+      {3 1 roll pop pop length 0 eq}
+      {pop false}
+      ifelse
+  } bind def
+  /string.endswith (  string seek - flag
+    like Python str.endswith) docstring {
+    dup length dup  % stack now: string seek n n, where n is len(seek)
+    3 index length exch sub  % index of possible match
+    3 index exch 3 -1 roll getinterval eq exch pop
   } bind def
   /add /+ alias  % allow use of `+` for `add`
   /sub /- alias  % allow use of `-` for `sub`
@@ -375,9 +388,9 @@ casperdict begin
   % cannot use `/` for `div`, nor `//` for `idiv`, until we hijack the parser
   % for the same reason we cannot use `%` for `mod`
   /reversed {  % for strings and arrays
-    % we make sure to make a copy with strcopy so as not to mess with
+    % we make sure to make a copy with string.copy so as not to mess with
     % the original; we were reversing argv[0] previously!
-    strcopy reverse
+    string.copy reverse
   } bind def
   /reverse {  % see comments for `reversed`
     % this is an *in-place* reverse, like Python!
@@ -510,7 +523,11 @@ end  % casperdict
   userdict /sys.argc 1 put
   % now enable top-down programming method
   topdown
+  count 0 gt
+    {(stack on casper exit: ) #only #stack /stackoverflow signalerror}
+    if
 } bind def
 end  % userdict
 {.setglobal} stopped {setglobal} if
+count 0 gt {(stack clutter on exit of casper.cs) /stackoverflow signalerror} if
 % vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2
