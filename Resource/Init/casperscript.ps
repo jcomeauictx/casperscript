@@ -386,14 +386,28 @@ casperdict begin
   % not sure how to go about this in a way that's more useful than
   % `ord` and `chr`, but will figure it out eventually
   /latin1 256 dict dup begin
+    currentdict /C0 [
+      /NUL /SOH /STX /ETX /EOT /ENQ /ACK /BEL
+      /BS  /HT  /LF  /VT  /FF  /CR  /SO  /SI
+      /DLE /DC1 /DC2 /DC3 /DC4 /NAK /SYN /ETB
+      /CAN /EM  /SUB /ESC /FS  /GS  /RS  /US
+      /SP  % plus /DEL=\177
+    ] put
     0 1 255 {dup chr currentdict 3 1 roll put} for
-    0 1 255 {dup chr exch currentdict 3 1 roll put} for
+    0 1 255 {dup chr cvn exch currentdict 3 1 roll put} for
   end def
   /string.lower (  STRING - string
     like Python str.lower(), converts entire string to lowercase
     (but only known to work for ASCII)) docstring {
     dup length dup string exch 0 1 3 -1 roll 1 sub
     {dup 3 index exch get 32 or 2 index 3 1 roll put} for
+    exch pop
+  } bind def
+  /string.upper (  string - STRING
+    like Python str.upper(), converts entire string to uppercase
+    (but only known to work for ASCII)) docstring {
+    dup length dup string exch 0 1 3 -1 roll 1 sub
+    {dup 3 index exch get 32 not and 2 index 3 1 roll put} for
     exch pop
   } bind def
   /add /+ alias  % allow use of `+` for `add`
