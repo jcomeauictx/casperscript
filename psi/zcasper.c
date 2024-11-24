@@ -110,7 +110,7 @@ int zmkdir(i_ctx_t *i_ctx_p) {
     errprintf_nomem("zmkdir passed typechecks\n");
     if (r_size(op - 1) >= PATHLENGTH) return_error(gs_error_rangecheck);
     errprintf_nomem("zmkdir passed rangechecks\n");
-    DISCARD(strncpy(filename, (char *)(op - 1)->value.bytes, r_size(op)));
+    DISCARD(strncpy(filename, (char *)(op - 1)->value.bytes, r_size(op - 1)));
     errprintf_nomem("zmkdir passed strncopy of filename\n");
     filename[r_size(op - 1)] = '\0';
     mode = op->value.intval;
