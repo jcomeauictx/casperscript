@@ -104,6 +104,7 @@ int zmkdir(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
     int code = 0;
     char filename[PATHLENGTH];
+    eprintf("starting zmkdir\n");
     if (r_type(op) != t_integer) return_op_typecheck(op);
     if (r_type(op - 1) != t_string) return_op_typecheck(op - 1);
     if (r_size(op - 1) >= PATHLENGTH) return_error(gs_error_rangecheck);

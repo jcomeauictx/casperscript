@@ -5,7 +5,7 @@ CASPER ?= 1
 INSTALL_PREFIX ?= /usr/local/casperscript
 CONFIG_ARGS ?= --with-x --prefix=$(INSTALL_PREFIX)
 ARCH := $(shell uname -m)
-XCFLAGS += -Ibase -Ipsi -Iobj -I.
+XCFLAGS += -DDEBUG -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
 CS_VERSION ?= $(shell git rev-parse --short HEAD)
