@@ -5,7 +5,7 @@ CASPER ?= 1
 INSTALL_PREFIX ?= /usr/local/casperscript
 CONFIG_ARGS ?= --with-x --prefix=$(INSTALL_PREFIX)
 ARCH := $(shell uname -m)
-XCFLAGS += -DDEBUG -Ibase -Ipsi -Iobj -I.
+XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
 CS_VERSION ?= $(shell git rev-parse --short HEAD)
@@ -101,7 +101,7 @@ gscasper:
 caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
 remake: # unlike `rebuild`, just uses last build's version number
-	$(MAKE) CS_VERSION=$(GS_BUILDVERSION)
+	XCFLAGS="-DDEBUG" $(MAKE) CS_VERSION=$(GS_BUILDVERSION)
 rebuild: remake caspertest
 	# if we changed anything, make sure we commit it before rebuild
 	git diff --name-only --exit-code || \
