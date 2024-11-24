@@ -415,15 +415,10 @@ casperdict begin
     {dup 1 get /stops exch def  dup 0 get /starts exch def} stopped
       {pop pop dup 0 get /stops exch def  /starts 0 def} if
     {dup 2 get /steps exch def} stopped {pop pop /steps 1 def} if
-    (starts: ) #only starts #only
-    (, stops: ) #only stops #only
-    (, steps: ) #only steps #only
-    (, stack: ) #only #stack
-    (discarding array: ) #only ##  % discard starts-stops-steps array
+    pop  % discard starts-stops-steps array
     [starts steps stops {} for]  % postscript has increment in middle, not end
     % pythonic range excludes `stops` whereas postscript includes it
     {dup length 1 sub 0 exch getinterval} stopped {[]} if
-    #stack
     end
   } bind def
   /string.lower (  STRING - string
