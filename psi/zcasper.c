@@ -111,8 +111,7 @@ int zmkdir(i_ctx_t *i_ctx_p) {
     filename[r_size(op - 1)] = '\0';
     code = mkdir(filename, op->value.intval);
     if (code == 0) {
-        pop(1);  // discard mode
-        make_bool(op, !!code);  // turn path string into success flag
+        pop(2);  // discard args
     } else {
         return_error(gs_error_invalidaccess);
     }
