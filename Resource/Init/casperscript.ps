@@ -69,7 +69,7 @@ casperdict begin
       {(topdown already initialized) =}
       {
         % this needs to go into always-available dictionary (userdict?)
-        /.extract {  % dottedname - any flag  % for use by `topdown`
+        /.extract {  % dottedname - any  % for use by `topdown`
           % assume dotted name pattern is dict.dict.procedure
           % NOTE we cannot use /undefined for the thrown error
           % or it will result in an infinite loop and /stackoverflow
@@ -79,18 +79,18 @@ casperdict begin
           dup 0 get cvn where not
             % need to duplicate name for .undefined signalerror to work
             {
-              (error in .extract: ) #only dup ##only ( not found) #
+              %(error in .extract: ) #only dup ##only ( not found) #
               cleartomark dup /.undefined signalerror
             }
             if
           % if we reached this point, containing dict for element 0 is on stack
           exch {{cvn get} forall} stopped
             {
-              $error /errorname get (error in .extract: ) #only ##
+              %$error /errorname get (error in .extract: ) #only ##
               cleartomark dup /.undefined signalerror
             }
             if
-          exch pop exch pop exec
+          exch pop exch pop  % don't `exec` here, let caller do that
         } bind def
         errordict /.undefined errordict /undefined get put
         errordict begin
@@ -98,10 +98,11 @@ casperdict begin
             dup type /nametype eq exch dup xcheck 3 -1 roll and
               {{.extract} stopped
                 {
-                  $error /errorname get (error in /undefined: ) #only ##
+                  %$error /errorname get (error in /undefined: ) #only ##
                   (\(/) print =only ( not yet defined\)) =
                 }
-                if
+                {exec}
+                ifelse
               }
               {pop /.undefined signalerror}
               ifelse
