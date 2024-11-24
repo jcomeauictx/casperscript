@@ -4,6 +4,7 @@
 #include <math.h>  /* for roundl(), ... */
 #include <stdlib.h>  /* for abs(), atof(), ... */
 #include <stdarg.h>  /* for vsnprintf(), ... */
+#include <sys/stat.h>  /* for mkdir() */
 #include "gssyslog.h"
 #include "zcasper.h"
 #include "interp.h"  /* for i_initial_enter_name() */
@@ -98,6 +99,17 @@ int zcasperinit(i_ctx_t *i_ctx_p) {
     return code;
 };
 
+int zmkdir(i_ctx_t *i_ctx_p);
+int zmkdir(i_ctx_t *i_ctx_p) {
+    os_ptr op = osp;
+    int code = 0;
+    if (r_type(op) != t_integer) return_op_typecheck(op);
+    if (r_type(op - 1) != t_string) return_op_typecheck(op - 1);
+    code = mkdir(op - 1, op);
+    if (code == 0) pop(2);
+    return code;
+}
+
 int zsavesession(i_ctx_t *i_ctx_p);
 int zsavesession(i_ctx_t *i_ctx_p) {
     HISTORY_STATE *history_state = history_get_history_state();
@@ -127,6 +139,7 @@ const op_def zcasper_op_defs[] =
 {
     /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
+    {"2mkdir", zmkdir},
     {"3sprintf", zsprintf},
     {"1savesession", zsavesession},
     op_def_end(0)
