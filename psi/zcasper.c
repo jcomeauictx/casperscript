@@ -103,10 +103,19 @@ int zmkdir(i_ctx_t *i_ctx_p);
 int zmkdir(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
     int code = 0;
+    char filename[PATHLENGTH];
     if (r_type(op) != t_integer) return_op_typecheck(op);
     if (r_type(op - 1) != t_string) return_op_typecheck(op - 1);
-    code = mkdir(op - 1, op);
-    if (code == 0) pop(2);
+    if (r_size(op - 1) >= PATHLENGTH) return_error(gs_error_rangecheck);
+    DISCARD(strncpy(filename, (char *)(op - 1)->value.bytes, r_size(op)));
+    filename[r_size(op - 1)] = '\0';
+    code = mkdir(filename, op->value.intval);
+    if (code == 0) {
+        pop(1);  // discard mode
+        make_bool(op, !!code);  // turn path string into success flag
+    } else {
+        return_error(gs_error_invalidaccess);
+    }
     return code;
 }
 
@@ -139,7 +148,7 @@ const op_def zcasper_op_defs[] =
 {
     /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
-    {"2mkdir", zmkdir},
+    {"2.mkdir", zmkdir},
     {"3sprintf", zsprintf},
     {"1savesession", zsavesession},
     op_def_end(0)
