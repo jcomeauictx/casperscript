@@ -140,6 +140,15 @@ casperdict begin
     % now put the modified array back on the stack, tossing the copy
     aload pop
   } bind def
+  /urand ( - integer
+    like `rand` but *real* random number
+    (not pseudorandom which gives identical series every run)) docstring {
+    (/dev/urandom) (r) file 0
+    % pop `true` flag after each read
+    4 {1 index read pop exch 8 bitshift or} repeat
+    exch closefile
+    1 31 bitshift 1 sub and  % chop sign bit using mask 0x7fffffff
+  } bind def
   /=stack (  -
     one-line version of pstack using ==) docstring {
     count array astore dup == aload pop
@@ -542,7 +551,9 @@ casperdict begin
     /pathsep (:) def
     /linesep (\n) def
     /devnull (/dev/null) def
-    /mkdir /.mkdir load def
+    /mkdir /.mkdir {load} stopped
+      {pop {/undefinedresource signalerror}} if
+      def
   end  % os
   /posixpath 16 dict def
   posixpath begin
