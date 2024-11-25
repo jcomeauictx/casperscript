@@ -104,25 +104,25 @@ int zmkdir(i_ctx_t *i_ctx_p) {
     os_ptr op = osp;
     int code = 0, mode = 0;
     char filename[PATHLENGTH];
-    errprintf_nomem("starting zmkdir\n");
+    //errprintf_nomem("starting zmkdir\n");
     if (r_type(op) != t_integer) return_op_typecheck(op);
     if (r_type(op - 1) != t_string) return_op_typecheck(op - 1);
-    errprintf_nomem("zmkdir passed typechecks\n");
+    //errprintf_nomem("zmkdir passed typechecks\n");
     if (r_size(op - 1) >= PATHLENGTH) return_error(gs_error_rangecheck);
-    errprintf_nomem("zmkdir passed rangechecks\n");
+    //errprintf_nomem("zmkdir passed rangechecks\n");
     DISCARD(strncpy(filename, (char *)(op - 1)->value.bytes, r_size(op - 1)));
-    errprintf_nomem("zmkdir passed strncopy of filename\n");
+    //errprintf_nomem("zmkdir passed strncopy of filename\n");
     filename[r_size(op - 1)] = '\0';
     mode = op->value.intval;
-    errprintf_nomem("zmkdir: filename: %s, mode: %04o\n", filename, mode);
+    //errprintf_nomem("zmkdir: filename: %s, mode: %04o\n", filename, mode);
     code = mkdir(filename, mode);
-    errprintf_nomem("zmkdir: passed mkdir with code %d\n", code);
+    //errprintf_nomem("zmkdir: passed mkdir with code %d\n", code);
     if (code == 0) {
         pop(2);  // discard args
     } else {
         return_error(gs_error_invalidaccess);
     }
-    errprintf_nomem("zmkdir: returning code to caller\n");
+    //errprintf_nomem("zmkdir: returning code to caller\n");
     return code;
 }
 
