@@ -47,7 +47,7 @@ endif
 all: $(CS_MAKEFILES)
 	@echo building casperscript version $(CS_VERSION)
 	[ -e "$<" ] || $(MAKE) $<
-	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
+	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $< 2>&1 | tee make.log
 	# trick for cstestcmd.cs test on unix-y systems
 	cd bin && ln -sf $(GSNAME) cs.exe
 	# make the same symlinks as for install, but in $(CWD)/bin
