@@ -45,6 +45,9 @@
 #include "gs_mgl_e.h"
 #include "gs_mro_e.h"
 
+#include "gdevpdtx.h"
+#include "gdevpdts.h"
+
 extern single_glyph_list_t SingleGlyphList[];
 
     /* Define the size of internal stream buffers. */
@@ -1159,6 +1162,16 @@ stream_to_text(gx_device_pdf * pdev)
 {
     int code;
 
+    /* This is to handle clipped text rendering modes. If we have started
+     * a text clipping operation (signalled via a spec_op) then we do
+     * *NOT* want to save the viewer state as that will write a q/Q round the text
+     * which will discard the clip.
+     */
+    if (!pdev->clipped_text_pending) {
+        code = pdf_save_viewer_state(pdev, pdev->strm);
+        if (code < 0)
+            return 0;
+    }
     /*
      * Bizarrely enough, Acrobat Reader cares how the final font size is
      * obtained -- the CTM (cm), text matrix (Tm), and font size (Tf)
@@ -1167,9 +1180,6 @@ stream_to_text(gx_device_pdf * pdev)
      * anti-alias characters.  Therefore, we have to temporarily patch
      * the CTM so that the scale factors are unity.  What a nuisance!
      */
-    code = pdf_save_viewer_state(pdev, pdev->strm);
-    if (code < 0)
-        return 0;
     pprintg2(pdev->strm, "%g 0 0 %g 0 0 cm BT\n",
              pdev->HWResolution[0] / 72.0, pdev->HWResolution[1] / 72.0);
     pdev->procsets |= Text;
@@ -1191,10 +1201,21 @@ text_to_stream(gx_device_pdf * pdev)
     int code;
 
     stream_puts(pdev->strm, "ET\n");
-    code = pdf_restore_viewer_state(pdev, pdev->strm);
-    if (code < 0)
-        return code;
-    pdf_reset_text(pdev);	/* because of Q */
+    /* This is to handle clipped text rendering modes. If we are in
+     * a text clipping operation (signalledd via a spec_op) then we do
+     * *NOT* want to restore the viewer state as that will write a q/Q round the text
+     * which will discard the clip. However, we *do* have to undo the 'cm'
+     * operation which is done for Acrobat (see stream_to_text above).
+     */
+    if (pdev->clipped_text_pending)
+        pprintg2(pdev->strm, "%g 0 0 %g 0 0 cm\n",
+             72.0 / pdev->HWResolution[0], 72.0 / pdev->HWResolution[1]);
+    else {
+        code = pdf_restore_viewer_state(pdev, pdev->strm);
+        if (code < 0)
+            return code;
+        pdf_reset_text(pdev);	/* because of Q */
+    }
     return PDF_IN_STREAM;
 }
 /* Exit stream context. */
@@ -1778,7 +1799,7 @@ pdf_alloc_aside(gx_device_pdf * pdev, pdf_resource_t ** plist,
     object = cos_object_alloc(pdev, "pdf_alloc_aside(object)");
     if (object == 0)
         return_error(gs_error_VMerror);
-    memset(pres + 1, 0, pst->ssize - sizeof(*pres));
+    memset(pres, 0, pst->ssize);
     pres->object = object;
     if (id < 0) {
         object->id = -1L;
@@ -2366,7 +2387,7 @@ pdf_encrypt_encoded_string(const gx_device_pdf *pdev, const byte *str, uint size
 static int
 pdf_put_encoded_string(const gx_device_pdf *pdev, const byte *str, uint size, gs_id object_id)
 {
-    if (!pdev->KeyLength || object_id == (gs_id)-1) {
+    if ((!pdev->KeyLength || pdev->WriteObjStms) || object_id == (gs_id)-1) {
         stream_write(pdev->strm, str, size);
         return 0;
     } else

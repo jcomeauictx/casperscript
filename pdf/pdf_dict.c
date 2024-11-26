@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -355,8 +355,8 @@ int pdfi_dict_get_common(pdf_context *ctx, pdf_dict *d, const char *Key, pdf_obj
             pdfi_countdown(d->list[index].value);
             d->list[index].value = *o;
         } else {
-            pdfi_set_error(ctx, 0, NULL, E_DICT_SELF_REFERENCE, "pdfi_dict_get", NULL);
-            return 0;
+            code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefinedresult), NULL, E_DICT_SELF_REFERENCE, "pdfi_dict_get", NULL);
+            return code;
         }
     }
     *o = d->list[index].value;
@@ -514,6 +514,22 @@ int pdfi_dict_get_type(pdf_context *ctx, pdf_dict *d, const char *Key, pdf_obj_t
     int code;
 
     code = pdfi_dict_get(ctx, d, Key, o);
+    if (code < 0)
+        return code;
+
+    if (pdfi_type_of(*o) != type) {
+        pdfi_countdown(*o);
+        *o = NULL;
+        return_error(gs_error_typecheck);
+    }
+    return 0;
+}
+
+int pdfi_dict_get_type_no_store_R(pdf_context *ctx, pdf_dict *d, const char *Key, pdf_obj_type type, pdf_obj **o)
+{
+    int code;
+
+    code = pdfi_dict_get_no_store_R(ctx, d, Key, o);
     if (code < 0)
         return code;
 
@@ -1124,6 +1140,28 @@ int pdfi_dict_knownget_type(pdf_context *ctx, pdf_dict *d, const char *Key, pdf_
         return 0;
 
     code = pdfi_dict_get_type(ctx, d, Key, type, o);
+    if (code < 0)
+        return code;
+
+    return 1;
+}
+
+/* As above but don't store any dereferenced object. Used for Annots when we need the /Parent but
+ * storing that back to the annot would create a circulare reference to the page object
+ */
+int pdfi_dict_knownget_type_no_store_R(pdf_context *ctx, pdf_dict *d, const char *Key, pdf_obj_type type, pdf_obj **o)
+{
+    bool known = false;
+    int code;
+
+    code = pdfi_dict_known(ctx, d, Key, &known);
+    if (code < 0)
+        return code;
+
+    if (known == false)
+        return 0;
+
+    code = pdfi_dict_get_type_no_store_R(ctx, d, Key, type, o);
     if (code < 0)
         return code;
 

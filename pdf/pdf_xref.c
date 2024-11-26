@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -53,7 +53,7 @@ static int resize_xref(pdf_context *ctx, uint64_t new_size)
 static int read_xref_stream_entries(pdf_context *ctx, pdf_c_stream *s, int64_t first, int64_t last, int64_t *W)
 {
     uint i, j;
-    uint field_width = 0;
+    uint64_t field_width = 0;
     uint32_t type = 0;
     uint64_t objnum = 0, gen = 0;
     byte *Buffer;
@@ -156,7 +156,7 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd
     pdf_array *a;
     int64_t size;
     int64_t num;
-    int64_t W[3];
+    int64_t W[3] = {0, 0, 0};
     int objnum;
     bool known = false;
 
@@ -209,6 +209,8 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd
 #endif
         pdfi_countup(ctx->xref_table);
 
+        pdfi_countdown(ctx->Trailer);
+
         ctx->Trailer = sdict;
         pdfi_countup(sdict);
     } else {
@@ -216,9 +218,8 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd
             return_error(gs_error_rangecheck);
 
         code = pdfi_merge_dicts(ctx, ctx->Trailer, sdict);
-        if (code < 0) {
-            if (code == gs_error_VMerror || ctx->args.pdfstoponerror)
-                return code;
+        if (code < 0 && (code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BADXREF, "pdfi_process_xref_stream", NULL)) < 0) {
+            goto exit;
         }
     }
 
@@ -303,6 +304,24 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd
         }
     }
     pdfi_countdown(a);
+
+    /* W[0] is either:
+     * 0 (no type field) or a single byte with the type.
+     * W[1] is either:
+     * The object number of the next free object, the byte offset of this object in the file or the object5 number of the object stream where this object is stored.
+     * W[2] is either:
+     * The generation number to use if this object is used again, the generation number of the object or the index of this object within the object stream.
+     *
+     * Object and generation numbers are limited to unsigned 64-bit values, as are bytes offsets in the file, indexes of objects within the stream likewise (actually
+     * most of these are generally 32-bit max). So we can limit the field widths to 8 bytes, enough to hold a 64-bit number.
+     * Even if a later version of the spec makes these larger (which seems unlikely!) we still cna't cope with integers > 64-bits.
+     */
+    if (W[0] > 1 || W[1] > 8 || W[2] > 8) {
+        pdfi_close_file(ctx, XRefStrm);
+        pdfi_countdown(ctx->xref_table);
+        ctx->xref_table = NULL;
+        return code;
+    }
 
     code = pdfi_dict_get_type(ctx, sdict, "Index", PDF_ARRAY, (pdf_obj **)&a);
     if (code == gs_error_undefined) {
@@ -411,11 +430,13 @@ static int pdfi_process_xref_stream(pdf_context *ctx, pdf_stream *stream_obj, pd
     if (code < 0)
         return code;
     if (code == TOKEN_XREF) {
-        pdfi_set_error(ctx, 0, NULL, E_PDF_PREV_NOT_XREF_STREAM, "pdfi_process_xref_stream", NULL);
-        if (!ctx->args.pdfstoponerror)
-            /* Read old-style xref table */
-            return(read_xref(ctx, ctx->main_stream));
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_PREV_NOT_XREF_STREAM, "pdfi_process_xref_stream", NULL)) < 0) {
+            goto exit;
+        }
+        /* Read old-style xref table */
+        return(read_xref(ctx, ctx->main_stream));
     }
+exit:
     return_error(gs_error_syntaxerror);
 }
 
@@ -461,8 +482,9 @@ static int pdfi_read_xref_stream_dict(pdf_context *ctx, pdf_c_stream *s, int obj
     /* We have the obj_num. Lets try for obj_num gen obj as a XRef stream */
     code = pdfi_read_bare_int(ctx, ctx->main_stream, &gen_num);
     if (code <= 0) {
-        if (ctx->args.pdfstoponerror)
+        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BADXREFSTREAM, "pdfi_read_xref_stream_dict", "")) < 0) {
             return code;
+        }
         return(pdfi_repair_file(ctx));
     }
 
@@ -475,17 +497,18 @@ static int pdfi_read_xref_stream_dict(pdf_context *ctx, pdf_c_stream *s, int obj
 
     /* Third element must be obj, or it's not a valid xref */
     if (code != TOKEN_OBJ) {
-        pdfi_set_error(ctx, 0, NULL, E_PDF_BAD_XREFSTMOFFSET, "pdfi_read_xref_stream_dict", "");
-        if (ctx->args.pdfstoponerror)
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_BAD_XREFSTMOFFSET, "pdfi_read_xref_stream_dict", "")) < 0) {
             return code;
+        }
         return(pdfi_repair_file(ctx));
     }
 
     do {
         code = pdfi_read_token(ctx, ctx->main_stream, obj_num, gen_num);
         if (code <= 0) {
-            if (ctx->args.pdfstoponerror)
+            if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BADXREFSTREAM, "pdfi_read_xref_stream_dict", NULL)) < 0) {
                 return code;
+            }
             return pdfi_repair_file(ctx);
         }
 
@@ -499,8 +522,9 @@ static int pdfi_read_xref_stream_dict(pdf_context *ctx, pdf_c_stream *s, int obj
                 /* Remove the 'stream' token from the stack, should leave a dictionary object on the stack */
                 pdfi_pop(ctx, 1);
                 if (pdfi_type_of(ctx->stack_top[-1]) != PDF_DICT) {
-                    if (ctx->args.pdfstoponerror)
+                    if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BADXREFSTREAM, "pdfi_read_xref_stream_dict", NULL)) < 0) {
                         return code;
+                    }
                     return pdfi_repair_file(ctx);
                 }
                 dict = (pdf_dict *)ctx->stack_top[-1];
@@ -510,8 +534,9 @@ static int pdfi_read_xref_stream_dict(pdf_context *ctx, pdf_c_stream *s, int obj
                 /* Pop off the dict */
                 pdfi_pop(ctx, 1);
                 if (code < 0) {
-                    if (ctx->args.pdfstoponerror)
+                    if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BADXREFSTREAM, "pdfi_read_xref_stream_dict", NULL)) < 0) {
                         return code;
+                    }
                     /* TODO: should I return code instead of trying to repair?
                      * Normally the above routine should not fail so something is
                      * probably seriously fubar.
@@ -528,7 +553,7 @@ static int pdfi_read_xref_stream_dict(pdf_context *ctx, pdf_c_stream *s, int obj
                 code = pdfi_dict_get_int(ctx, sdict->stream_dict, "Length", &Length);
                 if (code < 0) {
                     /* TODO: Not positive this will actually have a length -- just use 0 */
-                    pdfi_set_error_var(ctx, 0, NULL, E_PDF_BADSTREAM, "pdfi_read_xref_stream_dict", "Xref Stream object %u missing mandatory keyword /Length\n", obj_num);
+                    (void)pdfi_set_error_var(ctx, 0, NULL, E_PDF_BADSTREAM, "pdfi_read_xref_stream_dict", "Xref Stream object %u missing mandatory keyword /Length\n", obj_num);
                     code = 0;
                     Length = 0;
                 }
@@ -536,18 +561,17 @@ static int pdfi_read_xref_stream_dict(pdf_context *ctx, pdf_c_stream *s, int obj
                 sdict->length_valid = true;
 
                 code = pdfi_process_xref_stream(ctx, sdict, ctx->main_stream);
-                if (code < 0) {
-                    pdfi_countdown(sdict);
-                    if (ctx->args.pdfstoponerror)
-                        return code;
-                    return (pdfi_repair_file(ctx));
-                }
                 pdfi_countdown(sdict);
+                if (code < 0) {
+                    pdfi_set_error(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_PREV_NOT_XREF_STREAM, "pdfi_read_xref_stream_dict", NULL);
+                    return code;
+                }
                 break;
             } else if (keyword == TOKEN_ENDOBJ) {
                 /* Something went wrong, this is not a stream dictionary */
-                if (ctx->args.pdfstoponerror)
+                if ((code = pdfi_set_error_var(ctx, 0, NULL, E_PDF_BADSTREAM, "pdfi_read_xref_stream_dict", "Xref Stream object %u missing mandatory keyword /Length\n", obj_num)) < 0) {
                     return code;
+                }
                 return(pdfi_repair_file(ctx));
             }
         }
@@ -840,7 +864,7 @@ static int read_xref(pdf_context *ctx, pdf_c_stream *s)
     int code = 0;
     pdf_dict *d = NULL;
     uint64_t max_obj = 0;
-    int64_t num;
+    int64_t num, XRefStm = 0;
     int obj_num;
     bool known = false;
 
@@ -872,14 +896,30 @@ static int read_xref(pdf_context *ctx, pdf_c_stream *s)
     pdfi_countup(d);
     pdfi_pop(ctx, 1);
 
+    /* We don't want to pollute the Trailer dictionary with any XRefStm key/value pairs
+     * which will happen when we do pdfi_merge_dicts(). So we get any XRefStm here and
+     * if there was one, remove it from the dictionary before we merge with the
+     * primary trailer.
+     */
+    code = pdfi_dict_get_int(ctx, d, "XRefStm", &XRefStm);
+    if (code < 0 && code != gs_error_undefined)
+        goto error;
+
+    if (code == 0) {
+        code = pdfi_dict_delete(ctx, d, "XRefStm");
+        if (code < 0)
+            goto error;
+    }
+
     if (ctx->Trailer == NULL) {
         ctx->Trailer = d;
         pdfi_countup(d);
     } else {
         code = pdfi_merge_dicts(ctx, ctx->Trailer, d);
         if (code < 0) {
-            if (code == gs_error_VMerror || ctx->args.pdfstoponerror)
-                goto error;
+            if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BADXREF, "read_xref", "")) < 0) {
+                return code;
+            }
         }
     }
 
@@ -949,56 +989,50 @@ static int read_xref(pdf_context *ctx, pdf_c_stream *s)
     }
 
     /* Now check if this is a hybrid file. */
-    if (ctx->Trailer == d) {
-        code = pdfi_dict_get_int(ctx, d, "XRefStm", &num);
-        if (code < 0 && code != gs_error_undefined)
+    if (XRefStm != 0) {
+        ctx->is_hybrid = true;
+
+        if (ctx->args.pdfdebug)
+            dmprintf(ctx->memory, "%% File is a hybrid, containing xref table and xref stream. Reading the stream.\n");
+
+
+        if (pdfi_loop_detector_check_object(ctx, XRefStm) == true) {
+            code = gs_note_error(gs_error_circular_reference);
             goto error;
-
-        if (code == 0) {
-            ctx->is_hybrid = true;
-
-            if (ctx->args.pdfdebug)
-                dmprintf(ctx->memory, "%% File is a hybrid, containing xref table and xref stream. Reading the stream.\n");
-
-
-            if (pdfi_loop_detector_check_object(ctx, num) == true) {
-                code = gs_note_error(gs_error_circular_reference);
-                goto error;
-            }
-            else {
-                code = pdfi_loop_detector_add_object(ctx, num);
-                if (code < 0)
-                    goto error;
-            }
-
-            code = pdfi_loop_detector_mark(ctx);
+        }
+        else {
+            code = pdfi_loop_detector_add_object(ctx, XRefStm);
             if (code < 0)
                 goto error;
+        }
 
-            /* Because of the way the code works when we read a file which is a pure
-             * xref stream file, we need to read the first integer of 'x y obj'
-             * because the xref stream decoding code expects that to be on the stack.
-             */
-            pdfi_seek(ctx, s, num, SEEK_SET);
+        code = pdfi_loop_detector_mark(ctx);
+        if (code < 0)
+            goto error;
 
-            code = pdfi_read_bare_int(ctx, ctx->main_stream, &obj_num);
-            if (code < 0) {
-                pdfi_set_error(ctx, 0, NULL, E_PDF_BADXREFSTREAM, "read_xref", "");
-                pdfi_loop_detector_cleartomark(ctx);
-                goto error;
-            }
+        /* Because of the way the code works when we read a file which is a pure
+         * xref stream file, we need to read the first integer of 'x y obj'
+         * because the xref stream decoding code expects that to be on the stack.
+         */
+        pdfi_seek(ctx, s, XRefStm, SEEK_SET);
 
-            code = pdfi_read_xref_stream_dict(ctx, ctx->main_stream, obj_num);
-            /* We could just fall through to the exit here, but choose not to in order to avoid possible mistakes in future */
-            if (code < 0) {
-                pdfi_loop_detector_cleartomark(ctx);
-                goto error;
-            }
-
+        code = pdfi_read_bare_int(ctx, ctx->main_stream, &obj_num);
+        if (code < 0) {
+            pdfi_set_error(ctx, 0, NULL, E_PDF_BADXREFSTREAM, "read_xref", "");
             pdfi_loop_detector_cleartomark(ctx);
-        } else
-            code = 0;
-    }
+            goto error;
+        }
+
+        code = pdfi_read_xref_stream_dict(ctx, ctx->main_stream, obj_num);
+        /* We could just fall through to the exit here, but choose not to in order to avoid possible mistakes in future */
+        if (code < 0) {
+            pdfi_loop_detector_cleartomark(ctx);
+            goto error;
+        }
+
+        pdfi_loop_detector_cleartomark(ctx);
+    } else
+        code = 0;
 
 error:
     pdfi_countdown(d);
@@ -1025,11 +1059,15 @@ int pdfi_read_xref(pdf_context *ctx)
         dmprintf(ctx->memory, "%% Trying to read 'xref' token for xref table, or 'int int obj' for an xref stream\n");
 
     if (ctx->startxref > ctx->main_stream_length - 5) {
-        pdfi_set_error(ctx, 0, NULL, E_PDF_BADSTARTXREF, "pdfi_read_xref", (char *)"startxref offset is beyond end of file");
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_BADSTARTXREF, "pdfi_read_xref", (char *)"startxref offset is beyond end of file")) < 0)
+            goto exit;
+
         goto repair;
     }
     if (ctx->startxref < 0) {
-        pdfi_set_error(ctx, 0, NULL, E_PDF_BADSTARTXREF, "pdfi_read_xref", (char *)"startxref offset is before start of file");
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_BADSTARTXREF, "pdfi_read_xref", (char *)"startxref offset is before start of file")) < 0)
+            goto exit;
+
         goto repair;
     }
 
@@ -1049,7 +1087,9 @@ int pdfi_read_xref(pdf_context *ctx)
         /* If not, it had better start 'xref', and be an old-style xref table */
         code = pdfi_read_bare_keyword(ctx, ctx->main_stream);
         if (code != TOKEN_XREF) {
-            pdfi_set_error(ctx, 0, NULL, E_PDF_BADSTARTXREF, "pdfi_read_xref", (char *)"Failed to read any token at the startxref location");
+            if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_BADSTARTXREF, "pdfi_read_xref", (char *)"Failed to read any token at the startxref location")) < 0)
+                goto exit;
+
             goto repair;
         }
 

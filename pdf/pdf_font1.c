@@ -511,6 +511,16 @@ pdfi_t1_font_set_procs(pdf_context *ctx, pdf_font_type1 *font)
     pfont->data.interpret = gs_type1_interpret;
 }
 
+static inline void
+pdfi_type1_font_priv_defaults(ps_font_interp_private *pfpriv)
+{
+    pfpriv->gsu.gst1.data.lenIV = 4;
+    pfpriv->gsu.gst1.data.ExpansionFactor = 0.06;
+    pfpriv->gsu.gst1.data.BlueShift = 7;
+    pfpriv->gsu.gst1.data.BlueFuzz = 1;
+    pfpriv->gsu.gst1.data.BlueScale = 0.039625;
+}
+
 int
 pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict, pdf_dict *page_dict, byte *fbuf, int64_t fbuflen, pdf_font **ppdffont)
 {
@@ -543,10 +553,7 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
     }
 
     if (code >= 0) {
-        fpriv.gsu.gst1.data.lenIV = 4;
-        fpriv.gsu.gst1.data.ExpansionFactor = 0.06;
-        fpriv.gsu.gst1.data.BlueShift = 7;
-        fpriv.gsu.gst1.data.BlueFuzz = 1;
+        pdfi_type1_font_priv_defaults(&fpriv);
         code = pdfi_read_ps_font(ctx, font_dict, fbuf, fbuflen, &fpriv);
         gs_free_object(ctx->memory, fbuf, "pdfi_read_type1_font");
 
@@ -700,6 +707,12 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
             t1f->Subrs = fpriv.u.t1.Subrs;
             fpriv.u.t1.Subrs = NULL;
 
+            t1f->copyright = fpriv.u.t1.copyright;
+            t1f->notice = fpriv.u.t1.notice;
+            t1f->fullname = fpriv.u.t1.fullname;
+            t1f->familyname = fpriv.u.t1.familyname;
+            fpriv.u.t1.copyright = fpriv.u.t1.notice = fpriv.u.t1.fullname = fpriv.u.t1.familyname = NULL;
+
             code = pdfi_font_generate_pseudo_XUID(ctx, font_dict, t1f->pfont);
             if (code < 0) {
                 goto error;
@@ -760,6 +773,10 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
     pdfi_countdown(fpriv.u.t1.blendfontbbox);
     pdfi_countdown(fpriv.u.t1.blendaxistypes);
     pdfi_countdown(fpriv.u.t1.Subrs);
+    pdfi_countdown(fpriv.u.t1.copyright);
+    pdfi_countdown(fpriv.u.t1.notice);
+    pdfi_countdown(fpriv.u.t1.fullname);
+    pdfi_countdown(fpriv.u.t1.familyname);
     if (fpriv.gsu.gst1.UID.xvalues != NULL) {
         gs_free_object(ctx->memory, fpriv.gsu.gst1.UID.xvalues, "pdfi_read_type1_font(xuid)");
     }
@@ -775,10 +792,10 @@ pdfi_read_type1_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dic
                 memcpy(fname, fobj->data, fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length);
                 fname[fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length] = '\0';
 
-                pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_type1_font", "Error reading Type 1 font file %s\n", fname);
+                (void)pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_type1_font", "Error reading Type 1 font file %s\n", fname);
             }
             else {
-                pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_type1_font", "Error reading embedded Type 1 font object %u\n", font_dict->object_num);
+                (void)pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_type1_font", "Error reading embedded Type 1 font object %u\n", font_dict->object_num);
             }
         }
         else {
@@ -851,6 +868,10 @@ pdfi_copy_type1_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, 
     pdfi_countup(font->blendfontbbox);
     pdfi_countup(font->blendaxistypes);
     pdfi_countup(font->Subrs);
+    pdfi_countup(font->copyright);
+    pdfi_countup(font->notice);
+    pdfi_countup(font->fullname);
+    pdfi_countup(font->familyname);
 
     if (font->BaseFont != NULL && ((pdf_name *)font->BaseFont)->length <= gs_font_name_max - 1) {
         memcpy(dpfont1->key_name.chars, ((pdf_name *)font->BaseFont)->data, ((pdf_name *)font->BaseFont)->length);
@@ -984,6 +1005,10 @@ pdfi_free_font_type1(pdf_obj *font)
     pdfi_countdown(t1f->blendaxistypes);
     pdfi_countdown(t1f->Subrs);
     pdfi_countdown(t1f->filename);
+    pdfi_countdown(t1f->copyright);
+    pdfi_countdown(t1f->notice);
+    pdfi_countdown(t1f->fullname);
+    pdfi_countdown(t1f->familyname);
 
     gs_free_object(OBJ_MEMORY(font), t1f->Widths, "Free Type 1 fontWidths");
     gs_free_object(OBJ_MEMORY(font), t1f, "Free Type 1 font");

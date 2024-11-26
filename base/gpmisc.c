@@ -189,16 +189,6 @@ gp_file_name_combine_generic(const char *prefix, uint plen, const char *fname, u
     }
     if (!append(&bp, bpe, &ip, rlen))
         return gp_combine_small_buffer;
-    slen = gs_file_name_check_separator(bp, buffer - bp, bp); /* Backward search. */
-    if (rlen != 0 && slen == 0) {
-        /* Patch it against names like "c:dir" on Windows. */
-        const char *sep = gp_file_name_directory_separator();
-
-        slen = strlen(sep);
-        if (!append(&bp, bpe, &sep, slen))
-            return gp_combine_small_buffer;
-        rlen += slen;
-    }
     for (;;) {
         const char *item = ip;
         uint ilen;
@@ -1042,7 +1032,7 @@ gp_validate_path_len(const gs_memory_t *mem,
                      const uint         len,
                      const char        *mode)
 {
-    char *buffer, *bufferfull;
+    char *buffer, *bufferfull = NULL;
     uint rlen;
     int code = 0;
     const char *cdirstr = gp_file_name_current();
@@ -1091,14 +1081,50 @@ gp_validate_path_len(const gs_memory_t *mem,
         rlen = len;
     }
     else {
-        rlen = len+1;
-        bufferfull = (char *)gs_alloc_bytes(mem->thread_safe_memory, rlen + prefix_len, "gp_validate_path");
-        if (bufferfull == NULL)
-            return gs_error_VMerror;
+        char *test = (char *)path, *test1;
+        uint tlen = len, slen;
+        gp_file_name_combine_result res;
 
-        buffer = bufferfull + prefix_len;
-        if (gp_file_name_reduce(path, (uint)len, buffer, &rlen) != gp_combine_success)
-            return gs_error_invalidfileaccess;
+        /* Look for any pipe (%pipe% or '|' specifications between path separators
+         * Reject any path spec which has a %pipe% or '|' anywhere except at the start.
+         */
+        while (tlen > 0) {
+            if (test[0] == '|' || (tlen > 5 && memcmp(test, "%pipe", 5) == 0)) {
+                code = gs_note_error(gs_error_invalidfileaccess);
+                goto exit;
+            }
+            test1 = test;
+            slen = search_separator((const char **)&test, path + len, test1, 1);
+            if(slen == 0)
+                break;
+            test += slen;
+            tlen -= test - test1;
+            if (test >= path + len)
+                break;
+        }
+
+        rlen = len+1;
+        /* There is a very, very small chance that gp_file_name_reduce() can return a longer
+           string than simply rlen + prefix_len. The do/while loop is to cope with that.
+         */
+        do {
+            bufferfull = (char *)gs_alloc_bytes(mem->thread_safe_memory, rlen + prefix_len, "gp_validate_path");
+            if (bufferfull == NULL)
+                return gs_error_VMerror;
+
+            buffer = bufferfull + prefix_len;
+            res = gp_file_name_reduce(path, (uint)len, buffer, &rlen);
+            if (res == gp_combine_small_buffer) {
+                rlen += 1;
+                gs_free_object(mem->thread_safe_memory, bufferfull, "gp_validate_path");
+                rlen += 1;
+                continue;
+            }
+            if (res != gp_combine_success) {
+                code = gs_note_error(gs_error_invalidfileaccess);
+                goto exit;
+            }
+        } while (res != gp_combine_success);
         buffer[rlen] = 0;
     }
     while (1) {
@@ -1133,13 +1159,38 @@ gp_validate_path_len(const gs_memory_t *mem,
             code = gs_note_error(gs_error_invalidfileaccess);
         }
         if (code < 0 && prefix_len > 0 && buffer > bufferfull) {
+            uint newlen = rlen + cdirstrl + dirsepstrl;
+            char *newbuffer;
+            int code;
+
             buffer = bufferfull;
             memcpy(buffer, cdirstr, cdirstrl);
             memcpy(buffer + cdirstrl, dirsepstr, dirsepstrl);
+
+            /* We've prepended a './' or similar for the current working directory. We need
+             * to execute file_name_reduce on that, to eliminate any '../' or similar from
+             * the (new) full path.
+             */
+            newbuffer = (char *)gs_alloc_bytes(mem->thread_safe_memory, newlen + 1, "gp_validate_path");
+            if (newbuffer == NULL) {
+                code = gs_note_error(gs_error_VMerror);
+                goto exit;
+            }
+
+            memcpy(newbuffer, buffer, rlen + cdirstrl + dirsepstrl);
+            newbuffer[newlen] = 0x00;
+
+            code = gp_file_name_reduce(newbuffer, (uint)newlen, buffer, &newlen);
+            gs_free_object(mem->thread_safe_memory, newbuffer, "gp_validate_path");
+            if (code != gp_combine_success) {
+                code = gs_note_error(gs_error_invalidfileaccess);
+                goto exit;
+            }
+
             continue;
         }
-        else if (code < 0 && cdirstrl > 0 && prefix_len == 0 && buffer == bufferfull) {
-            buffer = bufferfull + cdirstrl + dirsepstrl;
+        else if (code < 0 && cdirstrl > 0 && prefix_len == 0 && buffer == bufferfull
+            && memcmp(buffer, cdirstr, cdirstrl) && !memcmp(buffer + cdirstrl, dirsepstr, dirsepstrl)) {
             continue;
         }
         break;
@@ -1154,6 +1205,7 @@ gp_validate_path_len(const gs_memory_t *mem,
                                            gs_path_control_flag_is_scratch_file);
     }
 
+exit:
     gs_free_object(mem->thread_safe_memory, bufferfull, "gp_validate_path");
 #ifdef EACCES
     if (code == gs_error_invalidfileaccess)

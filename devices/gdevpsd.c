@@ -163,6 +163,10 @@ psd_spec_op(gx_device *pdev, int op, void *data, int datasize)
         return true;
     }
 
+    if (op == gxdso_is_sep_supporting_additive_device &&
+        pdev->color_info.polarity == GX_CINFO_POLARITY_ADDITIVE)
+        return 3; /* We must be RGB */
+
     if (op == gxdso_supports_saved_pages)
        return 0;
 
@@ -176,68 +180,67 @@ psd_spec_op(gx_device *pdev, int op, void *data, int datasize)
            that the number of spot colors can change from page to page.
            Update things so that we only output separations for the
            inks on that page. */
-        if (pdev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE) {
-            if (pdev_psd->devn_params.page_spot_colors >= 0) {
-                cmm_dev_profile_t *profile_struct;
-                int code = dev_proc(pdev, get_profile)((gx_device *)pdev, &profile_struct);
-                if (code < 0)
-                    return code;
+        int num_proc_cols = pdev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE ? 4 : 3;
+        if (pdev_psd->devn_params.page_spot_colors >= 0) {
+            cmm_dev_profile_t *profile_struct;
+            int code = dev_proc(pdev, get_profile)((gx_device *)pdev, &profile_struct);
+            if (code < 0)
+                return code;
 
-                /* PDF case, as the page spot colors are known. */
-                if (profile_struct->spotnames != NULL) {
+            /* PDF case, as the page spot colors are known. */
+            if (profile_struct->spotnames != NULL) {
 
-                    /* PDF case, NCLR ICC profile with spot names. The ICC spots
-                       will use up some of the max_spots values. If max_spots is
-                       too small to accomodate even the ICC spots, throw an error */
-                    if (profile_struct->spotnames->count - 4 > pdev_psd->max_spots ||
-                        profile_struct->spotnames->count < 4 ||
-                        profile_struct->spotnames->count <
-                        profile_struct->device_profile[0]->num_comps) {
-                        gs_warn("ICC profile colorant names count error");
-                        return_error(gs_error_rangecheck);
-                    }
+                /* PDF case, NCLR ICC profile with spot names. The ICC spots
+                   will use up some of the max_spots values. If max_spots is
+                   too small to accomodate even the ICC spots, throw an error */
+                if (profile_struct->spotnames->count - num_proc_cols > pdev_psd->max_spots ||
+                    profile_struct->spotnames->count < num_proc_cols ||
+                    profile_struct->spotnames->count <
+                    profile_struct->device_profile[0]->num_comps) {
+                    gs_warn("ICC profile colorant names count error");
+                    return_error(gs_error_rangecheck);
+                }
+                pdev->color_info.num_components =
+                    (profile_struct->spotnames->count
+                    + pdev_psd->devn_params.page_spot_colors + has_tags);
+                if (pdev->color_info.num_components > pdev->color_info.max_components)
+                    pdev->color_info.num_components = pdev->color_info.max_components;
+                if (pdev->num_planar_planes)
+                    pdev->num_planar_planes = pdev->color_info.num_components;
+            } else {
+
+                /* Use the information that is in the page spot color. We should
+                   be here if we are processing a PDF and we do not have a DeviceN
+                   ICC profile specified for output */
+                if (!(pdev_psd->lock_colorants)) {
                     pdev->color_info.num_components =
-                        (profile_struct->spotnames->count
-                        + pdev_psd->devn_params.page_spot_colors + has_tags);
+                        (pdev_psd->devn_params.page_spot_colors
+                        + pdev_psd->devn_params.num_std_colorant_names + has_tags);
                     if (pdev->color_info.num_components > pdev->color_info.max_components)
                         pdev->color_info.num_components = pdev->color_info.max_components;
                     if (pdev->num_planar_planes)
                         pdev->num_planar_planes = pdev->color_info.num_components;
-                } else {
-
-                    /* Use the information that is in the page spot color. We should
-                       be here if we are processing a PDF and we do not have a DeviceN
-                       ICC profile specified for output */
-                    if (!(pdev_psd->lock_colorants)) {
-                        pdev->color_info.num_components =
-                            (pdev_psd->devn_params.page_spot_colors
-                            + pdev_psd->devn_params.num_std_colorant_names + has_tags);
-                        if (pdev->color_info.num_components > pdev->color_info.max_components)
-                            pdev->color_info.num_components = pdev->color_info.max_components;
-                        if (pdev->num_planar_planes)
-                            pdev->num_planar_planes = pdev->color_info.num_components;
-                    }
                 }
-            } else {
+            }
+        } else {
 
-                /* We do not know how many spots may occur on the page.
-                   For this reason we go ahead and allocate the maximum that we
-                   have available.  Note, lack of knowledge only occurs in the case
-                   of PS files. With PDF we know a priori the number of spot
-                   colorants. However, the first time the device is opened,
-                   pdev_psd->devn_params.page_spot_colors is -1 even if we are
-                   dealing with a PDF file, so we will first find ourselves here,
-                   which will set num_comp based upon max_spots + 4. If -dMaxSpots
-                   was set (Default is GS_SOFT_MAX_SPOTS which is 10),
-                   it is made use of here. */
-                if (!(pdev_psd->lock_colorants)) {
-                    int num_comp = pdev_psd->max_spots + 4 + has_tags; /* Spots + CMYK */
-                    if (num_comp > GS_CLIENT_COLOR_MAX_COMPONENTS)
-                        num_comp = GS_CLIENT_COLOR_MAX_COMPONENTS;
-                    pdev->color_info.num_components = num_comp;
-                    pdev->color_info.max_components = num_comp;
-                    pdev->num_planar_planes = num_comp;
-                }
+            /* We do not know how many spots may occur on the page.
+               For this reason we go ahead and allocate the maximum that we
+               have available.  Note, lack of knowledge only occurs in the case
+               of PS files. With PDF we know a priori the number of spot
+               colorants. However, the first time the device is opened,
+               pdev_psd->devn_params.page_spot_colors is -1 even if we are
+               dealing with a PDF file, so we will first find ourselves here,
+               which will set num_comp based upon max_spots + 4. If -dMaxSpots
+               was set (Default is GS_SOFT_MAX_SPOTS which is 10),
+               it is made use of here. */
+            if (!(pdev_psd->lock_colorants)) {
+                int num_comp = pdev_psd->max_spots + num_proc_cols + has_tags; /* Spots + CMYK */
+                if (num_comp > GS_CLIENT_COLOR_MAX_COMPONENTS)
+                    num_comp = GS_CLIENT_COLOR_MAX_COMPONENTS;
+                pdev->color_info.num_components = num_comp;
+                pdev->color_info.max_components = num_comp;
+                pdev->num_planar_planes = num_comp;
             }
         }
         nc = pdev->color_info.num_components;
@@ -369,6 +372,8 @@ psd_rgbtags_encode_color(gx_device *dev, const gx_color_value colors[])
         color <<= bpc;
         color |= COLROUND_ROUND(colors[i]);
     }
+    /* FIXME: We are writing both tags and colors[ncomp-1] to the lower bits.
+     * Is this really safe? */
     color |= (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
     return (color == gx_no_color_index ? color ^ 1 : color);
 }
@@ -444,7 +449,10 @@ psdtags_initialize_device_procs(gx_device *dev)
  */
 const psd_device gs_psdrgb_device =
 {
-    psd_device_body(psd_initialize_device_procs, "psdrgb", 3, GX_CINFO_POLARITY_ADDITIVE, 24, 255, 255, GX_CINFO_SEP_LIN, "DeviceRGB"),
+    psd_device_body(psd_initialize_device_procs, "psdrgb",
+                    ARCH_SIZEOF_GX_COLOR_INDEX, /* Number of components - need a nominal 1 bit for each */
+                    GX_CINFO_POLARITY_ADDITIVE,
+                    ARCH_SIZEOF_GX_COLOR_INDEX * 8, 255, 255, GX_CINFO_SEP_LIN, "DeviceRGB"),
     /* devn_params specific parameters */
     { 8,	/* Bits per color - must match ncomp, depth, etc. above */
       DeviceRGBComponents,	/* Names of color model colorants */
@@ -465,7 +473,10 @@ const psd_device gs_psdrgb_device =
 
 const psd_device gs_psdrgb16_device =
 {
-    psd_device_body(psd_initialize_device_procs, "psdrgb16", 3, GX_CINFO_POLARITY_ADDITIVE, 48, 65535, 65535, GX_CINFO_SEP_LIN, "DeviceRGB"),
+    psd_device_body(psd_initialize_device_procs, "psdrgb16",
+                    ARCH_SIZEOF_GX_COLOR_INDEX, /* Number of components - need a nominal 1 bit for each */
+                    GX_CINFO_POLARITY_ADDITIVE,
+                    ARCH_SIZEOF_GX_COLOR_INDEX * 16, 65535, 65535, GX_CINFO_SEP_LIN, "DeviceRGB"),
     /* devn_params specific parameters */
     { 16,	/* Bits per color - must match ncomp, depth, etc. above */
       DeviceRGBComponents,	/* Names of color model colorants */
@@ -489,7 +500,10 @@ const psd_device gs_psdrgb16_device =
  */
 const psd_device gs_psdrgbtags_device =
 {
-    psd_device_body(psdtags_initialize_device_procs, "psdrgbtags", 4, GX_CINFO_POLARITY_ADDITIVE, 24, 255, 255, GX_CINFO_SEP_LIN, "DeviceRGB"),
+    psd_device_body(psdtags_initialize_device_procs, "psdrgbtags",
+                    ARCH_SIZEOF_GX_COLOR_INDEX, /* Number of components - need a nominal 1 bit for each */
+                    GX_CINFO_POLARITY_ADDITIVE,
+                    ARCH_SIZEOF_GX_COLOR_INDEX * 8, 255, 255, GX_CINFO_SEP_LIN, "DeviceRGB"),
     /* devn_params specific parameters */
     { 8,	/* Bits per color - must match ncomp, depth, etc. above */
       DevRGBTComponents,	/* Names of color model colorants */
@@ -655,6 +669,19 @@ psd_prn_open(gx_device * pdev)
     pdev_psd->color_replace_warning_given = false;
 #endif
 
+    /* The default code thinks that any number of spots over 4 must mean
+     * that it's a CMYK space. Correct that for psdrgb and psdrgbtags. */
+    if (strcmp(pdev->dname, "psdrgb") == 0 || strcmp(pdev->dname, "psdrgbtags") == 0) {
+        if (pdev->icc_struct &&
+            pdev->icc_struct->device_profile[gsDEFAULTPROFILE]) {
+            rc_decrement(pdev->icc_struct->device_profile[gsDEFAULTPROFILE], "psd_prn_open");
+        }
+        code = gsicc_set_device_profile(pdev, pdev->memory,
+                    (char *)DEFAULT_RGB_ICC, gsDEFAULTPROFILE);
+       if (code < 0)
+           return code;
+    }
+
     /* For the planar device we need to set up the bit depth of each plane.
        For other devices this is handled in check_device_separable where
        we compute the bit shift for the components etc. */
@@ -673,10 +700,7 @@ psd_prn_open(gx_device * pdev)
     nc = pdev->color_info.num_components;
     pdev->color_info.separable_and_linear = GX_CINFO_SEP_LIN;
     set_linear_color_bits_mask_shift(pdev);
-    if (pdev->color_info.polarity == GX_CINFO_POLARITY_ADDITIVE)
-        pdev->icc_struct->supports_devn = false;
-    else
-        pdev->icc_struct->supports_devn = true;
+    pdev->icc_struct->supports_devn = true;
     code = gdev_prn_open_planar(pdev, nc);
     return code;
 }
@@ -710,7 +734,12 @@ cmyk_cs_to_psdgray_cm(const gx_device * dev, frac c, frac m, frac y, frac k, fra
 static void
 gray_cs_to_psdrgb_cm(const gx_device * dev, frac gray, frac out[])
 {
-    int i = ((psd_device *)dev)->devn_params.separations.num_separations;
+    /* Previous code here has tried to set
+     * int i = ((psd_device *)dev)->devn_params.separations.num_separations;
+     * but during the fillpage at least that's 0, even for pages with
+     * separations on. The psdcmyk code seems to use num_components instead
+     * and that works, so move to that here too. */
+    int i = dev->color_info.num_components - 3;
 
     out[0] = out[1] = out[2] = gray;
     for(; i>0; i--)			/* Clear spot colors */
@@ -721,7 +750,8 @@ static void
 rgb_cs_to_psdrgb_cm(const gx_device * dev, const gs_gstate *pgs,
                                   frac r, frac g, frac b, frac out[])
 {
-    int i = ((psd_device *)dev)->devn_params.separations.num_separations;
+    /* see note above */
+    int i = dev->color_info.num_components - 3;
 
     out[0] = r;
     out[1] = g;
@@ -734,7 +764,8 @@ static void
 cmyk_cs_to_psdrgb_cm(const gx_device * dev,
                         frac c, frac m, frac y, frac k, frac out[])
 {
-    int i = ((psd_device *)dev)->devn_params.separations.num_separations;
+    /* see note above */
+    int i = dev->color_info.num_components - 3;
 
     color_cmyk_to_rgb(c, m, y, k, NULL, out, dev->memory);
     for(; i>0; i--)			/* Clear spot colors */
@@ -746,12 +777,13 @@ cmyk_cs_to_psdrgbtags_cm(const gx_device * dev,
                          frac c, frac m, frac y, frac k, frac out[])
 {
     int ncomps = dev->color_info.num_components;
-    int i = ((psd_device *)dev)->devn_params.separations.num_separations;
+    /* see note above */
+    int i = dev->color_info.num_components - 4;
 
     color_cmyk_to_rgb(c, m, y, k, NULL, out, dev->memory);
     for(; i>0; i--)			/* Clear spot colors */
         out[2 + i] = 0;
-    out[ncomps - 1] = byte2frac(dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
+    out[ncomps - 1] = (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
 }
 
 /* Color mapping routines for the psdcmyk device */
@@ -813,7 +845,7 @@ cmyk_cs_to_psdcmyktags_cm(const gx_device *dev,
        accordingly, as it goes through the same mappings on
        its way to devn and then eventually to 8 or 16 bit values */
     if (map[ncomps - 1] != GX_DEVICE_COLOR_MAX_COMPONENTS)
-        out[ncomps - 1] = byte2frac(dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
+        out[ncomps - 1] = (dev->graphics_type_tag & ~GS_DEVICE_ENCODES_TAGS);
 }
 
 static void
@@ -1179,6 +1211,9 @@ psd_setup(psd_write_ctx *xc, gx_devn_prn_device *dev, gp_file *file, int w, int 
 {
     int i;
     int spot_count;
+    psd_device *pdev_psd = (psd_device *)dev;
+    bool has_tags = (pdev_psd->color_model == psd_DEVICE_CMYKT ||
+            pdev_psd->color_model == psd_DEVICE_RGBT);
 
     xc->f = file;
 
@@ -1189,8 +1224,7 @@ psd_setup(psd_write_ctx *xc, gx_devn_prn_device *dev, gp_file *file, int w, int 
     }
     xc->base_num_channels = dev->devn_params.num_std_colorant_names;
     xc->num_channels = i;
-    if (dev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE
-        && strcmp(dev->dname, "psdcmykog") != 0) {
+    if (strcmp(dev->dname, "psdcmykog") != 0) {
 
         /* Note: num_separation_order_names is only set if
         SeparationColorNames was setup. If this was not set,
@@ -1241,8 +1275,7 @@ psd_setup(psd_write_ctx *xc, gx_devn_prn_device *dev, gp_file *file, int w, int 
         xc->chnl_to_orig_sep[i] = i;
     }
     /* If we had a specify order name, then we may need to adjust things */
-    if (dev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE &&
-        strcmp(dev->dname, "psdcmykog") != 0) {
+    if (strcmp(dev->dname, "psdcmykog") != 0) {
         if (dev->devn_params.num_separation_order_names > 0) {
             for (i = 0; i < dev->devn_params.num_separation_order_names; i++) {
                 int sep_order_num = dev->devn_params.separation_order_map[i];
@@ -1270,9 +1303,6 @@ psd_setup(psd_write_ctx *xc, gx_devn_prn_device *dev, gp_file *file, int w, int 
 
                 const char *prev = " ";
                 int prev_size = 1;
-                psd_device *pdev_psd = (psd_device*)dev;
-                bool has_tags = (pdev_psd->color_model == psd_DEVICE_CMYKT ||
-                                 pdev_psd->color_model == psd_DEVICE_RGBT);
 
                 xc->num_channels += xc->n_extra_channels;
                 for (i=xc->base_num_channels + has_tags; i < xc->num_channels; i++) {
@@ -1301,6 +1331,10 @@ psd_setup(psd_write_ctx *xc, gx_devn_prn_device *dev, gp_file *file, int w, int 
                 }
             }
         }
+    }
+    if (has_tags) {
+        xc->chnl_to_position[xc->num_channels - 1] = dev->color_info.num_components - 1;
+        xc->chnl_to_orig_sep[xc->num_channels - 1] = dev->color_info.num_components - 1;
     }
     return 0;
 }
@@ -1360,7 +1394,7 @@ psd_write_src_spot_names(psd_write_ctx *xc, gx_devn_prn_device *pdev, int chan_i
     const devn_separation_name *separation_name;
 
     for (; chan_idx < xc->num_channels; chan_idx++) {
-        sep_num = xc->chnl_to_orig_sep[chan_idx] - NUM_CMYK_COMPONENTS - has_tags;
+        sep_num = xc->chnl_to_orig_sep[chan_idx] - xc->base_num_channels - has_tags;
         separation_name = &(pdev->devn_params.separations.names[sep_num]);
         psd_write_8(xc, (byte)separation_name->size);
         psd_write(xc, separation_name->data, separation_name->size);
@@ -1446,16 +1480,16 @@ psd_write_header(psd_write_ctx* xc, gx_devn_prn_device* pdev)
      *    C=0, M=1, Y=2, K=3, Spot1=4, Spot2=5, ... T=n-1
      */
     /* Channel Names size computation -- this will get the "Tags" name */
-    for (chan_idx = NUM_CMYK_COMPONENTS; chan_idx < xc->num_channels; chan_idx++) {
+    for (chan_idx = xc->base_num_channels; chan_idx < xc->num_channels; chan_idx++) {
         fixed_colorant_name n = pdev->devn_params.std_colorant_names[chan_idx];
         if (n == NULL)
             break;
         chan_names_len += strlen(n) + 1;
     }
-    extra_std_colors = chan_idx - NUM_CMYK_COMPONENTS;
+    extra_std_colors = chan_idx - xc->base_num_channels;
 
     for (; chan_idx < xc->num_channels; chan_idx++) {
-        sep_num = xc->chnl_to_orig_sep[chan_idx] - NUM_CMYK_COMPONENTS - has_tags;
+        sep_num = xc->chnl_to_orig_sep[chan_idx] - xc->base_num_channels - has_tags;
         separation_name = &(pdev->devn_params.separations.names[sep_num]);
         chan_names_len += (separation_name->size + 1);
     }
@@ -1476,14 +1510,14 @@ psd_write_header(psd_write_ctx* xc, gx_devn_prn_device* pdev)
        to add tags to psdcmykog or similar such device that
        has pre-defined spots with the tags plane */
     if (has_tags) {
-        chan_idx = NUM_CMYK_COMPONENTS + extra_std_colors;
+        chan_idx = xc->base_num_channels + extra_std_colors;
         psd_write_src_spot_names(xc, pdev, chan_idx, has_tags);
-        chan_idx = NUM_CMYK_COMPONENTS;
+        chan_idx = xc->base_num_channels;
         psd_write_std_extra_names(xc, pdev, chan_idx);
     } else {
-        chan_idx = NUM_CMYK_COMPONENTS;
+        chan_idx = xc->base_num_channels;
         psd_write_std_extra_names(xc, pdev, chan_idx);
-        chan_idx = NUM_CMYK_COMPONENTS + extra_std_colors;
+        chan_idx = xc->base_num_channels + extra_std_colors;
         psd_write_src_spot_names(xc, pdev, chan_idx, has_tags);
     }
     if (chan_names_len % 2)
@@ -1628,7 +1662,7 @@ psd_write_image_data(psd_write_ctx *xc, gx_device_printer *pdev)
     int chan_idx;
     byte * unpacked;
     int num_comp = xc->num_channels;
-    gs_get_bits_params_t params;
+    gs_get_bits_params_t params = { 0 };
     gx_downscaler_t ds = { NULL };
     int octets_per_component = bpc >> 3;
     int octets_per_line = xc->width * octets_per_component;
@@ -1643,10 +1677,11 @@ psd_write_image_data(psd_write_ctx *xc, gx_device_printer *pdev)
     sep_line = gs_alloc_bytes(pdev->memory, octets_per_line, "psd_write_sep_line");
 
     for (chan_idx = 0; chan_idx < num_comp; chan_idx++) {
+        int data_pos = xc->chnl_to_position[chan_idx];
         planes[chan_idx] = gs_alloc_bytes(pdev->memory, raster_plane,
                                         "psd_write_sep_line");
-        params.data[chan_idx] = planes[chan_idx];
-        if (params.data[chan_idx] == NULL)
+        params.data[data_pos] = planes[chan_idx];
+        if (params.data[data_pos] == NULL)
             return_error(gs_error_VMerror);
     }
 
@@ -1654,7 +1689,7 @@ psd_write_image_data(psd_write_ctx *xc, gx_device_printer *pdev)
         return_error(gs_error_VMerror);
 
     code = gx_downscaler_init_planar(&ds, (gx_device *)pdev,
-                                     bpc, bpc, num_comp,
+                                     bpc, bpc, pdev->color_info.num_components,
                                      &psd_dev->downscale,
                                      &params);
     if (code < 0)
@@ -1671,7 +1706,7 @@ psd_write_image_data(psd_write_ctx *xc, gx_device_printer *pdev)
 
                 unpacked = params.data[data_pos];
 
-                if (base_num_channels == 3) {
+                if (base_num_channels == 3 && chan_idx < 3) {
                     memcpy(sep_line, unpacked, octets_per_line);
                 } else if (octets_per_component == 1) {
                     for (i = 0; i < xc->width; ++i) {

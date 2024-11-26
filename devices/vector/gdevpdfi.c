@@ -1412,6 +1412,10 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
 
     /* We don't want to change the colour space of a mask, or an SMask (both of which are Gray) */
     if (!is_mask) {
+#if 1
+        if (image[0].pixel.ColorSpace != NULL && !(context == PDF_IMAGE_TYPE3_MASK))
+           convert_to_process_colors = setup_image_colorspace(pdev, &image[0], pcs, &pcs_orig, names, &cs_value);
+#else
         if (image[0].pixel.ColorSpace != NULL) {
             if (context != PDF_IMAGE_TYPE3_MASK)
                 convert_to_process_colors = setup_image_colorspace(pdev, &image[0], pcs, &pcs_orig, names, &cs_value);
@@ -1428,6 +1432,7 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
                 }
             }
         }
+#endif
 
         if (pim->BitsPerComponent > 8 && convert_to_process_colors) {
             use_fallback = 1;
@@ -3005,9 +3010,112 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
         case gxdso_in_smask_construction:
             return pdev->smask_construction;
         case gxdso_pending_optional_content:
+            if (pdev->CompatibilityLevel < 1.4999) {
+                if (pdev->PDFA) {
+                    switch (pdev->PDFACompatibilityPolicy) {
+                        case 0:
+                            emprintf(pdev->memory,
+                                     "Optional Content not valid in this version of PDF, reverting to normal PDF output\n");
+                            pdev->AbortPDFAX = true;
+                            pdev->PDFA = 0;
+                            break;
+                        case 1:
+                            emprintf(pdev->memory,
+                                     "Optional Content not valid in this version of PDF. Dropping feature to preserve PDF/A compatibility\n");
+                            break;
+                        case 2:
+                            emprintf(pdev->memory,
+                                     "Optional Content not valid in this version of PDF,  aborting conversion\n");
+                            return_error (gs_error_typecheck);
+                            break;
+                        default:
+                            emprintf(pdev->memory,
+                                     "Optional Content not valid in this version of PDF, unrecognised PDFACompatibilityLevel,\nreverting to normal PDF output\n");
+                            pdev->AbortPDFAX = true;
+                            pdev->PDFA = 0;
+                            break;
+                    }
+                } else {
+                    emprintf(pdev->memory,
+                             "Optional Content not valid in this version of PDF. Dropping feature to preserve compatibility\n");
+                }
+            } else
             {
                 int64_t *object = data;
                 pdev->PendingOC = *object;
+            }
+            return 0;
+            break;
+        case gxdso_hilevel_text_clip:
+            if (data == 0) {
+                /* We are exiting a text render mode 'clip' by grestoring back to
+                 *  a time when the clip wasn't active.
+                 * First, check if we have a clip (this should always be true).
+                 */
+                if (pdev->clipped_text_pending) {
+                    /* Get back to the content stream. This will (amongst other things) flush
+                     * any pending text.
+                     */
+                    code = pdf_open_page(pdev, PDF_IN_STREAM);
+                    if (code < 0)
+                        return code;
+                    /* Reset the pending state */
+                    pdev->clipped_text_pending = 0;
+                    /* Restore to our saved state */
+
+                    /* The saved state in this case is the dpeth of the saved gstate stack at the time we
+                     * started the text clipping.
+                     */
+                    if (pdev->vgstack_bottom)
+                        pdev->vgstack_bottom = pdev->saved_vgstack_depth_for_textclip;
+
+                    while (pdev->vgstack_depth > pdev->vgstack_bottom) {
+                        code = pdf_restore_viewer_state(pdev, pdev->strm);
+                        if (code < 0)
+                            return code;
+                    }
+
+                    pdf_reset_text(pdev);	/* because of Q */
+                }
+            } else {
+                /* We are starting text in a clip mode
+                 * First make sure we aren't already in a clip mode (this shuld never be true)
+                 */
+                if (!pdev->clipped_text_pending) {
+                    /* Return to the content stream, this will (amongst other things) flush
+                     * any pending text.
+                     */
+                    code = pdf_open_page(pdev, PDF_IN_STREAM);
+                    if (code < 0)
+                        return code;
+
+                    if (pdf_must_put_clip_path(pdev, NULL)) {
+                       code = pdf_unclip(pdev);
+                        if (code < 0)
+                            return code;
+                    }
+
+                    /* Save the current graphics state (or at least that bit which we track) so
+                     * that we can put it back later.
+                     */
+                    code = pdf_save_viewer_state(pdev, pdev->strm);
+                    if (code < 0)
+                        return code;
+                    pdev->clipped_text_pending = 1;
+
+                    /* Save the current 'bottom' of the saved gstate stack, we need to
+                     * restore back to this state when we exit the graphics state
+                     * with a text rendering mode involving a clip.
+                     */
+                    pdev->saved_vgstack_depth_for_textclip = pdev->vgstack_bottom;
+                    /* And push the bottom of the stack up until it is where we are now.
+                     * This is because clip paths, images, and possibly other constructs
+                     * will emit a clip path if the 'depth - bottom' is not zero, to create
+                     * a clip path. We want to make sure that it doesn't try to restore back
+                     * to a point before we established the text clip.
+                     */
+                    pdev->vgstack_bottom = pdev->vgstack_depth;
+                }
             }
             break;
         case gxdso_get_dev_param:

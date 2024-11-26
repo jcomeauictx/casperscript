@@ -31,7 +31,8 @@ typedef enum {
     PDF14_DeviceRGB = 1,
     PDF14_DeviceCMYK = 2,
     PDF14_DeviceCMYKspot = 3,
-    PDF14_DeviceCustom = 4
+    PDF14_DeviceCustom = 4,
+    PDF14_DeviceRGBspot = 5
 } pdf14_default_colorspace_t;
 
 typedef enum {
@@ -114,6 +115,7 @@ typedef struct pdf14_group_color_s pdf14_group_color_t;
 
 struct pdf14_group_color_s {
     int num_components;
+    int num_std_colorants;
     bool isadditive;
     gx_color_polarity_t polarity;
     byte comp_shift[GX_DEVICE_COLOR_MAX_COMPONENTS]; /* These are needed for the shading code */
@@ -162,7 +164,7 @@ struct pdf14_buf_s {
     int rowstride;
     int planestride;
     int n_chan;   /* number of pixel planes including alpha */
-    int n_planes; /* total number of planes including alpha, shape, alpha_g */
+    int n_planes; /* total number of planes including alpha, shape, alpha_g and tags */
     byte *data;
     byte *transfer_fn;
     bool is_ident;

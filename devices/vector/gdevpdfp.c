@@ -119,6 +119,7 @@ static const gs_param_item_t pdf_param_items[] = {
     pi("DetectDuplicateImages", gs_param_type_bool, DetectDuplicateImages),
     pi("AllowIncrementalCFF", gs_param_type_bool, AllowIncrementalCFF),
     pi("WantsToUnicode", gs_param_type_bool, WantsToUnicode),
+    pi("WantsOptionalContent", gs_param_type_bool, WantsOptionalContent),
     pi("PdfmarkCapable", gs_param_type_bool, PdfmarkCapable),
     pi("AllowPSRepeatFunctions", gs_param_type_bool, AllowPSRepeatFunctions),
     pi("IsDistiller", gs_param_type_bool, IsDistiller),
@@ -136,6 +137,7 @@ static const gs_param_item_t pdf_param_items[] = {
     pi("ModifiesPageOrder", gs_param_type_bool, ModifiesPageOrder),
     pi("WriteObjStms", gs_param_type_bool, WriteObjStms),
     pi("WriteXRefStm", gs_param_type_bool, WriteXRefStm),
+    pi("ToUnicodeForStdEnc", gs_param_type_bool, ToUnicodeForStdEnc),
 #undef pi
     gs_param_item_end
 };
@@ -735,8 +737,38 @@ gdev_pdf_put_params_impl(gx_device * dev, const gx_device_pdf * save_dev, gs_par
     if (pdev->PDFA == 1 || pdev->PDFX || pdev->CompatibilityLevel < 1.4) {
          pdev->HaveTransparency = false;
          pdev->PreserveSMask = false;
+         pdev->WantsOptionalContent = false;
     }
 
+    /* We cannot guarantee that all page objects have a Group with a /CS (ColorSpace) entry
+     * which is a requirement for PDF/A-2+ when objects are defined in Device Independent Colour.
+     * Try and warn the user.
+     */
+    if (pdev->PDFA > 1 && pdev->params.ColorConversionStrategy == ccs_UseDeviceIndependentColor) {
+        switch (pdev->PDFACompatibilityPolicy) {
+            case 0:
+                emprintf(pdev->memory,
+                 "\n\tpdfwrite cannot guarantee creating a conformant PDF/A-2 file with device-independent colour.\n\tWe recommend converting to a device colour space.\n\tReverting to normal output.\n");
+                pdev->AbortPDFAX = true;
+                pdev->PDFX = 0;
+                break;
+            case 1:
+                emprintf(pdev->memory,
+                 "\n\tpdfwrite cannot guarantee creating a conformant PDF/A-2 file with device-independent colour.\n\tWe recommend converting to a device colour space.\n\tWe cannot ignore this request, reverting to normal output.\n");
+                break;
+            case 2:
+                emprintf(pdev->memory,
+                 "\n\tpdfwrite cannot guarantee creating a conformant PDF/A-2 file with device-independent colour.\n\tWe recommend converting to a device colour space.\n\tAborting.\n");
+                return_error(gs_error_unknownerror);
+                break;
+            default:
+                emprintf(pdev->memory,
+                 "\n\tpdfwrite cannot guarantee creating a conformant PDF/A-2 file with device-independent colour.\n\tWe recommend converting to a device colour space.\n\tReverting to normal output.\n");
+                pdev->AbortPDFAX = true;
+                pdev->PDFX = 0;
+                break;
+        }
+    }
     /*
      * We have to set version to the new value, because the set of
      * legal parameter values for psdf_put_params varies according to
@@ -784,6 +816,8 @@ gdev_pdf_put_params_impl(gx_device * dev, const gx_device_pdf * save_dev, gs_par
     if (cl < 1.2) {
         pdev->HaveCFF = false;
     }
+    if (cl < 1.5)
+        pdev->WantsOptionalContent = false;
 
     ecode = param_read_float(plist, "UserUnit", &pdev->UserUnit);
     if (ecode < 0)

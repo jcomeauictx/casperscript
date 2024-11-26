@@ -750,6 +750,7 @@ struct gx_device_pdf_s {
     pdf_article_t *articles;
     cos_dict_t *Dests;
     cos_dict_t *EmbeddedFiles;
+    cos_array_t *AF;
     byte fileID[16];
     /* Use a single time moment for all UUIDs to minimize an indeterminizm. */
     /* This needs to be a long because we call the platform code gp_get_realtime
@@ -791,6 +792,11 @@ struct gx_device_pdf_s {
      * redundant clipping paths when PS document generates such ones.
      */
     gx_path *clip_path;
+
+    /* Used for preserving text rendering modes with clip. */
+    bool clipped_text_pending;
+    int saved_vgstack_depth_for_textclip;
+
     /*
      * Page labels.
      */
@@ -900,6 +906,8 @@ struct gx_device_pdf_s {
     double    image_mask_scale;
     /* Temporary data for soft mask form. */
     pdf_resource_t *pres_soft_mask_dict;
+    /* used to track duplicate stream definitions in pdfmarks */
+    bool pdfmark_dup_stream;
     /* Temporary data for pdfmark_BP. */
     gs_const_string objname;
     int OPDFRead_procset_length;      /* PS2WRITE only. */
@@ -919,6 +927,7 @@ struct gx_device_pdf_s {
     bool WantsToUnicode;
     bool PdfmarkCapable;
     bool WantsPageLabels;
+    bool WantsOptionalContent;
     bool AllowPSRepeatFunctions;
     bool IsDistiller;
     bool PreserveSMask;
@@ -968,6 +977,7 @@ struct gx_device_pdf_s {
     int *OCRUnicode;                /* Used to pass back the Unicode value from the OCR engine to the text processing */
     gs_char OCR_char_code;          /* Passes the current character code from text processing to the image processing code when rendering glyph bitmaps for OCR */
     gs_glyph OCR_glyph;             /* Passes the current glyph code from text processing to the image processing code when rendering glyph bitmaps for OCR */
+    gs_text_enum_t *OCR_enum;       /* We need this to update the OCR char_code and glyph in gdev_pdf_fill_mask() when rendering a glyph for OCR, when using PDF input */
     ocr_glyph_t *ocr_glyphs;        /* Records bitmaps and other data from text processing when doing OCR */
     gs_gstate **initial_pattern_states;
     bool OmitInfoDate;              /* If true, do not emit CreationDate and ModDate in the Info dictionary and XMP Metadata (must not be true for PDF/X support) */
@@ -977,7 +987,8 @@ struct gx_device_pdf_s {
     bool ModifiesPageOrder;         /* If true, the new PDF interpreter will not preserve Outlines or Dests, because they will refer to the wrong page number */
     bool WriteXRefStm;              /* If true, (the default) use an XRef stream rather than an xref table */
     bool WriteObjStms;              /* If true, (the default) store candidate objects in ObjStms rather than plain text in the PDF file. */
-    int64_t PendingOC;
+    int64_t PendingOC;              /* An OptionalContent object is pending */
+    bool ToUnicodeForStdEnc;        /* Should we emit ToUnicode CMaps when a simple font has only standard glyph names. Defaults to true */
 };
 
 #define is_in_page(pdev)\
@@ -1012,7 +1023,7 @@ struct gx_device_pdf_s {
  m(39, gx_device_pdf, EmbeddedFiles);
  m(40, gx_device_pdf, pdf_font_dir);
  m(41, gx_device_pdf, Extension_Metadata);*/
-#define gx_device_pdf_num_ptrs 43
+#define gx_device_pdf_num_ptrs 44
 #define gx_device_pdf_do_param_strings(m)\
     m(0, OwnerPassword) m(1, UserPassword) m(2, NoEncrypt)\
     m(3, DocumentUUID) m(4, InstanceUUID)

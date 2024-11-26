@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -108,9 +108,20 @@ static int cmap_endcodespacerange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *
     /* increment to_pop to cover the mark object */
     numranges = to_pop++;
     while (numranges % 2) numranges--;
-    if (numranges > 200) {
-        (void)pdf_ps_stack_pop(s, to_pop);
+
+    /* The following hard limit is an implementation limit */
+    if (numranges < 0 || numranges + 1 > PDF_PS_STACK_MAX) {
+        pdfi_set_error(s->pdfi_ctx, 0, NULL, E_PDF_BAD_TYPE0_CMAP, "cmap_endcodespacerange_func", NULL);
         return_error(gs_error_syntaxerror);
+    }
+
+    /* The following "soft" limit is according to the spec */
+    if (numranges > 200) {
+        int code;
+        if ((code = pdfi_set_warning_stop(s->pdfi_ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_LIMITCHECK_TYPE0_CMAP, "cmap_endcodespacerange_func", NULL)) < 0) {
+            (void)pdf_ps_stack_pop(s, to_pop);
+            return code;
+        }
     }
 
     if (numranges > 0
@@ -161,7 +172,7 @@ static int cmap_insert_map(pdfi_cmap_range_t *cmap_range, pdfi_cmap_range_map_t 
 static int general_endcidrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, pdf_cmap *pdficmap, pdfi_cmap_range_t *cmap_range)
 {
     int ncodemaps, to_pop = pdf_ps_stack_count_to_mark(s, PDF_PS_OBJ_MARK);
-    int i, j;
+    unsigned int i, j;
     pdfi_cmap_range_map_t *pdfir;
     pdf_ps_stack_object_t *stobj;
 
@@ -171,9 +182,20 @@ static int general_endcidrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, pdf_cmap 
      * startcode, endcode and basecid
      */
     while (ncodemaps % 3) ncodemaps--;
-    if (ncodemaps > 300) {
-        (void)pdf_ps_stack_pop(s, to_pop);
+
+    /* The following hard limit is an implementation limit */
+    if (ncodemaps < 0 || ncodemaps + 1 > PDF_PS_STACK_MAX) {
+        pdfi_set_error(s->pdfi_ctx, 0, NULL, E_PDF_BAD_TYPE0_CMAP, "general_endcidrange_func", NULL);
         return_error(gs_error_syntaxerror);
+    }
+
+    /* The following "soft" limit is according to the spec */
+    if (ncodemaps > 300) {
+        int code;
+        if ((code = pdfi_set_warning_stop(s->pdfi_ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_LIMITCHECK_TYPE0_CMAP, "general_endcidrange_func", NULL)) < 0) {
+            (void)pdf_ps_stack_pop(s, to_pop);
+            return code;
+        }
     }
 
     stobj = &s->cur[-ncodemaps] + 1;
@@ -183,7 +205,10 @@ static int general_endcidrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, pdf_cmap 
 
         if (pdf_ps_obj_has_type(&(stobj[i + 2]), PDF_PS_OBJ_INTEGER)
         &&  pdf_ps_obj_has_type(&(stobj[i + 1]), PDF_PS_OBJ_STRING)
-        &&  pdf_ps_obj_has_type(&(stobj[i]), PDF_PS_OBJ_STRING)){
+        &&  pdf_ps_obj_has_type(&(stobj[i]), PDF_PS_OBJ_STRING)
+        &&  pdf_ps_obj_size(&(stobj[i])) > 0
+        &&  pdf_ps_obj_size(&(stobj[i])) == pdf_ps_obj_size(&(stobj[i + 1]))){
+
             uint cidbase = stobj[i + 2].val.i;
 
             /* First, find the length of the prefix */
@@ -198,7 +223,7 @@ static int general_endcidrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, pdf_cmap 
             }
 
             if (preflen > MAX_CMAP_CODE_SIZE || stobj[i].size - preflen > MAX_CMAP_CODE_SIZE || stobj[i + 1].size - preflen > MAX_CMAP_CODE_SIZE
-                || stobj[i].size - preflen < 0 || stobj[i + 1].size - preflen < 0) {
+                || ((int64_t)stobj[i].size) - preflen < 0 || ((int64_t)stobj[i + 1].size) - preflen < 0) {
                 (void)pdf_ps_stack_pop(s, to_pop);
                 return_error(gs_error_syntaxerror);
             }
@@ -268,7 +293,7 @@ static int cmap_endfbrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, by
 {
     pdf_cmap *pdficmap = (pdf_cmap *)s->client_data;
     int ncodemaps, to_pop = pdf_ps_stack_count_to_mark(s, PDF_PS_OBJ_MARK);
-    int i, j, k;
+    unsigned int i, j, k;
     pdfi_cmap_range_map_t *pdfir;
     pdf_ps_stack_object_t *stobj;
 
@@ -278,9 +303,19 @@ static int cmap_endfbrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, by
      */
     while (ncodemaps % 3) ncodemaps--;
 
-    if (ncodemaps > 300) {
-        (void)pdf_ps_stack_pop(s, to_pop);
+    /* The following hard limit is an implementation limit */
+    if (ncodemaps < 0 || ncodemaps + 1 > PDF_PS_STACK_MAX) {
+        pdfi_set_error(s->pdfi_ctx, 0, NULL, E_PDF_BAD_TYPE0_CMAP, "cmap_endfbrange_func", NULL);
         return_error(gs_error_syntaxerror);
+    }
+    /* The following "soft" limit is according to the spec */
+
+    if (ncodemaps > 300) {
+        int code;
+        if ((code = pdfi_set_warning_stop(s->pdfi_ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_LIMITCHECK_TYPE0_CMAP, "cmap_endfbrange_func", NULL)) < 0) {
+            (void)pdf_ps_stack_pop(s, to_pop);
+            return code;
+        }
     }
 
     stobj = &s->cur[-ncodemaps] + 1;
@@ -309,7 +344,10 @@ static int cmap_endfbrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, by
 
         if (pdf_ps_obj_has_type(&(stobj[i + 2]), PDF_PS_OBJ_ARRAY)
         &&  pdf_ps_obj_has_type(&(stobj[i + 1]), PDF_PS_OBJ_STRING)
-        &&  pdf_ps_obj_has_type(&(stobj[i]), PDF_PS_OBJ_STRING)){
+        &&  pdf_ps_obj_has_type(&(stobj[i]), PDF_PS_OBJ_STRING)
+        &&  pdf_ps_obj_size(&(stobj[i + 1])) > 0
+        &&  pdf_ps_obj_size(&(stobj[i])) > 0){
+
             uint cidbase;
             int m, size;
 
@@ -339,7 +377,7 @@ static int cmap_endfbrange_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, by
                 }
 
                 if (preflen > MAX_CMAP_CODE_SIZE || stobj[i].size - preflen > MAX_CMAP_CODE_SIZE || stobj[i + 1].size - preflen > MAX_CMAP_CODE_SIZE
-                    || stobj[i].size - preflen < 0 || stobj[i + 1].size - preflen < 0) {
+                    || ((int64_t)stobj[i].size) - preflen < 0 || ((int64_t)stobj[i + 1].size) - preflen < 0) {
                     (void)pdf_ps_stack_pop(s, to_pop);
                     return_error(gs_error_syntaxerror);
                 }
@@ -499,9 +537,17 @@ static int general_endcidchar_func(gs_memory_t *mem, pdf_ps_ctx_t *s, pdf_cmap *
      */
     while (ncodemaps % 2) ncodemaps--;
 
-    if (ncodemaps > 200) {
-        (void)pdf_ps_stack_pop(s, to_pop);
+    if (ncodemaps < 0 || ncodemaps + 1 > PDF_PS_STACK_MAX) {
+        pdfi_set_error(s->pdfi_ctx, 0, NULL, E_PDF_BAD_TYPE0_CMAP, "general_endcidchar_func", NULL);
         return_error(gs_error_syntaxerror);
+    }
+
+    if (ncodemaps > 200) {
+        int code;
+        if ((code = pdfi_set_warning_stop(s->pdfi_ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_LIMITCHECK_TYPE0_CMAP, "general_endcidchar_func", NULL)) < 0) {
+            (void)pdf_ps_stack_pop(s, to_pop);
+            return code;
+        }
     }
 
     stobj = &s->cur[-ncodemaps] + 1;
@@ -582,9 +628,19 @@ static int cmap_endbfchar_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byt
     pdf_ps_stack_object_t *stobj;
     int i, j;
 
-    if (ncodemaps > 200) {
-        (void)pdf_ps_stack_pop(s, ncodemaps);
+    /* The following hard limit is an implementation limit */
+    if (ncodemaps < 0 || ncodemaps + 1 > PDF_PS_STACK_MAX) {
+        pdfi_set_error(s->pdfi_ctx, 0, NULL, E_PDF_BAD_TYPE0_CMAP, "cmap_endbfchar_func", NULL);
         return_error(gs_error_syntaxerror);
+    }
+
+    /* The following "soft" limit is according to the spec */
+    if (ncodemaps > 200) {
+        int code;
+        if ((code = pdfi_set_warning_stop(s->pdfi_ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_LIMITCHECK_TYPE0_CMAP, "cmap_endbfchar_func", NULL)) < 0) {
+            (void)pdf_ps_stack_pop(s, ncodemaps);
+            return code;
+        }
     }
 
     stobj = &s->cur[-ncodemaps] + 1;
@@ -620,6 +676,9 @@ static int cmap_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *buf
 
     if (pdf_ps_obj_has_type(&s->cur[-1], PDF_PS_OBJ_NAME)) {
         if (!memcmp(s->cur[-1].val.name, CMAP_NAME_AND_LEN("Registry"))) {
+            if (pdficmap->csi_reg.data != NULL)
+               gs_free_object(mem, pdficmap->csi_reg.data, "cmap_def_func(Registry)");
+
             pdficmap->csi_reg.data = gs_alloc_bytes(mem, s->cur[0].size + 1, "cmap_def_func(Registry)");
             if (pdficmap->csi_reg.data != NULL) {
                 pdficmap->csi_reg.size = s->cur[0].size;
@@ -636,6 +695,9 @@ static int cmap_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *buf
             }
         }
         else if (!memcmp(s->cur[-1].val.name, CMAP_NAME_AND_LEN("Ordering"))) {
+            if (pdficmap->csi_ord.data != NULL)
+               gs_free_object(mem, pdficmap->csi_ord.data, "cmap_def_func(Ordering)");
+
             pdficmap->csi_ord.data = gs_alloc_bytes(mem, s->cur[0].size + 1, "cmap_def_func(Ordering)");
             if (pdficmap->csi_ord.data != NULL) {
                 pdficmap->csi_ord.size = s->cur[0].size;
@@ -658,6 +720,9 @@ static int cmap_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *buf
             }
         }
         else if (!memcmp(s->cur[-1].val.name, CMAP_NAME_AND_LEN("CMapName"))) {
+            if (pdficmap->name.data != NULL)
+               gs_free_object(mem, pdficmap->name.data, "cmap_def_func(CMapName)");
+
             pdficmap->name.data = gs_alloc_bytes(mem, s->cur[0].size + 1, "cmap_def_func(CMapName)");
             if (pdficmap->name.data != NULL) {
                 pdficmap->name.size = s->cur[0].size;
@@ -693,6 +758,10 @@ static int cmap_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *buf
         else if (!memcmp(s->cur[-1].val.name, CMAP_NAME_AND_LEN("XUID"))) {
             if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_ARRAY)) {
                 int len = s->cur->size;
+
+                if (pdficmap->uid.xvalues != NULL)
+                   gs_free_object(mem, pdficmap->uid.xvalues, "cmap_def_func(XUID)");
+
                 pdficmap->uid.xvalues = (long *)gs_alloc_bytes(mem, len * sizeof(*pdficmap->uid.xvalues), "cmap_def_func(XUID)");
                 if (pdficmap->uid.xvalues != NULL) {
                      int i;
@@ -715,8 +784,9 @@ static int cmap_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *buf
         else if (!memcmp(s->cur[-1].val.name, CMAP_NAME_AND_LEN("WMode"))) {
             if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_INTEGER)) {
                 if (s->cur[0].val.i != 0) {
-                    if (s->cur[0].val.i != 1)
-                        pdfi_set_warning(s->pdfi_ctx, 0, NULL, W_PDF_BAD_WMODE, "cmap_def_func", NULL);
+                    if (s->cur[0].val.i != 1) {
+                        code = pdfi_set_warning_stop(s->pdfi_ctx, gs_note_error(gs_error_rangecheck), NULL, W_PDF_BAD_WMODE, "cmap_def_func", NULL);
+                    }
                     pdficmap->wmode = 1;
                 }
                 else

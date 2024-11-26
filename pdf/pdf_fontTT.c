@@ -189,7 +189,7 @@ static uint pdfi_type42_get_glyph_index(gs_font_type42 *pfont, gs_glyph glyph)
             /* Not to spec, but... if we get a "uni..." formatted name, use
                the hex value from that.
              */
-            if (gname.size > 5 && !strncmp((char *)gname.data, "uni", 3)) {
+            if (gname.size == 7 && !strncmp((char *)gname.data, "uni", 3)) {
                 char gnbuf[64];
                 int l = (gname.size - 3) > 63 ? 63 : gname.size - 3;
 
@@ -696,10 +696,10 @@ error:
             memcpy(fname, fobj->data, fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length);
             fname[fobj->length > gp_file_name_sizeof ? gp_file_name_sizeof : fobj->length] = '\0';
 
-            pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_truetype_font", "Error reading TrueType font file %s\n", fname);
+            (void)pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_truetype_font", "Error reading TrueType font file %s\n", fname);
         }
         else {
-            pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_truetype_font", "Error reading embedded TrueType font object %u\n", font_dict->object_num);
+            (void)pdfi_set_error_var(ctx, code, NULL, E_PDF_BADSTREAM, "pdfi_read_truetype_font", "Error reading embedded TrueType font object %u\n", font_dict->object_num);
         }
     }
     else {
@@ -794,6 +794,10 @@ pdfi_copy_truetype_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dic
     (void)pdfi_dict_knownget_type(ctx, font_dict, "FontDescriptor", PDF_DICT, (pdf_obj **)&font->FontDescriptor);
 
     pdfi_countup(font->sfnt);
+    pdfi_countup(font->copyright);
+    pdfi_countup(font->notice);
+    pdfi_countup(font->fullname);
+    pdfi_countup(font->familyname);
 
     if (font->BaseFont != NULL && ((pdf_name *)font->BaseFont)->length <= gs_font_name_max) {
         memcpy(dpfont42->key_name.chars, ((pdf_name *)font->BaseFont)->data, ((pdf_name *)font->BaseFont)->length);
@@ -912,6 +916,10 @@ int pdfi_free_font_truetype(pdf_obj *font)
     pdfi_countdown(ttfont->ToUnicode);
     pdfi_countdown(ttfont->filename);
     pdfi_countdown(ttfont->post);
+    pdfi_countdown(ttfont->copyright);
+    pdfi_countdown(ttfont->notice);
+    pdfi_countdown(ttfont->fullname);
+    pdfi_countdown(ttfont->familyname);
 
     gs_free_object(OBJ_MEMORY(ttfont), ttfont, "Free TrueType font");
 

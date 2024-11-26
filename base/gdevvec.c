@@ -478,12 +478,16 @@ gdev_vector_prepare_stroke(gx_device_vector * vdev,
             int i, code;
 
             pattern = (float *)gs_alloc_bytes(vdev->memory->stable_memory, pattern_size * sizeof(float), "vector allocate dash pattern");
+            if (pattern == NULL)
+                return_error(gs_error_VMerror);
             for (i = 0; i < pattern_size; ++i)
                 pattern[i] = pgs->line_params.dash.pattern[i] * scale;
             code = (*vdev_proc(vdev, setdash))
                 (vdev, pattern, pattern_size, dash_offset);
-            if (code < 0)
+            if (code < 0) {
+                gs_free_object(vdev->memory->stable_memory, pattern, "vector free new dash pattern on error");
                 return code;
+            }
             if (vdev->dash_pattern)
                 gs_free_object(vdev->memory->stable_memory, vdev->dash_pattern, "vector free old dash pattern");
             vdev->dash_pattern = pattern;
@@ -970,7 +974,7 @@ int gdev_vector_get_param(gx_device *dev, char *Param, void *list)
 {
     gs_param_list * plist = (gs_param_list *)list;
     gs_param_string ofns;
-    bool bool_true = 1;
+    bool bool_true = 1, bool_false = 0;
 
     ofns.data = (const byte *)vdev->fname,
         ofns.size = strlen(vdev->fname),
@@ -980,6 +984,9 @@ int gdev_vector_get_param(gx_device *dev, char *Param, void *list)
     }
     if (strcmp(Param, "HighLevelDevice") == 0) {
         return param_write_bool(plist, "HighLevelDevice", &bool_true);
+    }
+    if (strcmp(Param, "SupportsRasterOPs") == 0) {
+        return param_write_bool(plist, "SupportsRasterOPs", &bool_false);
     }
     if (strcmp(Param, "NoInterpolateImagemasks") == 0) {
         return param_write_bool(plist, "NoInterpolateImagemasks", &bool_true);

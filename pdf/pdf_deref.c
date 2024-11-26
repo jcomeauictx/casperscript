@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2023 Artifex Software, Inc.
+/* Copyright (C) 2020-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -32,6 +32,10 @@
 #include "pdf_repair.h"
 
 /* Start with the object caching functions */
+/* Disable object caching (for easier debugging with reference counting)
+ * by uncommenting the following line
+ */
+/*#define DISABLE CACHE*/
 
 /* given an object, create a cache entry for it. If we have too many entries
  * then delete the leat-recently-used cache entry. Make the new entry be the
@@ -43,6 +47,7 @@
  */
 static int pdfi_add_to_cache(pdf_context *ctx, pdf_obj *o)
 {
+#ifndef DISABLE_CACHE
     pdf_obj_cache_entry *entry;
 
     if (o < PDF_TOKEN_AS_OBJ(TOKEN__LAST_KEY))
@@ -93,6 +98,7 @@ static int pdfi_add_to_cache(pdf_context *ctx, pdf_obj *o)
 
     ctx->cache_entries++;
     ctx->xref_table->xref[o->object_num].cache = entry;
+#endif
     return 0;
 }
 
@@ -101,6 +107,7 @@ static int pdfi_add_to_cache(pdf_context *ctx, pdf_obj *o)
  */
 static void pdfi_promote_cache_entry(pdf_context *ctx, pdf_obj_cache_entry *cache_entry)
 {
+#ifndef DISABLE_CACHE
     if (ctx->cache_MRU && cache_entry != ctx->cache_MRU) {
         if ((pdf_obj_cache_entry *)cache_entry->next != NULL)
             ((pdf_obj_cache_entry *)cache_entry->next)->previous = cache_entry->previous;
@@ -117,6 +124,7 @@ static void pdfi_promote_cache_entry(pdf_context *ctx, pdf_obj_cache_entry *cach
         ctx->cache_MRU->next = cache_entry;
         ctx->cache_MRU = cache_entry;
     }
+#endif
     return;
 }
 
@@ -128,6 +136,7 @@ static void pdfi_promote_cache_entry(pdf_context *ctx, pdf_obj_cache_entry *cach
  */
 int replace_cache_entry(pdf_context *ctx, pdf_obj *o)
 {
+#ifndef DISABLE_CACHE
     xref_entry *entry;
     pdf_obj_cache_entry *cache_entry;
     pdf_obj *old_cached_obj = NULL;
@@ -156,6 +165,7 @@ int replace_cache_entry(pdf_context *ctx, pdf_obj *o)
         /* Now decrement the old cache entry, if any */
         pdfi_countdown(old_cached_obj);
     }
+#endif
     return 0;
 }
 
@@ -292,9 +302,9 @@ static int pdfi_read_stream_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_
 
         (void)pdfi_loop_detector_cleartomark(ctx);
         gs_snprintf(extra_info, sizeof(extra_info), "Stream object %u missing mandatory keyword /Length, unable to verify the stream length.\n", objnum);
-        pdfi_set_error(ctx, 0, NULL, E_PDF_BADSTREAM, "pdfi_read_stream_object", extra_info);
+        code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_ioerror), NULL, E_PDF_BADSTREAM, "pdfi_read_stream_object", extra_info);
         pdfi_countdown(stream_obj); /* get rid of extra ref */
-        return 0;
+        return code;
     }
     code = pdfi_loop_detector_cleartomark(ctx);
     if (code < 0) {
@@ -306,7 +316,11 @@ static int pdfi_read_stream_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_
         char extra_info[gp_file_name_sizeof];
 
         gs_snprintf(extra_info, sizeof(extra_info), "Stream object %u has /Length which, when added to offset of object, exceeds file size.\n", objnum);
-        pdfi_set_error(ctx, 0, NULL, E_PDF_BADSTREAM, "pdfi_read_stream_object", extra_info);
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_ioerror), NULL, E_PDF_BADSTREAM, "pdfi_read_stream_object", extra_info))< 0) {
+            pdfi_pop(ctx, 1);
+            pdfi_countdown(stream_obj); /* get rid of extra ref */
+            return code;
+        }
     } else {
         code = pdfi_seek(ctx, ctx->main_stream, i, SEEK_CUR);
         if (code < 0) {
@@ -335,13 +349,18 @@ static int pdfi_read_stream_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_
             char extra_info[gp_file_name_sizeof];
 
             gs_snprintf(extra_info, sizeof(extra_info), "Failed to find 'endstream' keyword at end of stream object %u.\n", objnum);
-            pdfi_set_error(ctx, 0, NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_stream_object", extra_info);
+            if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_stream_object", extra_info)) < 0) {
+                pdfi_countdown(stream_obj); /* get rid of extra ref */
+                return code;
+            }
         } else if (code != TOKEN_ENDSTREAM) {
             char extra_info[gp_file_name_sizeof];
 
             gs_snprintf(extra_info, sizeof(extra_info), "Stream object %u has an incorrect /Length of %"PRIu64"\n", objnum, i);
-            pdfi_log_info(ctx, "pdfi_read_stream_object", extra_info);
-            pdfi_set_error(ctx, 0, NULL, E_PDF_BAD_LENGTH, "pdfi_read_stream_object", extra_info);
+            if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_BAD_LENGTH, "pdfi_read_stream_object", extra_info)) < 0) {
+                pdfi_countdown(stream_obj); /* get rid of extra ref */
+                return code;
+            }
         } else {
             /* Cache the Length in the stream object and mark it valid */
             stream_obj->Length = i;
@@ -407,13 +426,12 @@ static int pdfi_read_stream_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_
     code = pdfi_read_bare_keyword(ctx, ctx->main_stream);
     if (code < 0) {
         pdfi_countdown(stream_obj); /* get rid of extra ref */
-        if (ctx->args.pdfstoponerror)
+        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_stream_object", "")) < 0) {
             return code;
-        else
-            /* Something went wrong looking for endobj, but we found endstream, so assume
-             * for now that will suffice.
-             */
-            pdfi_set_error(ctx, 0, NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_stream_object", NULL);
+        }
+        /* Something went wrong looking for endobj, but we found endstream, so assume
+         * for now that will suffice.
+         */
         return 0;
     }
 
@@ -424,13 +442,11 @@ static int pdfi_read_stream_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_
 
     if (code != TOKEN_ENDOBJ) {
         pdfi_countdown(stream_obj); /* get rid of extra ref */
-        if (ctx->args.pdfstoponerror)
-            return_error(gs_error_typecheck);
-        pdfi_set_error(ctx, 0, NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_stream_object", NULL);
+        code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_stream_object", NULL);
         /* Didn't find an endobj, but we have an endstream, so assume
          * for now that will suffice
          */
-        return 0;
+        return code;
     }
     pdfi_countdown(stream_obj); /* get rid of extra ref */
 
@@ -459,6 +475,14 @@ int pdfi_read_bare_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_t stream_
     if (code == 0)
         /* failed to read a token */
         return_error(gs_error_syntaxerror);
+
+    if (pdfi_type_of(ctx->stack_top[-1]) == PDF_FAST_KEYWORD) {
+        keyword = (pdf_key)(uintptr_t)(ctx->stack_top[-1]);
+        if (keyword == TOKEN_ENDOBJ) {
+            ctx->stack_top[-1] = PDF_NULL_OBJ;
+            return 0;
+        }
+    }
 
     do {
         /* move all the saved offsets up by one */
@@ -505,7 +529,9 @@ int pdfi_read_bare_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_t stream_
     if (keyword == TOKEN_OBJ) {
         pdf_obj *o;
 
-        pdfi_set_error(ctx, 0, NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_bare_object", NULL);
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_bare_object", NULL)) < 0) {
+            return code;
+        }
 
         /* 4 for; the object we want, the object number, generation number and 'obj' keyword */
         if (pdfi_count_stack(ctx) - initial_depth < 4)
@@ -527,7 +553,7 @@ int pdfi_read_bare_object(pdf_context *ctx, pdf_c_stream *s, gs_offset_t stream_
 
 missing_endobj:
     /* Assume that any other keyword means a missing 'endobj' */
-    if (!ctx->args.pdfstoponerror) {
+    if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_xref_stream_dict", "")) == 0) {
         pdf_obj *o;
 
         pdfi_set_error(ctx, 0, NULL, E_PDF_MISSINGENDOBJ, "pdfi_read_bare_object", NULL);
@@ -908,10 +934,9 @@ static int pdfi_dereference_main(pdf_context *ctx, uint64_t obj, uint64_t gen, p
         char extra_info[gp_file_name_sizeof];
 
         gs_snprintf(extra_info, sizeof(extra_info), "Error, attempted to dereference object %"PRIu64", which is not present in the xref table\n", obj);
-        pdfi_set_error(ctx, 0, NULL, E_PDF_BADOBJNUMBER, "pdfi_dereference", extra_info);
-
-        if(ctx->args.pdfstoponerror)
-            return_error(gs_error_rangecheck);
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_BADOBJNUMBER, "pdfi_dereference", extra_info)) < 0) {
+            return code;
+        }
 
         code = pdfi_repair_file(ctx);
         if (code < 0) {
@@ -934,12 +959,15 @@ static int pdfi_dereference_main(pdf_context *ctx, uint64_t obj, uint64_t gen, p
     if (entry->free) {
         char extra_info[gp_file_name_sizeof];
 
-        gs_snprintf(extra_info, sizeof(extra_info), "Attempt to dereference free object %"PRIu64", trying next object number as offset.\n", entry->object_num);
-        pdfi_set_error(ctx, 0, NULL, E_PDF_DEREF_FREE_OBJ, "pdfi_dereference", extra_info);
-    }
-    if (!entry->compressed) {
-        if(entry->u.uncompressed.generation_num != gen)
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_MISMATCH_GENERATION, "pdfi_dereference_main", "");
+        gs_snprintf(extra_info, sizeof(extra_info), "Attempt to dereference free object %"PRIu64", treating as NULL object.\n", entry->object_num);
+        code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefined), NULL, E_PDF_DEREF_FREE_OBJ, "pdfi_dereference", extra_info);
+        *object = PDF_NULL_OBJ;
+        return code;
+    }else {
+        if (!entry->compressed) {
+            if(entry->u.uncompressed.generation_num != gen)
+                pdfi_set_warning(ctx, 0, NULL, W_PDF_MISMATCH_GENERATION, "pdfi_dereference_main", "");
+        }
     }
 
     if (ctx->loop_detection) {
@@ -1002,12 +1030,34 @@ static int pdfi_dereference_main(pdf_context *ctx, uint64_t obj, uint64_t gen, p
                 if (code1 == 0)
                     return pdfi_dereference_main(ctx, obj, gen, object, cache);
                 /* Repair failed, just give up and return an error */
-                return code;
+                goto error;
+            }
+
+            /* We only expect a single object back when dereferencing an indirect reference
+             * The only way (I think) we can end up with more than one is if the object initially
+             * appears to be a dictionary or array, but the object terminates (with endobj or
+             * simply reaching EOF) without terminating the array or dictionary. That's clearly
+             * an error. We might, as a future 'improvement' choose to walk back through
+             * the stack looking for unterminated dictionary or array markers, and closing them
+             * so that (hopefully!) we end up with a single 'repaired' object on the stack.
+             * But for now I'm simply going to treat these as errors. We will try a repair on the
+             * file to see if we end up using a different (hopefully intact) object from the file.
+             */
+            if (pdfi_count_stack(ctx) - stack_depth > 1) {
+                int code1 = 0;
+
+                code1 = pdfi_repair_file(ctx);
+                if (code1 == 0)
+                    return pdfi_dereference_main(ctx, obj, gen, object, cache);
+                /* Repair failed, just give up and return an error */
+                code = gs_note_error(gs_error_syntaxerror);
+                goto error;
             }
 
             if (pdfi_count_stack(ctx) > 0 &&
-                (ctx->stack_top[-1] > PDF_TOKEN_AS_OBJ(TOKEN__LAST_KEY) &&
-                (ctx->stack_top[-1])->object_num == obj)) {
+                ((ctx->stack_top[-1] > PDF_TOKEN_AS_OBJ(TOKEN__LAST_KEY) &&
+                (ctx->stack_top[-1])->object_num == obj)
+                || ctx->stack_top[-1] == PDF_NULL_OBJ)) {
                 *object = ctx->stack_top[-1];
                 pdfi_countup(*object);
                 pdfi_pop(ctx, 1);
@@ -1021,7 +1071,10 @@ static int pdfi_dereference_main(pdf_context *ctx, uint64_t obj, uint64_t gen, p
                         goto error;
                     }
                 }
-                if (cache) {
+                /* There's really no point in caching an indirect reference and
+                 * I think it could be potentially confusing to later calls.
+                 */
+                if (cache && pdfi_type_of(*object) != PDF_INDIRECT) {
                     code = pdfi_add_to_cache(ctx, *object);
                     if (code < 0) {
                         pdfi_countdown(*object);
@@ -1130,13 +1183,16 @@ static int pdfi_resolve_indirect_array(pdf_context *ctx, pdf_obj *obj, bool recu
         }
 
         if (code == gs_error_circular_reference) {
-            /* Just leave as an indirect ref */
-            code = 0;
+            /* Previously we just left as an indirect reference, but now we want
+             * to return the error so we don't end up replacing indirect references
+             * to objects with circular references.
+             */
         } else {
             if (code < 0) goto exit;
-            if (recurse)
+            if (recurse) {
                 code = pdfi_resolve_indirect_loop_detect(ctx, NULL, object, recurse);
-            if (code < 0) goto exit;
+                if (code < 0) goto exit;
+            }
             /* don't store the object if it's a stream (leave as a ref) */
             if (pdfi_type_of(object) != PDF_STREAM)
                 code = pdfi_array_put(ctx, array, index, object);
@@ -1189,11 +1245,14 @@ static int pdfi_resolve_indirect_dict(pdf_context *ctx, pdf_obj *obj, bool recur
             code = 0;
         } else {
             if (code < 0) goto exit;
+            if (recurse) {
+                code = pdfi_resolve_indirect_loop_detect(ctx, NULL, Value, recurse);
+                if (code < 0)
+                    goto exit;
+            }
             /* don't store the object if it's a stream (leave as a ref) */
             if (pdfi_type_of(Value) != PDF_STREAM)
-                pdfi_dict_put_obj(ctx, dict, (pdf_obj *)Key, Value, true);
-            if (recurse)
-                code = pdfi_resolve_indirect_loop_detect(ctx, NULL, Value, recurse);
+                code = pdfi_dict_put_obj(ctx, dict, (pdf_obj *)Key, Value, true);
         }
         if (code < 0) goto exit;
 

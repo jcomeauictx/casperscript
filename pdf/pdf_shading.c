@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -153,7 +153,7 @@ static int pdfi_shading1(pdf_context *ctx, gs_shading_params_t *pcommon,
     }
 
     code = fill_matrix_from_dict(ctx, (float *)&params.Matrix, shading_dict);
-    if (code < 0)
+    if (code < 0 && code != gs_error_undefined)
         return code;
 
     code = pdfi_build_shading_function(ctx, &params.Function, (const float *)&params.Domain, 2, (pdf_dict *)shading_dict, page_dict);
@@ -163,7 +163,8 @@ static int pdfi_shading1(pdf_context *ctx, gs_shading_params_t *pcommon,
     }
     code = gs_shading_Fb_init(ppsh, &params, ctx->memory);
     if (code < 0) {
-        gs_free_object(ctx->memory, params.Function, "Function");
+        gs_function_free(params.Function, true, ctx->memory);
+        params.Function = NULL;
         pdfi_countdown(o);
     }
     return code;
@@ -214,6 +215,8 @@ static int pdfi_shading2(pdf_context *ctx, gs_shading_params_t *pcommon,
     }
     code = gs_shading_A_init(ppsh, &params, ctx->memory);
     if (code < 0){
+        gs_function_free(params.Function, true, ctx->memory);
+        params.Function = NULL;
         pdfi_countdown(o);
         return code;
     }
@@ -266,6 +269,8 @@ static int pdfi_shading3(pdf_context *ctx,  gs_shading_params_t *pcommon,
     }
     code = gs_shading_R_init(ppsh, &params, ctx->memory);
     if (code < 0){
+        gs_function_free(params.Function, true, ctx->memory);
+        params.Function = NULL;
         pdfi_countdown(o);
         return code;
     }
@@ -277,9 +282,6 @@ static int pdfi_build_mesh_shading(pdf_context *ctx, gs_shading_mesh_params_t *p
                   pdf_obj *Shading, pdf_dict *stream_dict, pdf_dict *page_dict)
 {
     int num_decode = 4, code;
-    gs_offset_t savedoffset;
-    gs_offset_t stream_offset;
-    int64_t Length;
     byte *data_source_buffer = NULL;
     pdf_c_stream *shading_stream = NULL;
     int64_t i;
@@ -295,20 +297,8 @@ static int pdfi_build_mesh_shading(pdf_context *ctx, gs_shading_mesh_params_t *p
     params->Function = NULL;
     params->Decode = NULL;
 
-    stream_offset = pdfi_stream_offset(ctx, (pdf_stream *)Shading);
-    if (stream_offset == 0)
-        return_error(gs_error_typecheck);
-
-    Length = pdfi_stream_length(ctx, (pdf_stream *)Shading);
-
-    savedoffset = pdfi_tell(ctx->main_stream);
-    code = pdfi_seek(ctx, ctx->main_stream, stream_offset, SEEK_SET);
-    if (code < 0)
-        return code;
-
-    code = pdfi_open_memory_stream_from_filtered_stream(ctx, (pdf_stream *)Shading, Length, &data_source_buffer, ctx->main_stream, &shading_stream, false);
+    code = pdfi_open_memory_stream_from_filtered_stream(ctx, (pdf_stream *)Shading, &data_source_buffer, &shading_stream, false);
     if (code < 0) {
-        pdfi_seek(ctx, ctx->main_stream, savedoffset, SEEK_SET);
         return code;
     }
 
@@ -318,10 +308,6 @@ static int pdfi_build_mesh_shading(pdf_context *ctx, gs_shading_mesh_params_t *p
      * pointed to by the params.DataSource member.
      */
     gs_free_object(ctx->memory, shading_stream, "discard memory stream(pdf_stream)");
-
-    code = pdfi_seek(ctx, ctx->main_stream, savedoffset, SEEK_SET);
-    if (code < 0)
-        goto build_mesh_shading_error;
 
     code = pdfi_build_shading_function(ctx, &params->Function, (const float *)NULL, 1,
                                        shading_dict, page_dict);
@@ -411,7 +397,8 @@ static int pdfi_shading4(pdf_context *ctx, gs_shading_params_t *pcommon,
 
     code = gs_shading_FfGt_init(ppsh, &params, ctx->memory);
     if (code < 0) {
-        gs_free_object(ctx->memory, params.Function, "Function");
+        gs_function_free(params.Function, true, ctx->memory);
+        params.Function = NULL;
         gs_free_object(ctx->memory, params.Decode, "Decode");
         return code;
     }
@@ -450,7 +437,8 @@ static int pdfi_shading5(pdf_context *ctx, gs_shading_params_t *pcommon,
 
     code = gs_shading_LfGt_init(ppsh, &params, ctx->memory);
     if (code < 0) {
-        gs_free_object(ctx->memory, params.Function, "Function");
+        gs_function_free(params.Function, true, ctx->memory);
+        params.Function = NULL;
         gs_free_object(ctx->memory, params.Decode, "Decode");
         return code;
     }
@@ -489,7 +477,8 @@ static int pdfi_shading6(pdf_context *ctx, gs_shading_params_t *pcommon,
 
     code = gs_shading_Cp_init(ppsh, &params, ctx->memory);
     if (code < 0) {
-        gs_free_object(ctx->memory, params.Function, "Function");
+        gs_function_free(params.Function, true, ctx->memory);
+        params.Function = NULL;
         gs_free_object(ctx->memory, params.Decode, "Decode");
         return code;
     }
@@ -528,7 +517,8 @@ static int pdfi_shading7(pdf_context *ctx, gs_shading_params_t *pcommon,
 
     code = gs_shading_Tpp_init(ppsh, &params, ctx->memory);
     if (code < 0) {
-        gs_free_object(ctx->memory, params.Function, "Function");
+        gs_function_free(params.Function, true, ctx->memory);
+        params.Function = NULL;
         gs_free_object(ctx->memory, params.Decode, "Decode");
         return code;
     }

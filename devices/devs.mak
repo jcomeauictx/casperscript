@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2023 Artifex Software, Inc.
+# Copyright (C) 2001-2024 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -267,6 +267,12 @@ gdevdljm_h=$(DEVSRC)gdevdljm.h
 GDEVLDFJB2CC=$(CC_) $(I_)$(DEVI_) $(II)$(LDF_JB2I_)$(_I) $(JB2CF_) $(GLF_)
 GDEVLWFJPXCC=$(CC_) $(I_)$(DEVI_) $(II)$(LWF_JPXI_)$(_I) $(JPXCF_) $(GLF_)
 GDEVLWFJB2JPXCC=$(CC_) $(I_)$(DEVI_)  $(II)$(LDF_JB2I_) $(II)$(LWF_JPXI_)$(_I) $(JB2CF_) $(JPXCF_) $(GLF_)
+
+###### ----------------------- OCR core support ----------------------- ######
+
+ocr_=$(DEVOBJ)gdevocr.$(OBJ)
+libocr_dev=$(DEVOBJ)libocr.dev
+ocr_i_=-include $(DEVOBJ)libocr
 
 ###### ----------------------- Device support ----------------------- ######
 
@@ -736,7 +742,7 @@ $(DD)eps2write.dev : $(DD)pdfwrite.dev $(GDEV) \
 $(DD)pdfwrite.dev : $(ECHOGS_XE) $(pdfwrite_)\
  $(GLD)cmyklib.dev $(GLD)cfe.dev $(GLD)lzwe.dev\
  $(GLD)rle.dev $(GLD)sdcte.dev $(GLD)sdeparam.dev $(GLD)smd5.dev\
- $(GLD)szlibe.dev $(GLD)psdf.dev $(GLD)gsagl.dev $(GLD)sarc4.dev $(DD)pdtext.dev $(GDEV) \
+ $(GLD)szlibe.dev $(GLD)psdf.dev $(GLD)gsagl.dev $(GLD)sarc4.dev $(DD)pdtext.dev $(libocr_dev) $(GDEV)\
  $(DEVS_MAK) $(MAKEDIRS)
 	$(SETDEV2) $(DD)pdfwrite $(pdfwrite1_)
 	$(ADDMOD) $(DD)pdfwrite $(pdfwrite2_)
@@ -754,6 +760,7 @@ $(DD)pdfwrite.dev : $(ECHOGS_XE) $(pdfwrite_)\
 	$(ADDMOD) $(DD)pdfwrite -include $(GLD)smd5 $(GLD)szlibe $(GLD)sarc4.dev
 	$(ADDMOD) $(DD)pdfwrite -include $(GLD)psdf $(GLD)gsagl
 	$(ADDMOD) $(DD)pdfwrite -include $(DD)pdtext
+	$(ADDMOD) $(DD)pdfwrite $(ocr_i_)
 
 gdevpdfb_h=$(DEVVECSRC)gdevpdfb.h
 gdevpdfc_h=$(DEVVECSRC)gdevpdfc.h
@@ -1454,10 +1461,6 @@ $(DD)pam.dev : $(pxm_) $(GLD)page.dev $(GDEV)  $(DEVS_MAK) $(MAKEDIRS)
 
 ### --------------- OCR device --------------- ###
 
-ocr_=$(DEVOBJ)gdevocr.$(OBJ)
-libocr_dev=$(DEVOBJ)libocr.dev
-ocr_i_=-include $(DEVOBJ)libocr
-
 $(DEVOBJ)gdevocr.$(OBJ) : $(DEVSRC)gdevocr.c\
  $(gdevprn_h) $(gdevpccm_h) $(gscdefs_h) $(ocr__h) $(DEVS_MAK) $(MAKEDIRS)
 	$(CC_) $(I_)$(DEVI_) $(II)$(PI_)$(_I) $(PCF_) $(GLF_) $(DEVO_)gdevocr.$(OBJ) $(C_) $(DEVSRC)gdevocr.c
@@ -2016,10 +2019,22 @@ $(DD)urfcmyk.dev : $(urf) $(GLD)page.dev $(GDEV) $(DEVS_MAK) $(MAKEDIRS)
 	$(SETPDEV2) $(DD)urfcmyk $(urf)
 	$(ADDMOD) $(DD)urfcmyk -include $(GLD)page
 
-$(DEVOBJ)gdevurf.$(OBJ) : $(URFSRCDIR)$(D)gdevurf.c $(AK) $(PDEVH) \
+$(DEVOBJ)gdevurf.$(OBJ) : $(DEVSRC)gdevurf.c $(AK) $(PDEVH) \
  $(gsparam_h) $(gdevdcrd_h) $(gscrd_h) $(gscrdp_h) $(gxlum_h) $(gxdcconv_h)\
  $(gsutil_h) $(DEVS_MAK) $(MAKEDIRS)
-	$(DEVCC) $(DEVO_)gdevurf.$(OBJ) $(C_) $(URFSRCDIR)$(D)gdevurf.c
+	$(DEVCC) $(DEVO_)gdevurf.$(OBJ) $(C_) $(DEVSRC)gdevurf.c
+
+### --------------- Parallel PPM format device --------------- ###
+
+pppm_=$(DEVOBJ)gdevpppm.$(OBJ) $(DEVOBJ)gdevpccm.$(OBJ)
+
+$(DEVOBJ)gdevpppm.$(OBJ) : $(DEVSRC)gdevpppm.c \
+ $(gdevprn_h) $(gxdevsop_h) $(gdevpccm_h) $(gscdefs_h) $(ZGEN)zlibe.dev $(DEVS_MAK) $(MAKEDIRS)
+	$(CC_) $(I_)$(DEVI_) $(II)$(ZI_)$(_I) $(PCF_) $(GLF_) $(DEVO_)gdevpppm.$(OBJ) $(C_) $(DEVSRC)gdevpppm.c
+
+$(DD)pppm.dev : $(pppm_) $(GLD)page.dev $(GDEV) $(DEVS_MAK) $(MAKEDIRS)
+	$(SETPDEV2) $(DD)pppm $(pppm_)
+	$(ADDMOD) $(DD)pppm $(pppm_i_)
 
 # Dependencies:
 $(DEVSRC)gxfcopy.h:$(GLSRC)gsfont.h

@@ -46,6 +46,7 @@
 #include "gscolor3.h"       /* For gs_setsmoothness() */
 #include "gzpath.h"
 #include "gspenum.h"
+#include "gxdevsop.h"               /* For special ops */
 
 static const char *blend_mode_names[] = {
     GS_BLEND_MODE_NAMES, 0
@@ -222,7 +223,20 @@ int pdfi_op_Q(pdf_context *ctx)
             return code;
     }
 
-    return pdfi_grestore(ctx);
+    code = pdfi_grestore(ctx);
+
+    /* Special hackery for pdfwrite. If we have started doing text with a clip render mode
+     * and the output is pdfwrite, and the current (restored gstate does not have a text clipping
+     * render mode, then we need to tell pdfwrite that it must emit a 'Q'.
+     */
+    if (code >= 0 && ctx->device_state.preserve_tr_mode && ctx->text.TextClip && gs_currenttextrenderingmode(ctx->pgs) < 4) {
+        gx_device *dev = gs_currentdevice_inline(ctx->pgs);
+
+        ctx->text.TextClip = 0;
+        dev_proc(dev, dev_spec_op)(dev, gxdso_hilevel_text_clip, (void *)0, 1);
+    }
+
+    return code;
 }
 
 /* We want pdfi_grestore() so we can track and warn of "too many Qs"
@@ -587,11 +601,7 @@ static int pdfi_set_blackgeneration(pdf_context *ctx, pdf_obj *obj, pdf_dict *pa
     switch (pdfi_type_of(obj)) {
         case PDF_NAME:
             if (is_BG) {
-                pdfi_set_error(ctx, 0, NULL, E_PDF_BG_ISNAME, "pdfi_set_blackgeneration", "");
-                if (ctx->args.pdfstoponerror)
-                    code = gs_note_error(gs_error_typecheck);
-                else
-                    code = 0;
+                code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_BG_ISNAME, "pdfi_set_blackgeneration", "");
             } else {
                 if (pdfi_name_is((const pdf_name *)obj, "Identity"))
                     code = gs_setblackgeneration_remap(ctx->pgs, gs_identity_transfer, false);
@@ -599,7 +609,7 @@ static int pdfi_set_blackgeneration(pdf_context *ctx, pdf_obj *obj, pdf_dict *pa
                     code = gs_setblackgeneration_remap(ctx->pgs, ctx->page.DefaultBG.proc, false);
                     memcpy(ctx->pgs->black_generation->values, ctx->page.DefaultBG.values, transfer_map_size * sizeof(frac));
                 } else
-                    code = gs_note_error(gs_error_rangecheck);
+                    code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_BG_ISNAME, "pdfi_set_blackgeneration", "");
             }
             goto exit;
 
@@ -688,11 +698,7 @@ static int pdfi_set_undercolorremoval(pdf_context *ctx, pdf_obj *obj, pdf_dict *
     switch (pdfi_type_of(obj)) {
         case PDF_NAME:
             if (is_UCR) {
-                pdfi_set_error(ctx, 0, NULL, E_PDF_UCR_ISNAME, "pdfi_set_undercolorremoval", "");
-                if (ctx->args.pdfstoponerror)
-                    code = gs_note_error(gs_error_typecheck);
-                else
-                    code = 0;
+                code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_UCR_ISNAME, "pdfi_set_undercolorremoval", "");
             } else {
                 if (pdfi_name_is((const pdf_name *)obj, "Identity")) {
                     code = gs_setundercolorremoval_remap(ctx->pgs, gs_identity_transfer, false);
@@ -700,7 +706,7 @@ static int pdfi_set_undercolorremoval(pdf_context *ctx, pdf_obj *obj, pdf_dict *
                     code = gs_setundercolorremoval_remap(ctx->pgs, ctx->page.DefaultUCR.proc, false);
                     memcpy(ctx->pgs->undercolor_removal->values, ctx->page.DefaultUCR.values, transfer_map_size * sizeof(frac));
                 } else {
-                    code = gs_note_error(gs_error_rangecheck);
+                    code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_UCR_ISNAME, "pdfi_set_undercolorremoval", "");
                 }
             }
             goto exit;
@@ -954,11 +960,7 @@ static int pdfi_set_transfer(pdf_context *ctx, pdf_obj *obj, pdf_dict *page_dict
             goto exit;
         } else {
             if (is_TR) {
-                pdfi_set_error(ctx, 0, NULL, E_PDF_TR_NAME_NOT_IDENTITY, "pdfi_set_transfer", "");
-                if (ctx->args.pdfstoponerror)
-                    code = gs_note_error(gs_error_rangecheck);
-                else
-                    code = 0;
+                code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_TR_NAME_NOT_IDENTITY, "pdfi_set_undercolorremoval", "");
                 goto exit;
             } else {
                 if (pdfi_name_is((const pdf_name *)obj, "Default")) {
@@ -966,7 +968,7 @@ static int pdfi_set_transfer(pdf_context *ctx, pdf_obj *obj, pdf_dict *page_dict
                     memcpy(ctx->pgs->set_transfer.gray->values, ctx->page.DefaultTransfers[3].values, transfer_map_size * sizeof(frac));
                     goto exit;
                 } else {
-                    code = gs_note_error(gs_error_rangecheck);
+                    code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_TR_NAME_NOT_IDENTITY, "pdfi_set_undercolorremoval", "");
                     goto exit;
                 }
             }
@@ -1191,8 +1193,12 @@ static int build_type1_halftone(pdf_context *ctx, pdf_dict *halftone_dict, pdf_d
                 code = pdfi_array_get(ctx, (pdf_array *)obj, j, (pdf_obj **)&n);
                 if (code < 0)
                     goto error;
-                if (pdfi_type_of(n) != PDF_NAME)
-                    pdfi_set_error(ctx, 0, NULL, E_PDF_BAD_TYPE, "build_type1_halftone", "Halftone array element is not a name");
+                if (pdfi_type_of(n) != PDF_NAME) {
+                    if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_BAD_TYPE, "build_type1_halftone", "Halftone array element is not a name")) < 0) {
+                        pdfi_countdown(n);
+                        goto error;
+                    }
+                }
                 else {
                     for (i = 0; i < (sizeof(spot_table) / sizeof (char *)); i++) {
                         if (pdfi_name_is((pdf_name *)n, spot_table[i])) {
@@ -1849,9 +1855,7 @@ static int pdfi_do_halftone(pdf_context *ctx, pdf_obj *halftone_obj, pdf_dict *p
             if (code < 0)
                 goto error;
 
-            code = gs_sethalftone_prepare(ctx->pgs, pht, pdht);
-            if (code < 0)
-                goto error;
+            /* build_type5_halftone does the work of gs_sethalftone_prepare as well, so we don't need that here */
 
             code = gx_gstate_dev_ht_install(ctx->pgs, pdht, pht->type, gs_currentdevice_inline(ctx->pgs), HT_OBJTYPE_DEFAULT);
             if (code < 0)
@@ -2072,9 +2076,8 @@ static int GS_HT(pdf_context *ctx, pdf_dict *GS, pdf_dict *stream_dict, pdf_dict
     } else {
         code = pdfi_do_halftone(ctx, obj, page_dict);
     }
-    if (code < 0 && !ctx->args.pdfstoponerror) {
-        pdfi_set_error(ctx, code, NULL, E_BAD_HALFTONE, "GS_HT", "Halftone will be ignored");
-        code = 0;
+    if (code < 0) {
+        code = pdfi_set_error_stop(ctx, code, NULL, E_BAD_HALFTONE, "GS_HT", "Halftone will be ignored");
     }
 
 exit:

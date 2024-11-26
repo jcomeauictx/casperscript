@@ -85,7 +85,10 @@ int pdfi_read_Root(pdf_context *ctx)
     if (code < 0) {
         bool known = false;
 
-        pdfi_set_error(ctx, 0, NULL, E_PDF_MISSINGTYPE, "pdfi_read_Root", NULL);
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_MISSINGTYPE, "pdfi_read_Root", NULL)) < 0) {
+            pdfi_countdown(o1);
+            return code;
+        }
 
         /* Missing the *required* /Type key! See if it has /Pages at least, if it does carry on */
         code = pdfi_dict_known(ctx, (pdf_dict *)o1, "Pages", &known);
@@ -118,7 +121,11 @@ int pdfi_read_Root(pdf_context *ctx)
                 return 0;
             }
             pdfi_countdown(pages);
-            pdfi_set_error(ctx, 0, NULL, E_PDF_BAD_ROOT_TYPE, "pdfi_read_Root", NULL);
+            if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_BAD_ROOT_TYPE, "pdfi_read_Root", NULL)) < 0) {
+                pdfi_countdown(o);
+                pdfi_countdown(o1);
+                return code;
+            }
         }
         pdfi_countdown(o);
     }
@@ -157,8 +164,23 @@ static int Info_check_array(pdf_context *ctx, pdf_array *a)
                         goto error;
                 }
                 code = Info_check_dict(ctx, (pdf_dict *)array_obj);
-                if (code < 0)
+                if (code < 0) {
+                    if (array_obj->object_num != 0) {
+                        pdf_indirect_ref *i_o;
+
+                        code = pdfi_object_alloc(ctx, PDF_INDIRECT, 0, (pdf_obj **)&i_o);
+                        if (code < 0)
+                            goto error;
+                        i_o->ref_generation_num = array_obj->generation_num;
+                        i_o->ref_object_num = array_obj->object_num;
+                        i_o->indirect_num = array_obj->object_num;
+                        i_o->indirect_gen = array_obj->generation_num;
+                        code = pdfi_array_put(ctx, a, i, (pdf_obj *)i_o);
+                        if (code < 0)
+                            return code;
+                    }
                     goto error;
+                }
                 break;
             case PDF_ARRAY:
                 if (array_obj->object_num != 0) {
@@ -167,8 +189,23 @@ static int Info_check_array(pdf_context *ctx, pdf_array *a)
                         goto error;
                 }
                 code = Info_check_array(ctx, (pdf_array *)array_obj);
-                if (code < 0)
+                if (code < 0) {
+                    if (array_obj->object_num != 0) {
+                        pdf_indirect_ref *i_o;
+
+                        code = pdfi_object_alloc(ctx, PDF_INDIRECT, 0, (pdf_obj **)&i_o);
+                        if (code < 0)
+                            goto error;
+                        i_o->ref_generation_num = array_obj->generation_num;
+                        i_o->ref_object_num = array_obj->object_num;
+                        i_o->indirect_num = array_obj->object_num;
+                        i_o->indirect_gen = array_obj->generation_num;
+                        code = pdfi_array_put(ctx, a, i, (pdf_obj *)i_o);
+                        if (code < 0)
+                            return code;
+                    }
                     goto error;
+                }
                 break;
             default:
                 break;
@@ -467,7 +504,8 @@ int pdfi_read_Pages(pdf_context *ctx)
          * each node and add any leaf nodes.
          */
         for (i=0;i < a->size; i++) {
-            code = pdfi_array_get(ctx, a, i, &p);
+            /* We must not allow the entry in the array to be replaced, in case it's a circular reference */
+            code = pdfi_array_get_no_store_R(ctx, a, i, &p);
             if (code < 0)
                 continue;
             if (pdfi_type_of(p) != PDF_DICT) {
@@ -482,9 +520,17 @@ int pdfi_read_Pages(pdf_context *ctx)
             if (p->object_num != 0 && p->object_num == o1->object_num) {
                 pdfi_countdown(p);
                 p = NULL;
+                pdfi_countdown(a);
+                pdfi_countdown(o1);
                 ctx->num_pages = 0;
                 return_error(gs_error_circular_reference);
             }
+            /* Now we've checked for circular reference we can replace the entry in the
+             * array, and add the object to the cache.
+             * These are optimisations, so we don't especially care whether they succeed
+             */
+            (void)pdfi_array_put(ctx, a, i, p);
+            (void)replace_cache_entry(ctx, p);
             code = pdfi_dict_knownget_type(ctx, (pdf_dict *)p, "Type", PDF_NAME, (pdf_obj **)&p1);
             if (code <= 0) {
                 pdfi_countdown(p);
@@ -527,8 +573,13 @@ int pdfi_read_Pages(pdf_context *ctx)
      */
     if (pagecount != ctx->num_pages) {
         ctx->num_pages = pagecount;
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, E_PDF_BADPAGECOUNT, "pdfi_read_Pages", NULL)) < 0)
+            return code;
         code = pdfi_dict_put_int(ctx, (pdf_dict *)o1, "Count", ctx->num_pages);
-        pdfi_set_error(ctx, 0, NULL, E_PDF_BADPAGECOUNT, "pdfi_read_Pages", NULL);
+        if (code < 0) {
+            pdfi_countdown(o1);
+            return code;
+        }
     }
 
     /* We don't pdfi_countdown(o1) now, because we've transferred our
@@ -624,7 +675,9 @@ static int pdfi_get_child(pdf_context *ctx, pdf_array *Kids, int i, pdf_dict **p
                 code = gs_note_error(gs_error_typecheck);
                 goto errorExit;
             }
-            pdfi_set_error(ctx, 0, NULL, E_PDF_DICT_IS_STREAM, "pdfi_get_child", NULL);
+            if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_DICT_IS_STREAM, "pdfi_get_child", NULL)) < 0)
+                goto errorExit;
+
             code = pdfi_get_stream_dict(ctx, (pdf_stream *)child, &d1);
             if (code < 0)
                 goto errorExit;
@@ -656,7 +709,8 @@ static int pdfi_get_child(pdf_context *ctx, pdf_array *Kids, int i, pdf_dict **p
         } else {
             /* Bizarrely, one of the QL FTS files (FTS_07_0704.pdf) has a page diciotnary with a /Type of /Template */
             if (!pdfi_name_is(Type, "Page"))
-                pdfi_set_error(ctx, 0, NULL, E_PDF_BADPAGETYPE, "pdfi_get_child", NULL);
+                if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_BADPAGETYPE, "pdfi_get_child", NULL)) < 0)
+                    goto errorExit;
             /* Make a 'PageRef' entry (just stores an indirect reference to the actual page)
              * and store that in the Kids array for future reference. But pass on the
              * dereferenced Page dictionary, in case this is the target page.
@@ -867,8 +921,10 @@ int pdfi_get_page_dict(pdf_context *ctx, pdf_dict *d, uint64_t page_num, uint64_
                         *page_offset += 1;
                     }
                 } else {
-                    if (!pdfi_name_is(Type, "Page"))
-                        pdfi_set_error(ctx, 0, NULL, E_PDF_BADPAGETYPE, "pdfi_get_page_dict", NULL);
+                    if (!pdfi_name_is(Type, "Page")) {
+                        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_typecheck), NULL, E_PDF_BADPAGETYPE, "pdfi_get_page_dict", NULL)) < 0)
+                            goto exit;
+                    }
                     if ((*page_offset) == page_num) {
                         code = pdfi_merge_dicts(ctx, child, inheritable);
                         *target = child;
@@ -1150,8 +1206,10 @@ static int pdfi_doc_mark_the_outline(pdf_context *ctx, pdf_dict *outline)
 
         code1 = pdfi_dict_knownget_type(ctx, outline, "First", PDF_DICT, (pdf_obj **)&current);
         if (code1 > 0) {
-            if (code <= 0)
-                pdfi_set_warning(ctx, 0, NULL, W_PDF_OUTLINECHILD_NO_COUNT, "pdfi_doc_mark_the_outline", NULL);
+            if (code <= 0) {
+                if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_OUTLINECHILD_NO_COUNT, "pdfi_doc_mark_the_outline", NULL)) < 0)
+                    goto exit;
+            }
             count++;
             do {
                 code1 = pdfi_dict_knownget_type(ctx, current, "Next", PDF_DICT, (pdf_obj **)&next);
@@ -1696,7 +1754,7 @@ static int pdfi_doc_view(pdf_context *ctx)
 {
     int code = 0;
     pdf_dict *tempdict = NULL;
-    pdf_name *Mode = NULL;
+    pdf_name *Mode = NULL, *Layout = NULL;
     pdf_obj *ActionDest = NULL;
 
     code = pdfi_dict_knownget_type(ctx, ctx->Root, "PageMode", PDF_NAME, (pdf_obj **)&Mode);
@@ -1706,7 +1764,7 @@ static int pdfi_doc_view(pdf_context *ctx)
     if (code != 0) {
         code = pdfi_dict_alloc(ctx, 1, &tempdict);
         if (code < 0)
-            return code;
+            goto exit;
 
         pdfi_countup(tempdict);
 
@@ -1721,18 +1779,18 @@ static int pdfi_doc_view(pdf_context *ctx)
         tempdict = NULL;
     }
 
-    code = pdfi_dict_knownget_type(ctx, ctx->Root, "PageLayout", PDF_NAME, (pdf_obj **)&Mode);
+    code = pdfi_dict_knownget_type(ctx, ctx->Root, "PageLayout", PDF_NAME, (pdf_obj **)&Layout);
     if (code < 0)
-        return code;
+        goto exit;
 
     if (code != 0) {
         code = pdfi_dict_alloc(ctx, 1, &tempdict);
         if (code < 0)
-            return code;
+            goto exit;
 
         pdfi_countup(tempdict);
 
-        code = pdfi_dict_put(ctx, tempdict, "PageLayout", (pdf_obj *)Mode);
+        code = pdfi_dict_put(ctx, tempdict, "PageLayout", (pdf_obj *)Layout);
         if (code < 0)
             goto exit;
 
@@ -1745,14 +1803,14 @@ static int pdfi_doc_view(pdf_context *ctx)
 
     code = pdfi_dict_knownget(ctx, ctx->Root, "OpenAction", &ActionDest);
     if (code < 0)
-        return code;
+        goto exit;
 
     if (code != 0) {
         if (pdfi_type_of(ActionDest) == PDF_DICT) {
             /* Dictionary means this is an action */
             code = pdfi_dict_alloc(ctx, 1, &tempdict);
             if (code < 0)
-                return code;
+                goto exit;
 
             pdfi_countup(tempdict);
 
@@ -1769,7 +1827,7 @@ static int pdfi_doc_view(pdf_context *ctx)
                 /* Array means this is a destination */
                 code = pdfi_dict_alloc(ctx, 1, &tempdict);
                 if (code < 0)
-                    return code;
+                    goto exit;
 
                 pdfi_countup(tempdict);
 
@@ -1791,6 +1849,7 @@ static int pdfi_doc_view(pdf_context *ctx)
 
 exit:
     pdfi_countdown(ActionDest);
+    pdfi_countdown(Layout);
     pdfi_countdown(Mode);
     pdfi_countdown(tempdict);
     return code;
@@ -1807,18 +1866,15 @@ int pdfi_doc_trailer(pdf_context *ctx)
 
     /* Can't do this stuff with no Trailer */
     if (!ctx->Trailer) {
-        pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_TRAILER, "pdfi_doc_trailer", NULL);
-        if (ctx->args.pdfstoponwarning)
-            code = gs_note_error(gs_error_undefined);
-        goto exit;
+        if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_undefined), NULL, W_PDF_BAD_TRAILER, "pdfi_doc_trailer", NULL)) < 0)
+            goto exit;
     }
 
     if (ctx->device_state.writepdfmarks) {
         /* Handle Outlines */
         code = pdfi_doc_Outlines(ctx);
         if (code < 0) {
-            pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_OUTLINES, "pdfi_doc_trailer", NULL);
-            if (ctx->args.pdfstoponerror)
+            if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BAD_OUTLINES, "pdfi_doc_trailer", NULL)) < 0)
                 goto exit;
         }
 
@@ -1826,8 +1882,7 @@ int pdfi_doc_trailer(pdf_context *ctx)
         if (ctx->args.preservedocview) {
             code = pdfi_doc_view(ctx);
             if (code < 0) {
-                pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_VIEW, "pdfi_doc_view", NULL);
-                if (ctx->args.pdfstoponwarning)
+                if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BAD_VIEW, "pdfi_doc_view", NULL)) < 0)
                     goto exit;
             }
         }
@@ -1835,12 +1890,11 @@ int pdfi_doc_trailer(pdf_context *ctx)
         /* Handle Info */
         code = pdfi_doc_Info(ctx);
         if (code < 0) {
-            pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_INFO, "pdfi_doc_trailer", NULL);
             /* pdfwrite will set a Fatal error when processing the DOCINFO if it has been
              * told to create a PDF/A. the PDFA compatibility is 2, and the file info
              * cannot be handled. In that case, abort immediately.
              */
-            if (ctx->args.pdfstoponwarning || code == gs_error_Fatal)
+            if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BAD_INFO, "pdfi_doc_trailer", NULL)) < 0)
                 goto exit;
         }
 
@@ -1849,8 +1903,7 @@ int pdfi_doc_trailer(pdf_context *ctx)
         if (ctx->args.preserveembeddedfiles) {
             code = pdfi_doc_EmbeddedFiles(ctx);
             if (code < 0) {
-                pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_EMBEDDEDFILES, "pdfi_doc_trailer", NULL);
-                if (ctx->args.pdfstoponwarning)
+                if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BAD_EMBEDDEDFILES, "pdfi_doc_trailer", NULL)) < 0)
                     goto exit;
             }
         }
@@ -1862,24 +1915,21 @@ int pdfi_doc_trailer(pdf_context *ctx)
     /* Handle AcroForm -- this is some bookkeeping once per doc, not rendering them yet */
     code = pdfi_doc_AcroForm(ctx);
     if (code < 0) {
-        pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_ACROFORM, "pdfi_doc_trailer", NULL);
-        if (ctx->args.pdfstoponwarning)
+        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BAD_ACROFORM, "pdfi_doc_trailer", NULL)) < 0)
             goto exit;
     }
 
     /* Handle OutputIntent ICC Profile */
     code = pdfi_doc_OutputIntents(ctx);
     if (code < 0) {
-        pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_OUTPUTINTENTS, "pdfi_doc_trailer", NULL);
-        if (ctx->args.pdfstoponwarning)
+        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BAD_OUTPUTINTENTS, "pdfi_doc_trailer", NULL)) < 0)
             goto exit;
     }
 
     /* Handle PageLabels */
     code = pdfi_doc_PageLabels(ctx);
     if (code < 0) {
-        pdfi_set_warning(ctx, code, NULL, W_PDF_BAD_PAGELABELS, "pdfi_doc_trailer", NULL);
-        if (ctx->args.pdfstoponwarning)
+        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BAD_PAGELABELS, "pdfi_doc_trailer", NULL)) < 0)
             goto exit;
     }
 

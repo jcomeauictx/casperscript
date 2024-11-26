@@ -563,7 +563,10 @@ dnl Check for headers
 dnl --------------------------------------------------
 
 AC_HEADER_DIRENT
-AC_CHECK_HEADERS([errno.h fcntl.h limits.h malloc.h memory.h stdlib.h string.h strings.h sys/ioctl.h sys/param.h sys/time.h sys/times.h syslog.h unistd.h dirent.h ndir.h sys/dir.h sys/ndir.h inttypes.h])
+AC_CHECK_HEADERS([errno.h fcntl.h malloc.h memory.h stdlib.h strings.h sys/ioctl.h sys/param.h sys/time.h sys/times.h syslog.h unistd.h dirent.h ndir.h sys/dir.h sys/ndir.h inttypes.h])
+
+AC_CHECK_HEADER([limits.h], [CFLAGS="$CFLAGS -DHAVE_LIMITS_H=1"])
+AC_CHECK_HEADER([string.h], [CFLAGS="$CFLAGS -DHAVE_STRING_H=1"])
 
 dnl --------------------------------------------------
 dnl Sun, BSD possibly other makes don't have quite the
@@ -868,157 +871,189 @@ if test x$with_tesseract != xno; then
   AC_MSG_CHECKING([for local Tesseract library source])
   if test -d $srcdir/tesseract && test -d $srcdir/leptonica; then
     AC_MSG_RESULT([yes])
-    AC_LANG_PUSH(C++)
-    AC_PROG_CXX
-    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[return 0;]])],[HAVE_CXX_COMPILER=yes; AC_SUBST(CXX)],[HAVE_CXX_COMPILER=no])
-    if test x$HAVE_CXX_COMPILER != xyes; then
-      AC_MSG_WARN([Disabling tesseract as no working C++ compiler])
-    elif test x$SYNC = xnosync ; then
-      AC_MSG_ERROR([Threading disabled or not available. Tesseract OCR relies on threading. Rerun configure with "--without-tesseract" to exclude OCR from the build])
-    else
 
-      save_cxxflags="$CXXFLAGS"
-      cxxflags_to_try="-std=c++17 -stdlib=libstdc++"
-      CXXFLAGS_TO_USE=""
+    if test x$with_tesseract != xno; then
 
-      AC_MSG_CHECKING([supported C++ compiler flags])
-      for flag in $cxxflags_to_try ; do
-        CXXFLAGS="$CXXFLAGS $flag"
+      case $host in
+        *-aix*)
+          if test x"$GXX" = x"no" ; then
+            with_tesseract=no
+            AC_MSG_WARN([OCR devices disabled due to incompatibility with IBM AIX])
+            OCR_DEVS_WARNING_LINE1="OCR devices disabled due to incompatibility with IBM AIX"
+          else
+            CXXFLAGS="$CXXFLAGS -pthread"
+            LDFLAGS="$LDFLAGS -pthread"
+          fi
+          ;;
+        *-sun*|*-solaris*)
+          if test x"$GXX" = x"no" ; then
+            with_tesseract=no
+            AC_MSG_WARN([OCR devices disabled due to incompatibility with Oracle/Sun Solaris])
+            OCR_DEVS_WARNING_LINE1="OCR devices disabled due to incompatibility with Oracle/Sun Solaris"
+          else
+            # For some reason, the gnu std lib on Solaris (SPARC) doesn't include (all?) the atomic data
+            # types, so disable their use.
+            CXXFLAGS="$CXXFLAGS -D__STDC_NO_ATOMICS__=1"
+          fi
+          ;;
+      esac
 
-        AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <cstdlib>]], [[return 0;]])],[
-                echo "   $flag"; CXXFLAGS_TO_USE="$CXXFLAGS_TO_USE $flag"
-        ],[])
-
-        CXXFLAGS="$old_cflags"
-      done
-
-      if test x"$GXX" = x"no" || echo $CXXFLAGS_TO_USE | grep "std=c++17" ; then
-        if test x"$GXX" = x"no" ; then
-          OCR_DEVS_WARNING_LINE1="C++ compiler does not appear to be gcc or compatible, attempting to continue anyway"
-          OCR_DEVS_WARNING_LINE2="NOTE: that tesseract requires a C++17 compatible C++ compiler"
-        fi
-
-        CXXFLAGS="$save_cxxflags $CXXFLAGS_TO_USE"
-
-        dnl --------------------------------------------------
-        dnl check for sse4.1, avx, avx2 or fma
-        dnl --------------------------------------------------
-        AC_MSG_CHECKING([sse4.1 support])
-        save_cxxflags=$CXXFLAGS
-        TESS_CXXFLAGS="$CXXFLAGS"
-        CXXFLAGS="$CXXFLAGS -msse4.1"
-
-        TESS_SSE4_1=""
-        AC_LINK_IFELSE(
-          [AC_LANG_PROGRAM([#include <emmintrin.h>
-                            #include <smmintrin.h>],
-                           [__m128i input1;
-                            unsigned char buf1[[128]];
-                            input1 = _mm_loadu_si128((const __m128i *)buf1);
-                            input1 = _mm_hadd_epi32(input1, input1);
-                            return(0);
-                           ])],
-          [TESS_SSE4_1="-msse4.1"],
-          [TESS_SSE4_1=""])
-
-        if test "x$TESS_SSE4_1" != x; then
-          AC_MSG_RESULT(yes)
-          TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_SSE4_1"
-        else
-          AC_MSG_RESULT(no)
-        fi
-
-        AC_MSG_CHECKING([avx support])
-        CXXFLAGS="$save_cxxflags -mavx"
-
-        TESS_AVX=""
-        AC_LINK_IFELSE(
-          [AC_LANG_PROGRAM([#include <immintrin.h>],
-                           [__m256d input1 = _mm256_setzero_pd();
-                            input1 = _mm256_hadd_pd(input1, input1);
-                            return(0);])],
-          [TESS_AVX="-mavx"],
-          [TESS_AVX=""])
-
-        if test "x$TESS_AVX" != x; then
-          AC_MSG_RESULT(yes)
-          TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX"
-        else
-          AC_MSG_RESULT(no)
-        fi
-
-        AC_MSG_CHECKING([avx2 support])
-        CXXFLAGS="$save_cxxflags -mavx2"
-
-        TESS_AVX2=""
-        AC_LINK_IFELSE(
-          [AC_LANG_PROGRAM([#include <immintrin.h>],
-                           [__m256i input1;
-                            unsigned char buf1[[256]];
-                            input1 = _mm256_loadu_si256((const __m256i *)buf1);
-                            input1 = _mm256_adds_epu8(input1, input1);
-                            return(0);])],
-          [TESS_AVX2="-mavx2"],
-          [TESS_AVX2=""])
-
-        if test "x$TESS_AVX2" != x; then
-          AC_MSG_RESULT(yes)
-          TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX2"
-        else
-          AC_MSG_RESULT(no)
-        fi
-
-        AC_MSG_CHECKING([fma support])
-        CXXFLAGS="$save_cxxflags -mfma"
-
-        TESS_FMA=""
-        AC_LINK_IFELSE(
-          [AC_LANG_PROGRAM([#include <immintrin.h>],
-                           [__m256d input1 = _mm256_setzero_pd();
-                            input1 = _mm256_fmadd_pd(input1, input1, input1);
-                            return(0);])],
-          [TESS_FMA="-mfma"],
-          [TESS_FMA=""])
-
-        if test "x$TESS_FMA" != x; then
-          AC_MSG_RESULT(yes)
-          TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_FMA"
-        else
-          AC_MSG_RESULT(no)
-        fi
-
-        AC_MSG_CHECKING([neon support])
-        CXXFLAGS="$save_cxxflags -mfpu=neon -mcpu=cortex-a53"
-
-        TESS_NEON=""
-        AC_LINK_IFELSE(
-         [AC_LANG_PROGRAM([#include "arm_neon.h"],
-                          [int32x4_t round = vdupq_n_s32(10);
-                           return(0);])],
-         [TESS_NEON="-mfpu=neon -mcpu=cortex-a53 -D__ARM_NEON__"],
-         [TESS_NEON=""])
-
-        if test "x$TESS_NEON" != x && test "x$enable_neon" != xno; then
-          AC_MSG_RESULT(yes)
-          TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_NEON"
-        else
-          AC_MSG_RESULT(no)
-          TESS_NEON=""
-        fi
-
-        CXXFLAGS="$save_cxxflags"
-
-        OCR_VERSION=1
-        OCR_SHARED=0
-        OCR_DEVS="\$(DD)ocr.dev \$(DD)hocr.dev \$(DD)pdfocr8.dev \$(DD)pdfocr24.dev \$(DD)pdfocr32.dev"
-        LEPTONICAINCLUDE="include \$(GLSRCDIR)/leptonica.mak"
-        TESSERACTINCLUDE="include \$(GLSRCDIR)/tesseract.mak"
-        TESSERACT_LIBS="-lstdc++"
+      AC_LANG_PUSH(C++)
+      AC_PROG_CXX
+      AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[return 0;]])],[HAVE_CXX_COMPILER=yes; AC_SUBST(CXX)],[HAVE_CXX_COMPILER=no])
+      if test x$HAVE_CXX_COMPILER != xyes; then
+        AC_MSG_WARN([Disabling tesseract as no working C++ compiler])
+      elif test x$SYNC = xnosync ; then
+        AC_MSG_ERROR([Threading disabled or not available. Tesseract OCR relies on threading. Rerun configure with "--without-tesseract" to exclude OCR from the build])
       else
-        OCR_DEVS_WARNING_LINE1="OCR devices disabled due to incompatible compiler: tesseract requires a C++17 compatible compiler"
+
+        save_cxxflags="$CXXFLAGS"
+        save_ldflags="$LDFLAGS"
+        cxxflags_to_try="-std=c++17 -stdlib=libstdc++"
+        CXXFLAGS_TO_USE=""
+
+        AC_MSG_CHECKING([supported C++ compiler flags])
+        for flag in $cxxflags_to_try ; do
+          CXXFLAGS="$CXXFLAGS $flag"
+
+          AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[#include <cstdlib>]], [[return 0;]])],[
+                  echo "   $flag"; CXXFLAGS_TO_USE="$CXXFLAGS_TO_USE $flag"
+          ],[])
+
+          CXXFLAGS="$old_cflags"
+        done
+
+        if test x"$GXX" = x"no" || echo $CXXFLAGS_TO_USE | grep "std=c++17" ; then
+          if test x"$GXX" = x"no" ; then
+            OCR_DEVS_WARNING_LINE1="C++ compiler does not appear to be gcc or compatible, attempting to continue anyway"
+            OCR_DEVS_WARNING_LINE2="NOTE: that tesseract requires a C++17 compatible C++ compiler"
+          fi
+
+          CXXFLAGS="$save_cxxflags $CXXFLAGS_TO_USE"
+
+          dnl --------------------------------------------------
+          dnl check for sse4.1, avx, avx2 or fma
+          dnl --------------------------------------------------
+          AC_MSG_CHECKING([sse4.1 support])
+          save_cxxflags=$CXXFLAGS
+          TESS_CXXFLAGS="$CXXFLAGS"
+          CXXFLAGS="$CXXFLAGS -msse4.1"
+
+          TESS_SSE4_1=""
+          AC_LINK_IFELSE(
+            [AC_LANG_PROGRAM([#include <emmintrin.h>
+                              #include <smmintrin.h>],
+                             [__m128i input1;
+                              unsigned char buf1[[128]];
+                              input1 = _mm_loadu_si128((const __m128i *)buf1);
+                              input1 = _mm_hadd_epi32(input1, input1);
+                              return(0);
+                             ])],
+            [TESS_SSE4_1="-msse4.1"],
+            [TESS_SSE4_1=""])
+
+          if test "x$TESS_SSE4_1" != x; then
+            AC_MSG_RESULT(yes)
+            TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_SSE4_1"
+          else
+            AC_MSG_RESULT(no)
+          fi
+
+          AC_MSG_CHECKING([avx support])
+          CXXFLAGS="$save_cxxflags -mavx"
+
+          TESS_AVX=""
+          AC_LINK_IFELSE(
+            [AC_LANG_PROGRAM([#include <immintrin.h>],
+                             [__m256d input1 = _mm256_setzero_pd();
+                              input1 = _mm256_hadd_pd(input1, input1);
+                              return(0);])],
+            [TESS_AVX="-mavx"],
+            [TESS_AVX=""])
+
+          if test "x$TESS_AVX" != x; then
+            AC_MSG_RESULT(yes)
+            TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX"
+          else
+            AC_MSG_RESULT(no)
+          fi
+
+          AC_MSG_CHECKING([avx2 support])
+          CXXFLAGS="$save_cxxflags -mavx2"
+
+          TESS_AVX2=""
+          AC_LINK_IFELSE(
+            [AC_LANG_PROGRAM([#include <immintrin.h>],
+                             [__m256i input1;
+                              unsigned char buf1[[256]];
+                              input1 = _mm256_loadu_si256((const __m256i *)buf1);
+                              input1 = _mm256_adds_epu8(input1, input1);
+                              return(0);])],
+            [TESS_AVX2="-mavx2"],
+            [TESS_AVX2=""])
+
+          if test "x$TESS_AVX2" != x; then
+            AC_MSG_RESULT(yes)
+            TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_AVX2"
+          else
+            AC_MSG_RESULT(no)
+          fi
+
+          AC_MSG_CHECKING([fma support])
+          CXXFLAGS="$save_cxxflags -mfma"
+
+          TESS_FMA=""
+          AC_LINK_IFELSE(
+            [AC_LANG_PROGRAM([#include <immintrin.h>],
+                             [__m256d input1 = _mm256_setzero_pd();
+                              input1 = _mm256_fmadd_pd(input1, input1, input1);
+                              return(0);])],
+            [TESS_FMA="-mfma"],
+            [TESS_FMA=""])
+
+          if test "x$TESS_FMA" != x; then
+            AC_MSG_RESULT(yes)
+            TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_FMA"
+          else
+            AC_MSG_RESULT(no)
+          fi
+
+          AC_MSG_CHECKING([neon support])
+          CXXFLAGS="$save_cxxflags"
+          LDFLAGS="$save_ldflags -mfpu=neon -mcpu=cortex-a53"
+
+          TESS_NEON=""
+          AC_LINK_IFELSE(
+           [AC_LANG_PROGRAM([#include "arm_neon.h"],
+                            [int32x4_t round = vdupq_n_s32(10);
+                             return(0);])],
+           [TESS_NEON="-D__ARM_NEON__"],
+           [TESS_NEON=""])
+
+          if test "x$TESS_NEON" != x && test "x$enable_neon" != xno; then
+            AC_MSG_RESULT(yes)
+            TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_NEON"
+            LDFLAGS="$save_ldflags -mfpu=neon -mcpu=cortex-a53"
+          else
+            AC_MSG_RESULT(no)
+            TESS_NEON=""
+            LDFLAGS="$save_ldflags"
+          fi
+
+          CXXFLAGS="$save_cxxflags"
+
+          OCR_VERSION=1
+          OCR_SHARED=0
+          OCR_DEVS="\$(DD)ocr.dev \$(DD)hocr.dev \$(DD)pdfocr8.dev \$(DD)pdfocr24.dev \$(DD)pdfocr32.dev"
+          LEPTONICAINCLUDE="include \$(GLSRCDIR)/leptonica.mak"
+          TESSERACTINCLUDE="include \$(GLSRCDIR)/tesseract.mak"
+          TESSERACT_LIBS="-lstdc++"
+        else
+          OCR_DEVS_WARNING_LINE1="OCR devices disabled due to incompatible compiler: tesseract requires a C++17 compatible compiler"
+        fi
       fi
+      AC_LANG_POP()
     fi
-    AC_LANG_POP()
   else
     AC_MSG_RESULT([no])
     AC_MSG_CHECKING(for C++ compiler)
@@ -1075,7 +1110,6 @@ AC_SUBST(LEPTONICAINCLUDE)
 AC_SUBST(TESSERACTINCLUDE)
 AC_SUBST(LEPTONICADIR)
 AC_SUBST(TESSERACTDIR)
-AC_SUBST(OCR_DEVS)
 AC_SUBST(OCR_VERSION)
 AC_SUBST(OCR_SHARED)
 AC_SUBST(TESS_AVX)
@@ -2277,9 +2311,7 @@ AC_SUBST(SHARE_JPX)
 AC_SUBST(JPXDEVS)
 
 ENABLEURF=
-URF_DEVS=''
 URF_INCLUDE=
-URF_DEV=
 SURFX_H=
 AC_ARG_WITH([urf], AS_HELP_STRING([--without-urf],
     [do not try to include URF support]))
@@ -2289,18 +2321,17 @@ if test x$with_urf != xno; then
   if test -d $srcdir/urf; then
     AC_MSG_RESULT([yes])
     ENABLEURF="\$(D_)URF_INCLUDED\$(_D)"
-    URF_DEVS='urfgray urfrgb urfcmyk'
     GPDL_URF_TOP_OBJ="\$(GPDLOBJ)/\$(GPDL_URF_TOP_OBJ_FILE)"
     URF_INCLUDE="\$(I_)\$(URFSRCDIR)\$(_I)"
-    URF_DEV="\$(GLD)urfd.dev"
     SURFX_H="\$(URFSRCDIR)\$(D)surfx.h"
-fi
+  else
+    AC_MSG_RESULT([no])
+  fi
 fi
 
 AC_SUBST(ENABLEURF)
 AC_SUBST(GPDL_URF_TOP_OBJ)
 AC_SUBST(URF_INCLUDE)
-AC_SUBST(URF_DEV)
 AC_SUBST(SURFX_H)
 
 ENABLESO=
@@ -2331,6 +2362,8 @@ if test x$with_so != xno; then
             SO_PDFEXPORT_LIB="\$(SOSRCDIR)/lib/macos/x64/smart-office-lib.a"
         ;;
     esac
+  else
+    AC_MSG_RESULT([no])
   fi
 fi
 
@@ -2340,6 +2373,13 @@ AC_SUBST(SO_PDFEXPORT_LIB)
 
 AC_ARG_WITH([cal], AS_HELP_STRING([--without-cal],
     [do not try to use the CAL library for acceleration]))
+
+if test x"$WHICHLCMS" != x"lcms2mt"; then
+  with_cal=no
+  if test -d $srcdir/cal; then
+    AC_MSG_WARN([CAL dependency lcms2mt missing..... disabling CAL])
+  fi
+fi
 
 CALSRCDIR=$srcdir/cal
 if test x$with_cal != xno; then
@@ -2713,6 +2753,7 @@ AC_ARG_WITH(drivers,
                           PNG      = Output to PNG
                           PS       = Output to PostScript/PDF
                           TIFF     = Output to TIFF
+                          URF      = Output to URF
                           You can mix both variants, e.g.
                           --with-drivers=HP,stcolor would build HP drivers and
                           the Epson stcolor driver.
@@ -2762,12 +2803,13 @@ ETS_HALFTONING_DEVS='rinkj'
 
 dnl Known file formats
 BMP_DEVS='bmpmono bmpgray bmpsep1 bmpsep8 bmp16 bmp256 bmp16m bmp32b'
+URF_DEVS='urfgray urfrgb urfcmyk'
 
 JPEG_DEVS='jpeg jpeggray jpegcmyk'
 # PNG_DEVS='png16 png16m png256 pngalpha pnggray pngmono'
 
 PCX_DEVS='pcxmono pcxgray pcx16 pcx256 pcx24b pcxcmyk'
-PBM_DEVS='pbm pbmraw pgm pgmraw pgnm pgnmraw pnm pnmraw ppm ppmraw pkm pkmraw pksm pksmraw pam pamcmyk4 pamcmyk32 plan plang planm planc plank'
+PBM_DEVS='pbm pbmraw pgm pgmraw pgnm pgnmraw pnm pnmraw ppm ppmraw pkm pkmraw pksm pksmraw pam pamcmyk4 pamcmyk32 plan plang planm planc plank pppm'
 PS_DEVS='psdf psdcmyk psdrgb psdcmyk16 psdrgb16 psdcmyktags psdrgbtags psdcmyktags16 pdfwrite ps2write eps2write bbox txtwrite inkcov ink_cov psdcmykog fpng pdfimage8 pdfimage24 pdfimage32 PCLm PCLm8'
 
 # Handle --with-extract-dir=EXTRACT_DIR - build extract library and docxwrite
@@ -2809,13 +2851,13 @@ while test -n "$drivers"; do
         ALL)
                 # ALL = PRINTERS + FILES...
                 if test -z "$drivers"; then
-                        drivers="PRINTERS,FILES,X11"
+                        drivers="PRINTERS,FILES,X11,OCR"
                 else
-                        drivers="$drivers,PRINTERS,FILES,X11"
+                        drivers="$drivers,PRINTERS,FILES,X11,OCR"
                 fi
                 ;;
         PRINTERS)
-                P_DEVS0="$P_DEVS0 $CANON_DEVS $EPSON_DEVS $HP_DEVS $LEXMARK_DEVS $BROTHER_DEVS $APPLE_DEVS $IBM_DEVS $OKI_DEVS $JAPAN_DEVS $MISC_PDEVS $ETS_HALFTONING_DEVS $URF_DEVS"
+                P_DEVS0="$P_DEVS0 $CANON_DEVS $EPSON_DEVS $HP_DEVS $LEXMARK_DEVS $BROTHER_DEVS $APPLE_DEVS $IBM_DEVS $OKI_DEVS $JAPAN_DEVS $MISC_PDEVS $ETS_HALFTONING_DEVS"
                 IJS_DEVS0="$IJSDEVS"
                 if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
                         P_DEVS0="$P_DEVS0 $OPVP_DEVS"
@@ -2824,7 +2866,7 @@ while test -n "$drivers"; do
                 fi
                 ;;
         FILES)
-                F_DEVS0="$F_DEVS0 $BMP_DEVS $FAX_DEVS $JPEG_DEVS $TIFFDEVS $PCX_DEVS $PBM_DEVS $PS_DEVS $MISC_FDEVS $XPSDEV"
+                F_DEVS0="$F_DEVS0 $BMP_DEVS $FAX_DEVS $JPEG_DEVS $TIFFDEVS $PCX_DEVS $PBM_DEVS $PS_DEVS $MISC_FDEVS $XPSDEV $URF_DEVS"
                 CUPS_DEVS0="$CUPSDEV"
                 JBIG2_DEVS="$JBIG2FILEDEVS"
                 PNG_DEVS0="$PNGDEVS"
@@ -2926,6 +2968,14 @@ while test -n "$drivers"; do
                 # X11 display devices
                 X11_DEVS0="$X_DEVS"
                 ;;
+        URF)
+                # URF file format
+                F_DEVS0="$F_DEVS0 $URF_DEVS"
+                ;;
+        OCR)
+                # OCR specific devices
+                OCR_DEVS0="$OCR_DEVS"
+                ;;
         opvp)
                 # Open Vector Printing driver...
                 if test x$ac_cv_lib_dl_dlopen != xno -a x$found_iconv != xno; then
@@ -2994,6 +3044,7 @@ AC_SUBST(XPS_DEVS)
 AC_SUBST(JBIG2_DEVS)
 AC_SUBST(IJS_DEVS)
 AC_SUBST(PNG_DEVS)
+AC_SUBST(OCR_DEVS0)
 
 # This now gets done after handling --enable-dynamic
 # AC_SUBST(X11_DEVS)

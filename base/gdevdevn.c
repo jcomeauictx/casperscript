@@ -334,6 +334,19 @@ devn_get_color_comp_index(gx_device * dev, gs_devn_params * pdevn_params,
     if (strncmp(pname, "None", name_size) == 0) {
         return -1;
     }
+    /* Additive devices should NOT have C/M/Y/K Colorants added to them.
+     * This is a decision we take here to avoid problems with PDFI not
+     * counting such colorants as spots. */
+    if (dev->color_info.polarity == GX_CINFO_POLARITY_ADDITIVE) {
+        if (name_size == 5 && strncmp(pname, "Black", 7) == 0)
+            return -1;
+        if (name_size == 4 && strncmp(pname, "Cyan", 4) == 0)
+            return -1;
+        if (name_size == 7 && strncmp(pname, "Magenta", 7) == 0)
+            return -1;
+        if (name_size == 6 && strncmp(pname, "Yellow", 6) == 0)
+            return -1;
+    }
 
     /*
      * Check if we have room for another spot colorant.
@@ -375,6 +388,18 @@ devn_get_color_comp_index(gx_device * dev, gs_devn_params * pdevn_params,
 #define set_param_array(a, d, s)\
   (a.data = d, a.size = s, a.persistent = false);
 
+static int
+gs_device_supports_spots(gx_device *pdev)
+{
+        /* Separations are only valid with a subtractive color model,
+         * or additive ones that specifically want them. */
+        if (pdev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE)
+                return 1;
+        else if (pdev->color_info.polarity == GX_CINFO_POLARITY_ADDITIVE)
+                return (dev_proc(pdev, dev_spec_op)(pdev, gxdso_is_sep_supporting_additive_device, NULL, 0) > 0);
+        return 0;
+}
+
 /* Get parameters.  We provide a default CRD. */
 int
 devn_get_params(gx_device * pdev, gs_param_list * plist,
@@ -389,7 +414,6 @@ devn_get_params(gx_device * pdev, gs_param_list * plist,
     int equiv_elements[5 * GX_DEVICE_MAX_SEPARATIONS] = { 0 }; /* 5 * max_colors */
     /* limit in case num_separations in pdevn_params exceeds what is expected. */
     int num_separations = min(pdevn_params->separations.num_separations, sizeof(equiv_elements)/(5*sizeof(int)));
-
 
     set_param_array(scna, NULL, 0);
     set_param_array(sona, NULL, 0);
@@ -414,7 +438,7 @@ devn_get_params(gx_device * pdev, gs_param_list * plist,
          (code = param_write_bool(plist, "Separations", &seprs)) < 0)
         return code;
 
-    if (pdev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE &&
+    if (gs_device_supports_spots(pdev) &&
         (code = param_write_int(plist, "PageSpotColors", &(pdevn_params->page_spot_colors))) < 0)
         return code;
 
@@ -499,8 +523,7 @@ devn_put_params(gx_device * pdev, gs_param_list * plist,
         return_error(gs_error_rangecheck);
     }
 
-    /* Separations are only valid with a subtractive color model */
-    if (pdev->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE) {
+    if (gs_device_supports_spots(pdev)) {
         /*
          * Process the SeparationColorNames.  Remove any names that already
          * match the process color model colorant names for the device.

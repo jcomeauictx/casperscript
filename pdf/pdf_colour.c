@@ -87,6 +87,7 @@ static int pdfi_check_for_spots_by_name(pdf_context *ctx, pdf_name *name,
         if (pdfi_type_of(ref_space) == PDF_NAME) {
             if (pdfi_name_cmp(name, (pdf_name *)ref_space) == 0) {
                 pdfi_set_error(ctx, gs_error_circular_reference, NULL, E_PDF_CIRCULARNAME, NULL, NULL);
+                pdfi_countdown(ref_space);
                 return_error(gs_error_circular_reference);
             }
         }
@@ -239,6 +240,10 @@ static int pdfi_check_for_spots_by_array(pdf_context *ctx, pdf_array *color_arra
             code = gs_note_error(gs_error_typecheck);
             goto exit;
         }
+        if (a == color_array) {
+            code = gs_note_error(gs_error_circular_reference);
+            goto exit;
+        }
 
         /* recursion */
         code = pdfi_check_for_spots_by_array(ctx, a, parent_dict, page_dict, spot_dict);
@@ -354,7 +359,7 @@ int pdfi_gs_setgray(pdf_context *ctx, double d)
 
     /* PDF Reference 1.7 p423, any colour operators in a CharProc, following a d1, should be ignored */
     if (ctx->text.inside_CharProc && ctx->text.CharProc_d_type != pdf_type3_d0) {
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setgray", "");
+        pdfi_log_info(ctx, "pdfi_gs_setgray", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -392,7 +397,7 @@ int pdfi_gs_setrgbcolor(pdf_context *ctx, double r, double g, double b)
 
     /* PDF Reference 1.7 p423, any colour operators in a CharProc, following a d1, should be ignored */
     if (ctx->text.inside_CharProc && ctx->text.CharProc_d_type != pdf_type3_d0) {
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setrgbcolor", "");
+        pdfi_log_info(ctx, "pdfi_gs_setrgbcolor", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -432,7 +437,7 @@ static int pdfi_gs_setcmykcolor(pdf_context *ctx, double c, double m, double y, 
 
     /* PDF Reference 1.7 p423, any colour operators in a CharProc, following a d1, should be ignored */
     if (ctx->text.inside_CharProc && ctx->text.CharProc_d_type != pdf_type3_d0) {
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setcmykcolor", "");
+        pdfi_log_info(ctx, "pdfi_gs_setcmykcolor", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -476,7 +481,7 @@ int pdfi_gs_setcolorspace(pdf_context *ctx, gs_color_space *pcs)
     if (ctx->pgs->color[0].color_space->id != pcs->id) {
         /* PDF Reference 1.7 p423, any colour operators in a CharProc, following a d1, should be ignored */
         if (ctx->text.inside_CharProc && ctx->text.CharProc_d_type != pdf_type3_d0) {
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setcolorspace", "");
+            pdfi_log_info(ctx, "pdfi_gs_setcolorspace", "colour operator in a CharProc, following a d1 ignored");
             return 0;
         }
 
@@ -684,7 +689,7 @@ int pdfi_setstrokecolor(pdf_context *ctx)
          * Just clear the stack and hope for the best.
          */
         pdfi_clearstack(ctx);
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setrgbcolor", "");
+        pdfi_log_info(ctx, "pdfi_setstrokecolor", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -716,7 +721,7 @@ int pdfi_setfillcolor(pdf_context *ctx)
          * Just clear the stack and hope for the best.
          */
         pdfi_clearstack(ctx);
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setrgbcolor", "");
+        pdfi_log_info(ctx, "pdfi_setfillcolor", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -756,7 +761,7 @@ pdfi_setcolorN(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict, boo
          * Just clear the stack and hope for the best.
          */
         pdfi_clearstack(ctx);
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setrgbcolor", "");
+        pdfi_log_info(ctx, "pdfi_setcolorN", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -791,8 +796,7 @@ pdfi_setcolorN(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict, boo
         pdfi_countdown(n);
         if (code < 0) {
             /* Ignore the pattern if we failed to set it */
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_BADPATTERN, "pdfi_setcolorN", (char *)"PATTERN: Error setting pattern");
-            code = 0;
+            code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_BADPATTERN, "pdfi_setcolorN", (char *)"PATTERN: Error setting pattern");
             goto cleanupExit1;
         }
         if (base_space && pattern_instance_uses_base_space(cc.pattern))
@@ -947,7 +951,8 @@ static int pdfi_create_icc(pdf_context *ctx, char *Name, stream *s, int ncomps, 
     /* Return the number of components the ICC profile has */
     *icc_N = expected;
     if (expected != ncomps) {
-        pdfi_set_error(ctx, 0, NULL, E_PDF_ICC_BAD_N, "pdfi_create_icc", "");
+        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, E_PDF_ICC_BAD_N, "pdfi_create_icc", "")) < 0)
+            goto exit;
         ncomps = expected;
     }
 
@@ -1022,6 +1027,7 @@ static int pdfi_create_icc(pdf_context *ctx, char *Name, stream *s, int ncomps, 
         rc_decrement_only_cs(pcs, "pdfi_create_icc");
     }
 
+exit:
     /* The context has taken a reference to the colorspace. We no longer need
      * ours, so drop it. */
     rc_decrement(picc_profile, "pdfi_create_icc");
@@ -1033,7 +1039,6 @@ static int pdfi_create_iccprofile(pdf_context *ctx, pdf_stream *ICC_obj, char *c
 {
     pdf_c_stream *profile_stream = NULL;
     byte *profile_buffer;
-    gs_offset_t savedoffset;
     int code, code1;
     ulong dictkey = 0;
 
@@ -1064,10 +1069,6 @@ static int pdfi_create_iccprofile(pdf_context *ctx, pdf_stream *ICC_obj, char *c
         }
     }
 
-    /* Save the current stream position, and move to the start of the profile stream */
-    savedoffset = pdfi_tell(ctx->main_stream);
-    pdfi_seek(ctx, ctx->main_stream, pdfi_stream_offset(ctx, ICC_obj), SEEK_SET);
-
     /* The ICC profile reading code (irritatingly) requires a seekable stream, because it
      * rewinds it to the start, then seeks to the end to find the size, then rewinds the
      * stream again.
@@ -1075,9 +1076,8 @@ static int pdfi_create_iccprofile(pdf_context *ctx, pdf_stream *ICC_obj, char *c
      * implemented in PostScript (!) so we can't use it. What we can do is create a
      * string sourced stream in memory, which is at least seekable.
      */
-    code = pdfi_open_memory_stream_from_filtered_stream(ctx, ICC_obj, Length, &profile_buffer, ctx->main_stream, &profile_stream, true);
+    code = pdfi_open_memory_stream_from_filtered_stream(ctx, ICC_obj, &profile_buffer, &profile_stream, true);
     if (code < 0) {
-        pdfi_seek(ctx, ctx->main_stream, savedoffset, SEEK_SET);
         return code;
     }
 
@@ -1088,8 +1088,6 @@ static int pdfi_create_iccprofile(pdf_context *ctx, pdf_stream *ICC_obj, char *c
 
     if (code == 0)
         code = code1;
-
-    pdfi_seek(ctx, ctx->main_stream, savedoffset, SEEK_SET);
 
     return code;
 }
@@ -2095,7 +2093,8 @@ static int pdfi_create_DeviceN(pdf_context *ctx, pdf_array *color_array, int ind
             return code;
 
         if (ink_name->length == 3 && memcmp(ink_name->data, "All", 3) == 0) {
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_DEVICEN_USES_ALL, "pdfi_create_DeviceN", (char *)"WARNING: DeviceN space using /All ink name");
+            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_rangecheck), NULL, W_PDF_DEVICEN_USES_ALL, "pdfi_create_DeviceN", (char *)"WARNING: DeviceN space using /All ink name")) < 0)
+                return code;
         }
         pdfi_countdown(ink_name);
         ink_name = NULL;
@@ -2502,7 +2501,6 @@ pdfi_create_indexed(pdf_context *ctx, pdf_array *color_array, int index,
         break;
     case PDF_STRING:
     {
-        /* This is not legal, but Acrobat seems to accept it */
         pdf_string *lookup_string = (pdf_string *)lookup; /* alias */
 
         Buffer = gs_alloc_bytes(ctx->memory, lookup_string->length, "pdfi_create_indexed (lookup buffer)");
@@ -2521,10 +2519,21 @@ pdfi_create_indexed(pdf_context *ctx, pdf_array *color_array, int index,
     }
 
     if (num_values > lookup_length) {
-        dmprintf2(ctx->memory, "WARNING: pdfi_create_indexed() got %"PRIi64" values, expected at least %d values\n",
-                  lookup_length, num_values);
-        code = gs_note_error(gs_error_rangecheck);
-        goto exit;
+        /* This is not legal, but Acrobat seems to accept it */
+        byte *SBuffer = NULL;
+
+        code = pdfi_set_error_stop(ctx, gs_error_rangecheck, NULL, E_PDF_BAD_INDEXED_STRING, "pdfi_create_indexed", NULL);
+        if (code < 0)
+            goto exit;
+        SBuffer = gs_alloc_bytes(ctx->memory, num_values, "pdfi_create_indexed (lookup buffer)");
+        if (SBuffer == NULL) {
+            code = gs_note_error(gs_error_VMerror);
+            goto exit;
+        }
+        memcpy(SBuffer, Buffer, lookup_length);
+        memset(&SBuffer[lookup_length], 0x00, num_values - lookup_length);
+        gs_free_object(ctx->memory, Buffer, "pdfi_create_indexed (lookup buffer)");
+        Buffer = SBuffer;
     }
 
     /* If we have a named color profile and the base space is DeviceN or
@@ -2685,9 +2694,8 @@ pdfi_create_colorspace_by_array(pdf_context *ctx, pdf_array *color_array, int in
     code = 0;
     if (pdfi_name_is(space, "G") || pdfi_name_is(space, "DeviceGray")) {
         if (pdfi_name_is(space, "G") && !inline_image) {
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_array", NULL);
-            if (ctx->args.pdfstoponwarning)
-                return_error(gs_error_syntaxerror);
+            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_array", NULL)) < 0)
+                return code;
         }
         code = pdfi_create_DeviceGray(ctx, ppcs);
     } else if (pdfi_name_is(space, "I") || pdfi_name_is(space, "Indexed")) {
@@ -2758,26 +2766,24 @@ pdfi_create_colorspace_by_name(pdf_context *ctx, pdf_name *name,
                                gs_color_space **ppcs, bool inline_image)
 {
     int code = 0;
+    gs_id oldid = 0;
 
     if (pdfi_name_is(name, "G") || pdfi_name_is(name, "DeviceGray")) {
         if (pdfi_name_is(name, "G") && !inline_image) {
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_name", NULL);
-            if (ctx->args.pdfstoponwarning)
-                return_error(gs_error_syntaxerror);
+            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_name", NULL)) < 0)
+                return code;
         }
         code = pdfi_create_DeviceGray(ctx, ppcs);
     } else if (pdfi_name_is(name, "RGB") || pdfi_name_is(name, "DeviceRGB")) {
         if (pdfi_name_is(name, "RGB") && !inline_image) {
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_name", NULL);
-            if (ctx->args.pdfstoponwarning)
-                return_error(gs_error_syntaxerror);
+            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_name", NULL)) < 0)
+                return code;
         }
         code = pdfi_create_DeviceRGB(ctx, ppcs);
     } else if (pdfi_name_is(name, "CMYK") || pdfi_name_is(name, "DeviceCMYK") || pdfi_name_is(name, "CalCMYK")) {
         if (pdfi_name_is(name, "CMYK") && !inline_image) {
-            pdfi_set_warning(ctx, 0, NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_name", NULL);
-            if (ctx->args.pdfstoponwarning)
-                return_error(gs_error_syntaxerror);
+            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_BAD_INLINECOLORSPACE, "pdfi_create_colorspace_by_name", NULL)) < 0)
+                return code;
         }
         code = pdfi_create_DeviceCMYK(ctx, ppcs);
     } else if (pdfi_name_is(name, "Pattern")) {
@@ -2816,14 +2822,17 @@ pdfi_create_colorspace_by_name(pdf_context *ctx, pdf_name *name,
             }
         }
 
+        oldid = ctx->pgs->color[0].color_space->id;
         /* recursion */
         code = pdfi_create_colorspace(ctx, ref_space, stream_dict, page_dict, ppcs, inline_image);
 
         if (code >= 0) {
-            if (ppcs != NULL)
-                pdfi_set_colourspace_name(ctx, *ppcs, name);
-            else
-                pdfi_set_colourspace_name(ctx, ctx->pgs->color[0].color_space, name);
+            if (oldid != ctx->pgs->color[0].color_space->id) {
+                if (ppcs != NULL)
+                    pdfi_set_colourspace_name(ctx, *ppcs, name);
+                else
+                    pdfi_set_colourspace_name(ctx, ctx->pgs->color[0].color_space, name);
+            }
         }
 
         pdfi_countdown(ref_space);
@@ -2919,7 +2928,7 @@ int pdfi_setstrokecolor_space(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict 
 
     if (ctx->text.inside_CharProc && ctx->text.CharProc_d_type != pdf_type3_d0) {
         pdfi_pop(ctx, 1);
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setrgbcolor", "");
+        pdfi_log_info(ctx, "pdfi_setstrokecolor_space", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -2949,7 +2958,7 @@ int pdfi_setfillcolor_space(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *p
 
     if (ctx->text.inside_CharProc && ctx->text.CharProc_d_type != pdf_type3_d0) {
         pdfi_pop(ctx, 1);
-        pdfi_set_warning(ctx, 0, NULL, W_PDF_D1_COLOUR_OP, "pdfi_gs_setrgbcolor", "");
+        pdfi_log_info(ctx, "pdfi_setfillcolor_space", "colour operator in a CharProc, following a d1 ignored");
         return 0;
     }
 
@@ -3161,20 +3170,12 @@ int pdfi_color_setoutputintent(pdf_context *ctx, pdf_dict *intent_dict, pdf_stre
 {
     pdf_c_stream *profile_stream = NULL;
     byte *profile_buffer;
-    gs_offset_t savedoffset;
     int code, code1;
-    int64_t Length;
     pdf_dict *profile_dict;
 
     code = pdfi_dict_from_obj(ctx, (pdf_obj *)profile, &profile_dict);
     if (code < 0)
         return code;
-
-    /* Save the current stream position, and move to the start of the profile stream */
-    savedoffset = pdfi_tell(ctx->main_stream);
-    pdfi_seek(ctx, ctx->main_stream, pdfi_stream_offset(ctx, profile), SEEK_SET);
-
-    Length = pdfi_stream_length(ctx, profile);
 
     /* The ICC profile reading code (irritatingly) requires a seekable stream, because it
      * rewinds it to the start, then seeks to the end to find the size, then rewinds the
@@ -3183,7 +3184,7 @@ int pdfi_color_setoutputintent(pdf_context *ctx, pdf_dict *intent_dict, pdf_stre
      * implemented in PostScript (!) so we can't use it. What we can do is create a
      * string sourced stream in memory, which is at least seekable.
      */
-    code = pdfi_open_memory_stream_from_filtered_stream(ctx, profile, Length, &profile_buffer, ctx->main_stream, &profile_stream, true);
+    code = pdfi_open_memory_stream_from_filtered_stream(ctx, profile, &profile_buffer, &profile_stream, true);
     if (code < 0)
         goto exit;
 
@@ -3196,7 +3197,6 @@ int pdfi_color_setoutputintent(pdf_context *ctx, pdf_dict *intent_dict, pdf_stre
         code = code1;
 
  exit:
-    pdfi_seek(ctx, ctx->main_stream, savedoffset, SEEK_SET);
     return code;
 }
 
@@ -3302,12 +3302,15 @@ int pdfi_setup_DefaultSpaces(pdf_context *ctx, pdf_dict *source_dict)
                             ctx->page.DefaultGray_cs = pcs;
                             pdfi_set_colour_callback(pcs, ctx, NULL);
                         } else {
-                            pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL);
                             rc_decrement(pcs, "setup_DefautSpaces");
+                            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL)) < 0)
+                                return code;
                         }
                     }
-                } else
-                    pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL);
+                } else {
+                    if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL)) < 0)
+                        return code;
+                }
             }
             pdfi_countdown(DefaultSpace);
             DefaultSpace = NULL;
@@ -3327,11 +3330,14 @@ int pdfi_setup_DefaultSpaces(pdf_context *ctx, pdf_dict *source_dict)
                             pdfi_set_colour_callback(pcs, ctx, NULL);
                         } else {
                             rc_decrement(pcs, "setup_DefautSpaces");
-                            pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL);
+                            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL)) < 0)
+                                return code;
                         }
                     }
-                } else
-                    pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL);
+                } else {
+                    if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL)) < 0)
+                        return code;
+                }
             }
             pdfi_countdown(DefaultSpace);
             DefaultSpace = NULL;
@@ -3350,12 +3356,15 @@ int pdfi_setup_DefaultSpaces(pdf_context *ctx, pdf_dict *source_dict)
                             ctx->page.DefaultCMYK_cs = pcs;
                             pdfi_set_colour_callback(pcs, ctx, NULL);
                         } else {
-                            pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL);
                             rc_decrement(pcs, "setup_DefautSpaces");
+                            if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL)) < 0)
+                                return code;
                         }
                     }
-                } else
-                    pdfi_set_warning(ctx, 0, NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL);
+                } else {
+                    if ((code = pdfi_set_warning_stop(ctx, gs_note_error(gs_error_syntaxerror), NULL, W_PDF_INVALID_DEFAULTSPACE, "pdfi_setup_DefaultSpaces", NULL)) < 0)
+                        return code;
+                }
             }
             pdfi_countdown(DefaultSpace);
             DefaultSpace = NULL;

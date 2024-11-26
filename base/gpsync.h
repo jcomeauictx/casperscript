@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -66,6 +66,13 @@ void gp_semaphore_label(gp_semaphore * sema, const char *name);
  * Monitors support enter/leave semantics: at most one thread can have
  * entered and not yet left a given monitor.
  * 32-bit Solaris also requires maximum alignment. Bug 693147.
+ *
+ * Do NOT statically allocate these. Callers should be using
+ * gx_monitor_t rather than gp_monitor, and this dynamically
+ * allocates these, allowing for the ACTUAL size of the
+ * platform-dependent monitor structures. This structure is
+ * for alignment only and is NOT large enough for the actual
+ * monitor implementations.
  */
 typedef union {
     void *dummy_;
@@ -78,6 +85,8 @@ uint gp_monitor_sizeof(void);
 /*
  * Hack: gp_monitor_open(0) succeeds iff it's OK for the memory manager
  * to move a gp_monitor in memory.
+ *
+ * DO NOT CALL THESE (unless you are the implementation of gx_monitor_t!)
  */
 int gp_monitor_open(gp_monitor * mon);
 int gp_monitor_close(gp_monitor * mon);

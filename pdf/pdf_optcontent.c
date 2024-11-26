@@ -680,7 +680,7 @@ int pdfi_op_BDC(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict)
     if (!pdfi_name_is(tag, "OC"))
         ctx->BDCWasOC = false;
 
-    if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent) {
+    if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent && (!ctx->BDCWasOC || ctx->device_state.WantsOptionalContent)) {
         objarray = (pdf_obj **)gs_alloc_bytes(ctx->memory, 2 * sizeof(pdf_obj *), "pdfi_op_BDC");
         if (objarray == NULL) {
             code = gs_note_error(gs_error_VMerror);
@@ -698,6 +698,39 @@ int pdfi_op_BDC(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict)
                     code = gs_note_error(gs_error_typecheck);
                     goto exit;
                 }
+                /* If we are producing PDF/A we must not include any Metadata, as that
+                 * requires us to modify the XMP Metadata, which we don't know how to do.
+                 */
+                if (ctx->args.PDFA > 0) {
+                    uint64_t index = 0;
+                    pdf_name *Key = NULL;
+                    pdf_obj *Value = NULL;
+
+                    code = pdfi_dict_first(ctx, oc_dict, (pdf_obj **)&Key, &Value, &index);
+                    if (code < 0) {
+                        if (code == gs_error_undefined)
+                            code = 0;
+                        goto exit;
+                    }
+                    while (code >= 0) {
+                        if (pdfi_name_is(Key, "Metadata")) {
+                            pdfi_dict_delete_pair(ctx, oc_dict, Key);
+                        }
+                        pdfi_countdown(Key);
+                        Key = NULL;
+                        pdfi_countdown(Value);
+                        Value = NULL;
+
+                        code = pdfi_dict_next(ctx, oc_dict, (pdf_obj **)&Key, &Value, &index);
+                        if (code == gs_error_undefined) {
+                            code = 0;
+                            break;
+                        }
+                    }
+                }
+                if (pdfi_dict_entries(oc_dict) == 0)
+                    goto exit;
+
                 code = pdfi_pdfmark_dict(ctx, oc_dict);
                 if (code < 0)
                     goto exit;
@@ -762,7 +795,7 @@ int pdfi_op_EMC(pdf_context *ctx)
 {
     int code, code1 = 0;
 
-    if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent)
+    if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent && (!ctx->BDCWasOC || ctx->device_state.WantsOptionalContent))
         code1 = pdfi_pdfmark_from_objarray(ctx, NULL, 0, NULL, "EMC");
 
     code = pdfi_oc_levels_clear(ctx, ctx->OFFlevels, ctx->BMClevel);

@@ -469,7 +469,9 @@ MSWINSDKPATH=$(PGMFILESx86)\Microsoft SDKs\Windows\v7.0
 !endif
 !endif
 !endif
-!else
+!endif
+
+!ifndef MSWINSDKPATH
 !if exist ("$(PGMFILES)\Microsoft SDKs\Windows")
 !if exist ("$(PGMFILES)\Microsoft SDKs\Windows\v7.1A")
 MSWINSDKPATH=$(PGMFILES)\Microsoft SDKs\Windows\v7.1A
@@ -948,7 +950,7 @@ PNG_CFLAGS=/DExitProcess=exit
 CFLAGS=/DBUILD_PDF=1 /I$(PDFSRCDIR) /I$(ZSRCDIR) $(CFLAGS)
 !endif
 
-CFLAGS=$(CFLAGS) $(XCFLAGS)
+CFLAGS=$(CFLAGS) -DHAVE_LIMITS_H=1 $(XCFLAGS)
 
 # 1 --> Use 64 bits for gx_color_index.  This is required only for
 # non standard devices or DeviceN process color model devices.
@@ -1071,16 +1073,14 @@ DEVICE_DEVS9=$(DD)pbm.dev $(DD)pbmraw.dev $(DD)pgm.dev $(DD)pgmraw.dev $(DD)pgnm
 DEVICE_DEVS10=$(DD)tiffcrle.dev $(DD)tiffg3.dev $(DD)tiffg32d.dev $(DD)tiffg4.dev $(DD)tifflzw.dev $(DD)tiffpack.dev
 DEVICE_DEVS11=$(DD)bmpmono.dev $(DD)bmpgray.dev $(DD)bmp16.dev $(DD)bmp256.dev $(DD)bmp16m.dev $(DD)tiff12nc.dev $(DD)tiff24nc.dev $(DD)tiff48nc.dev $(DD)tiffgray.dev $(DD)tiff32nc.dev $(DD)tiff64nc.dev $(DD)tiffsep.dev $(DD)tiffsep1.dev $(DD)tiffscaled.dev $(DD)tiffscaled8.dev $(DD)tiffscaled24.dev $(DD)tiffscaled32.dev $(DD)tiffscaled4.dev
 DEVICE_DEVS12=$(DD)bit.dev $(DD)bitrgb.dev $(DD)bitcmyk.dev $(DD)bitrgbtags.dev $(DD)chameleon.dev
-DEVICE_DEVS13=$(DD)pngmono.dev $(DD)pngmonod.dev $(DD)pnggray.dev $(DD)png16.dev $(DD)png256.dev $(DD)png48.dev $(DD)png16m.dev $(DD)pngalpha.dev $(DD)png16malpha.dev $(DD)fpng.dev $(DD)psdcmykog.dev
+DEVICE_DEVS13=$(DD)pngmono.dev $(DD)pngmonod.dev $(DD)pnggray.dev $(DD)png16.dev $(DD)png256.dev $(DD)png48.dev $(DD)png16m.dev $(DD)pngalpha.dev $(DD)png16malpha.dev $(DD)fpng.dev $(DD)pppm.dev $(DD)psdcmykog.dev
 DEVICE_DEVS14=$(DD)jpeg.dev $(DD)jpeggray.dev $(DD)jpegcmyk.dev $(DD)pdfimage8.dev $(DD)pdfimage24.dev $(DD)pdfimage32.dev $(DD)PCLm.dev $(DD)PCLm8.dev $(DD)imagen.dev
 DEVICE_DEVS15=$(DD)pdfwrite.dev $(DD)ps2write.dev $(DD)eps2write.dev $(DD)txtwrite.dev $(DD)pxlmono.dev $(DD)pxlcolor.dev $(DD)xpswrite.dev $(DD)inkcov.dev $(DD)ink_cov.dev $(EXTRACT_DEVS)
 DEVICE_DEVS16=$(DD)bbox.dev $(DD)plib.dev $(DD)plibg.dev $(DD)plibm.dev $(DD)plibc.dev $(DD)plibk.dev $(DD)plan.dev $(DD)plang.dev $(DD)planm.dev $(DD)planc.dev $(DD)plank.dev $(DD)planr.dev
 !if "$(WITH_CUPS)" == "1"
 DEVICE_DEVS16=$(DEVICE_DEVS16) $(DD)cups.dev
 !endif
-!if "$(WITH_URF)" == "1"
 DEVICE_DEVS16=$(DEVICE_DEVS16) $(DD)urfgray.dev $(DD)urfrgb.dev $(DD)urfcmyk.dev
-!endif
 !if "$(OCR_VERSION)" == "0"
 !else
 DEVICE_DEVS16=$(DEVICE_DEVS16) $(DD)ocr.dev $(DD)hocr.dev $(DD)pdfocr8.dev $(DD)pdfocr24.dev $(DD)pdfocr32.dev
@@ -1374,11 +1374,11 @@ $(GPDLDLL_DLL): $(ECHOGS_XE) $(GSDLL_OBJ).res $(LIBCTR) $(LIB_ALL) $(PCL_DEVS_AL
 !if "$(SO_PDFEXPORT_LIB)"!=""
 	echo $(SO_PDFEXPORT_LIB) >> $(GPDLGEN)gpdlwin.tr
 !endif
-	echo $(PCLOBJ)pdlromfs$(COMPILE_INITS).$(OBJ) >> $(GPDLGEN)gpdlwin.tr
-	echo $(PCLOBJ)pdlromfs$(COMPILE_INITS)c0.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
-	echo $(PCLOBJ)pdlromfs$(COMPILE_INITS)c1.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
-	echo $(PCLOBJ)pdlromfs$(COMPILE_INITS)c2.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
-	echo $(PCLOBJ)pdlromfs$(COMPILE_INITS)c3.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS).$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c0.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c1.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c2.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c3.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
 	echo /DLL /DEF:$(PLSRCDIR)\$(GPDLDLL).def /OUT:$(GPDLDLL_DLL) > $(GPDLGEN)gpdlwin.rsp
 !if "$(PROFILE)"=="1"
 	echo /Profile >> $(GPDLGEN)gpdlwin.rsp
@@ -1497,7 +1497,7 @@ $(GPDF_XE): $(ECHOGS_XE) $(LIBCTR) $(LIB_ALL) $(WINMAINOBJS) $(PDF_DEVS_ALL) $(P
                 $(TOP_MAKEFILES)
 	copy $(pdfld_tr) $(PDFGEN)gpdfwin.tr
 	echo $(WINMAINOBJS) $(MAIN_OBJ) $(PDF_TOP_OBJS) $(INT_ARCHIVE_SOME) $(XOBJS) >> $(PDFGEN)gpdfwin.tr
-	echo $(PCLOBJ)pdfromfs$(COMPILE_INITS).$(OBJ) >> $(PDFGEN)gpdfwin.tr
+	echo $(GPDLOBJ)pdfromfs$(COMPILE_INITS).$(OBJ) >> $(PDFGEN)gpdfwin.tr
 	echo /SUBSYSTEM:CONSOLE > $(PDFGEN)pdfwin.rsp
         echo /OUT:$(GPDF_XE) >> $(XPSGEN)pdfwin.rsp
 	$(LINK) $(LCT) @$(PDFGEN)pdfwin.rsp @$(PDFGEN)gpdfwin.tr $(LINKLIBPATH) @$(LIBCTR) @$(PDFGEN)pdflib.rsp
@@ -1506,13 +1506,22 @@ $(GPDF_XE): $(ECHOGS_XE) $(LIBCTR) $(LIB_ALL) $(WINMAINOBJS) $(PDF_DEVS_ALL) $(P
 
 $(GPDL_XE): $(ECHOGS_XE) $(ld_tr) $(gpdl_tr) $(LIBCTR) $(LIB_ALL) $(WINMAINOBJS) $(XPS_DEVS_ALL) $(PCL_DEVS_ALL) $(PDF_DEVS_ALL) \
 		$(GS_ALL) \
-                $(GPDLGEN)gpdllib.rsp $(GPDLOBJ)pdlromfs$(COMPILE_INITS).$(OBJ) \
+		$(GPDLGEN)gpdllib.rsp \
+		$(GPDLOBJ)pdlromfs$(COMPILE_INITS).$(OBJ) \
+		$(GPDLOBJ)pdlromfs$(COMPILE_INITS)c0.$(OBJ) \
+		$(GPDLOBJ)pdlromfs$(COMPILE_INITS)c1.$(OBJ) \
+		$(GPDLOBJ)pdlromfs$(COMPILE_INITS)c2.$(OBJ) \
+		$(GPDLOBJ)pdlromfs$(COMPILE_INITS)c3.$(OBJ) \
 		$(GPDL_PSI_TOP_OBJS) $(PCL_PXL_TOP_OBJS) $(PSI_TOP_OBJ) $(XPS_TOP_OBJ) $(PDF_TOP_OBJ) \
 		$(MAIN_OBJ) $(XOBJS) $(INT_ARCHIVE_SOME) \
-                $(TOP_MAKEFILES)
+		$(TOP_MAKEFILES)
 	copy $(gpdlld_tr) $(GPDLGEN)gpdlwin.tr
 	echo $(WINMAINOBJS) $(MAIN_OBJ) $(GPDL_PSI_TOP_OBJS) $(PCL_PXL_TOP_OBJS) $(PSI_TOP_OBJ) $(XPS_TOP_OBJ) $(PDF_TOP_OBJ) $(XOBJS) >> $(GPDLGEN)gpdlwin.tr
-	echo $(PCLOBJ)pdlromfs$(COMPILE_INITS).$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS).$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c0.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c1.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c2.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
+	echo $(GPDLOBJ)pdlromfs$(COMPILE_INITS)c3.$(OBJ) >> $(GPDLGEN)gpdlwin.tr
 !if "$(SO_PDFEXPORT_LIB)"!=""
 	echo $(SO_PDFEXPORT_LIB) >> $(GPDLGEN)gpdlwin.tr
 !endif

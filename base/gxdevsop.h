@@ -522,6 +522,17 @@ enum {
      * cloned for NumRenderingThreads etc. */
     gxdso_adjust_colors,
 
+    /* Called to ask if we are an additive device that would like to support separations
+     * natively. Should return the number of additive process colors in use.
+     */
+    gxdso_is_sep_supporting_additive_device,
+
+    /* Communicate the start of text with a 'clip' render mode, and the grestore
+     * which restores it away. We send data of 1 for the start of text in a clipping
+     * mode and 0 when we grestore back to a non-clip mode.
+     */
+    gxdso_hilevel_text_clip,
+
     /* Add new gxdso_ keys above this. */
     gxdso_pattern__LAST
 };

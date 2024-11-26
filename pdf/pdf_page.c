@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2023 Artifex Software, Inc.
+/* Copyright (C) 2019-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -76,6 +76,10 @@ static int pdfi_process_page_contents(pdf_context *ctx, pdf_dict *page_dict)
         pdfi_countdown(o);
         return code;
     }
+    /* Increment the saved gsave_level by 1 to allow for the gsave we've just
+     * done. Otherwise excess 'Q' operators in the stream can cause us to pop
+     * one higher than we should. Bug 707753. */
+    ctx->current_stream_save.gsave_level++;
 
     ctx->encryption.decrypt_strings = false;
     if (pdfi_type_of(o) == PDF_ARRAY) {
@@ -105,8 +109,10 @@ static int pdfi_process_page_contents(pdf_context *ctx, pdf_dict *page_dict)
                     code = pdfi_dereference(ctx, r->ref_object_num, r->ref_generation_num, &o1);
                     pdfi_countdown(r);
                     if (code < 0) {
-                        if (code != gs_error_VMerror || ctx->args.pdfstoponerror == false)
-                            code = 0;
+                        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_NOERROR, "pdfi_process_page_contents", NULL)) < 0) {
+                            goto page_error;
+                        }
+                        code = 0;
                         goto page_error;
                     }
                     if (pdfi_type_of(o1) != PDF_STREAM) {
@@ -117,8 +123,9 @@ static int pdfi_process_page_contents(pdf_context *ctx, pdf_dict *page_dict)
                     code = pdfi_interpret_content_stream(ctx, NULL, (pdf_stream *)o1, page_dict);
                     pdfi_countdown(o1);
                     if (code < 0) {
-                        if (code == gs_error_VMerror || ctx->args.pdfstoponerror == true)
+                        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_NOERROR, "pdfi_process_page_contents", NULL)) < 0) {
                             goto page_error;
+                        }
                     }
                 }
             }
@@ -130,6 +137,8 @@ static int pdfi_process_page_contents(pdf_context *ctx, pdf_dict *page_dict)
             code = gs_note_error(gs_error_typecheck);
     }
 page_error:
+    /* Decrement the stream level to counterbalance the increment above. */
+    ctx->current_stream_save.gsave_level--;
     ctx->encryption.decrypt_strings = true;
     pdfi_clearstack(ctx);
     pdfi_grestore(ctx);
@@ -867,12 +876,6 @@ static int setup_page_DefaultSpaces(pdf_context *ctx, pdf_dict *page_dict)
     return(pdfi_setup_DefaultSpaces(ctx, page_dict));
 }
 
-static bool
-pdfi_pattern_purge_all_proc(gx_color_tile * ctile, void *proc_data)
-{
-    return true;
-}
-
 int pdfi_page_render(pdf_context *ctx, uint64_t page_num, bool init_graphics)
 {
     int code, code1=0;
@@ -895,10 +898,10 @@ int pdfi_page_render(pdf_context *ctx, uint64_t page_num, bool init_graphics)
 
         page_dict_error = true;
         gs_snprintf(extra_info, sizeof(extra_info), "*** ERROR: Page %ld has invalid Page dict, skipping\n", page_num+1);
-        pdfi_set_error(ctx, 0, NULL, E_PDF_PAGEDICTERROR, "pdfi_page_render", extra_info);
-        if (code != gs_error_VMerror && !ctx->args.pdfstoponerror)
-            code = 0;
-        goto exit3;
+        if (code == gs_error_VMerror ||
+        ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_PAGEDICTERROR, "pdfi_page_render", extra_info)) < 0)) {
+            goto exit3;
+        }
     }
 
     code = pdfi_check_page(ctx, page_dict, NULL, NULL, init_graphics);
@@ -920,8 +923,9 @@ int pdfi_page_render(pdf_context *ctx, uint64_t page_num, bool init_graphics)
      * to handle files such as Bug #705206 where the Group dictionary is a free object in a
      * compressed object stream.
      */
-    if (code < 0)
-        pdfi_set_error(ctx, 0, NULL, E_BAD_GROUP_DICT, "pdfi_page_render", NULL);
+    if (code < 0 && (code = pdfi_set_error_stop(ctx, code, NULL, E_BAD_GROUP_DICT, "pdfi_page_render", NULL)) < 0)
+        goto exit2;
+
     if (group_dict != NULL)
         page_group_known = true;
 
@@ -1058,7 +1062,7 @@ exit3:
     /* Flush any pattern tiles. We don't want to (potentially) return to PostScript
      * with any pattern tiles referencing our objects, in case the garbager runs.
      */
-    gx_pattern_cache_winnow(gstate_pattern_cache(ctx->pgs), pdfi_pattern_purge_all_proc, NULL);
+    gx_pattern_cache_flush(gstate_pattern_cache(ctx->pgs));
     /* We could be smarter, but for now.. purge for each page */
     pdfi_purge_cache_resource_font(ctx);
 

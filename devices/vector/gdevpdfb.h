@@ -151,6 +151,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  0,				/* articles */
  0,				/* Dests */
  0,				/* EmbeddedFiles */
+ 0,             /* AF (part of embedded files for PDF/A-3) */
  {0},				/* fileID */
          {0, 0},		/* uuid_time */
  0,				/* global_named_objects */
@@ -160,6 +161,8 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  0,				/* font_cache */
  {0, 0},			/* char_width */
  0,				/* clip_path */
+ 0,             /* clipped_text_pending */
+ 0,             /* saved_vgstack_depth_for_textclip */
  0,                             /* PageLabels */
  -1,                            /* PageLabels_current_page */
  0,                             /* PageLabels_current_label */
@@ -202,6 +205,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  {0,0,0,0,0,0}, 		/* gs_matrix converting_image_matrix */
  0,				/* image_mask_scale */
  NULL,				/* pres_soft_mask_dict */
+ 0,                 /* pdfmark_dup_stream */
  {0, 0},			/* objname */
  0,				/* OPDFRead_procset_length */
  0,				/* find_resource_param */
@@ -218,6 +222,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  true,				/* DetectDuplicateImages */
  false,				/* AllowIncrementalCFF */
  !PDF_FOR_OPDFREAD,		/* WantsToUnicode */
+ !PDF_FOR_OPDFREAD,		/* WantsOptionalContent */
  !PDF_FOR_OPDFREAD,		/* PdfmarkCapable */
  !PDF_FOR_OPDFREAD,		/* WantsPageLabels */
  PDF_FOR_OPDFREAD,		/* AllowPSRepeatFunctions */
@@ -241,6 +246,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  NULL,                  /* OCRUnicode */
  0,                     /* OCR_char_code */
  0,                     /* OCR_glyph */
+ NULL,                  /* OCE_penum */
  NULL,                  /* ocr_glyphs */
  0,                     /* initial_pattern_state */
  false,                 /* OmitInfoDate */
@@ -250,7 +256,8 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  false,                 /* ModifiesPageOrder */
  true,                  /* WriteXRefStm */
  true,                  /* WriteObjStms */
- 0                      /* PendingOC */
+ 0,                     /* PendingOC */
+ true                   /* ToUnicodeForStdEnc */
 };
 
 #else

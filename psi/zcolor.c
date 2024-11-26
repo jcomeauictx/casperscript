@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2024 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -3815,6 +3815,7 @@ static int septransform(i_ctx_t *i_ctx_p, ref *sepspace, int *usealternate, int 
         code = array_get(imemory, sepspace, 3, &proc);
         if (code < 0)
             return code;
+        check_proc(proc);
         *esp = proc;
         return o_push_estack;
     }
@@ -4630,6 +4631,7 @@ static int devicentransform(i_ctx_t *i_ctx_p, ref *devicenspace, int *usealterna
         code = array_get(imemory, devicenspace, 3, &proc);
         if (code < 0)
             return code;
+        check_proc(proc);
         esp++;
         *esp = proc;
         return o_push_estack;
@@ -5054,6 +5056,7 @@ static int indexedbasecolor(i_ctx_t * i_ctx_p, ref *space, int base, int *stage,
             code = array_get(imemory, space, 3, &proc);
             if (code < 0)
                 return code;
+            check_proc(proc);
             *ep = proc;	/* lookup proc */
             return o_push_estack;
         } else {
@@ -5067,6 +5070,9 @@ static int indexedbasecolor(i_ctx_t * i_ctx_p, ref *space, int base, int *stage,
             if (!r_has_type(op, t_integer))
                 return_error (gs_error_typecheck);
             index = op->value.intval;
+            /* Ensure it is in range. See bug #707990 */
+            if (index < 0 || index > pcs->params.indexed.hival)
+                return_error(gs_error_rangecheck);
             /* And remove it from the stack. */
             ref_stack_pop(&o_stack, 1);
             op = osp;
@@ -5187,7 +5193,7 @@ static int setpatternspace(i_ctx_t * i_ctx_p, ref *r, int *stage, int *cont, int
 static int validatepatternspace(i_ctx_t * i_ctx_p, ref **r)
 {
     int code;
-    ref tref;
+    ref tref, nameref, sref;
 
     /* since makepattern has already been run, we don't need to do much validation */
     if (!r_has_type(*r, t_name)) {
@@ -5196,6 +5202,33 @@ static int validatepatternspace(i_ctx_t * i_ctx_p, ref **r)
                 code = array_get(imemory, *r, 1, &tref);
                 if (code < 0)
                     return code;
+
+                /* If the alternate space is a name then use it */
+                if (!r_has_type(&tref, t_name)) {
+                    /* If its an array we need to check further */
+                    if (r_is_array(&tref) && r_size(&tref) > 0) {
+                        /* Get the first element of the array, for a color space this must be the space name */
+                        code = array_get(imemory, &tref, 0, &nameref);
+                        if (code < 0)
+                            return code;
+                        /* Check its a name */
+                        if (!r_has_type(&nameref, t_name))
+                            return_error(gs_error_typecheck);
+
+                        /* Convert alternate space name to string */
+                        name_string_ref(imemory, &nameref, &sref);
+                    } else
+                        /* The alternate is neither an array nor a name, which is not legal */
+                        return_error(gs_error_typecheck);
+                } else
+                    name_string_ref(imemory, &tref, &sref);
+
+                /* Check its not /Pattern */
+                if (r_size(&sref) == 7) {
+                    if (strncmp((const char *)sref.value.const_bytes, "Pattern", 7) == 0)
+                        return_error(gs_error_typecheck);
+                }
+
                 ref_assign(*r, &tref);
             } else
                 *r = 0;
@@ -5243,6 +5276,9 @@ static int patterncomponent(i_ctx_t * i_ctx_p, ref *space, int *n)
             code = array_get(imemory, pImpl, 0, &pPatInst);
             if (code < 0)
                 return code;
+
+            if (!r_is_struct(&pPatInst) || (!r_has_stype(&pPatInst, imemory, st_pattern1_instance) && !r_has_stype(&pPatInst, imemory, st_pattern2_instance)))
+                return_error(gs_error_typecheck);
             cc.pattern = r_ptr(&pPatInst, gs_pattern_instance_t);
             if (pattern_instance_uses_base_space(cc.pattern))
                 *n = n_comps;
@@ -6237,6 +6273,8 @@ static int validateiccspace(i_ctx_t * i_ctx_p, ref **r)
         if (!r_has_type(tempref, t_integer))
             return_error(gs_error_typecheck);
         components = tempref->value.intval;
+        if (components < 0 || components > GS_CLIENT_COLOR_MAX_COMPONENTS)
+            return_error(gs_error_rangecheck);
     } else
         return_error(gs_error_typecheck);
     code = dict_find_string(&ICCdict, "DataSource", &tempref);

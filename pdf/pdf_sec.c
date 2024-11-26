@@ -927,7 +927,7 @@ int pdfi_compute_objkey(pdf_context *ctx, pdf_obj *obj, pdf_string **Key)
 
 int pdfi_decrypt_string(pdf_context *ctx, pdf_string *string)
 {
-    int code = 0;
+    int code = 0, bytes_decrypted = 0;
     pdf_c_stream *stream = NULL, *crypt_stream = NULL;
     pdf_string *EKey = NULL;
     char *Buffer = NULL;
@@ -973,11 +973,23 @@ int pdfi_decrypt_string(pdf_context *ctx, pdf_string *string)
             goto error;
         }
 
-        sfread(Buffer, 1, string->length, crypt_stream->s);
+        /* The decrypted string length will likely be less than the original encrypted
+         * string length. sfread won't tell us how many bytes it actually read, so we need
+         * to decrypt one byte at a time until it returns EOD/ERRC. Then we can copy the
+         * bytes we actually read and change the string length.
+         */
+        for (bytes_decrypted = 0;bytes_decrypted < string->length;bytes_decrypted++) {
+            code = sfread(&Buffer[bytes_decrypted], 1, 1, crypt_stream->s);
+            if (code != 1) {
+                code = 0;
+                break;
+            }
+        }
 
         pdfi_close_file(ctx, crypt_stream);
         pdfi_close_memory_stream(ctx, NULL, stream);
 
+        string->length = bytes_decrypted;
         memcpy(string->data, Buffer, string->length);
     }
 
@@ -1392,7 +1404,8 @@ int pdfi_initialise_Decryption(pdf_context *ctx)
             }
             /* Revision 2 is always 40-bit RC4 */
             if (KeyLen != 0 && KeyLen != 40)
-                pdfi_set_error(ctx, 0, NULL, E_PDF_INVALID_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL);
+                if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefined), NULL, E_PDF_INVALID_DECRYPT_LEN, "pdfi_initialise_Decryption", NULL)) < 0)
+                    goto done;
             KeyLen = 40;
             if (ctx->encryption.StmF == CRYPT_NONE)
                 ctx->encryption.StmF = CRYPT_V1;
