@@ -4,6 +4,7 @@
 #include <math.h>  /* for roundl(), ... */
 #include <stdlib.h>  /* for abs(), atof(), ... */
 #include <stdarg.h>  /* for vsnprintf(), ... */
+#include <sys/stat.h>  /* for mkdir() */
 #include "gssyslog.h"
 #include "zcasper.h"
 #include "interp.h"  /* for i_initial_enter_name() */
@@ -16,7 +17,7 @@
 #include "oper.h"
 #include "store.h"
 #include "estack.h"
-#include "std.h"
+#include "std.h"  /* for eprintf and other printf-style macros */
 #endif  /* TEST_ZCASPER */
 #include "gsprintf.h"  /* for gsprintf and thus zsprintf */
 #define PATHLENGTH 1024  /* for savesession filename */
@@ -98,6 +99,33 @@ int zcasperinit(i_ctx_t *i_ctx_p) {
     return code;
 };
 
+int zmkdir(i_ctx_t *i_ctx_p);
+int zmkdir(i_ctx_t *i_ctx_p) {
+    os_ptr op = osp;
+    int code = 0, mode = 0;
+    char filename[PATHLENGTH];
+    //errprintf_nomem("starting zmkdir\n");
+    if (r_type(op) != t_integer) return_op_typecheck(op);
+    if (r_type(op - 1) != t_string) return_op_typecheck(op - 1);
+    //errprintf_nomem("zmkdir passed typechecks\n");
+    if (r_size(op - 1) >= PATHLENGTH) return_error(gs_error_rangecheck);
+    //errprintf_nomem("zmkdir passed rangechecks\n");
+    DISCARD(strncpy(filename, (char *)(op - 1)->value.bytes, r_size(op - 1)));
+    //errprintf_nomem("zmkdir passed strncopy of filename\n");
+    filename[r_size(op - 1)] = '\0';
+    mode = op->value.intval;
+    //errprintf_nomem("zmkdir: filename: %s, mode: %04o\n", filename, mode);
+    code = mkdir(filename, mode);
+    //errprintf_nomem("zmkdir: passed mkdir with code %d\n", code);
+    if (code == 0) {
+        pop(2);  // discard args
+    } else {
+        return_error(gs_error_invalidaccess);
+    }
+    //errprintf_nomem("zmkdir: returning code to caller\n");
+    return code;
+}
+
 int zsavesession(i_ctx_t *i_ctx_p);
 int zsavesession(i_ctx_t *i_ctx_p) {
     HISTORY_STATE *history_state = history_get_history_state();
@@ -127,6 +155,7 @@ const op_def zcasper_op_defs[] =
 {
     /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
+    {"2.mkdir", zmkdir},
     {"3sprintf", zsprintf},
     {"1savesession", zsavesession},
     op_def_end(0)

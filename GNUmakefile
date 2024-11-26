@@ -8,8 +8,10 @@ ARCH := $(shell uname -m)
 XCFLAGS += -Ibase -Ipsi -Iobj -I.
 GSNAME := gs
 ifneq ($(strip $(CASPER)),)
-CS_VERSION ?= $(shell git describe)
+CS_VERSION ?= $(shell git rev-parse --short HEAD)
 GSNAME := cs-$(CS_VERSION)
+GSBUILDNAME ?= $(shell awk -F= '$$1 == "GS" {print $$2}' config.log | tr -d "'")
+GS_BUILDVERSION := $(shell string=$(GSBUILDNAME); echo $${string##*-})
 CONFIG_ARGS += --with-gs=$(GSNAME)
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
@@ -26,8 +28,15 @@ XTRALIBS += $(CASPERLIBS)
 VDIFF_TESTDIRS := reference latest
 VDIFF_TESTFILE ?= cjk/iso2022.ps.1.pnm
 VDIFF_TESTFILES := $(foreach dir,$(VDIFF_TESTDIRS),$(dir)/$(VDIFF_TESTFILE))
+GSCASPER := /usr/bin/gs -dNOSAFER -dNODISPLAY
+TESTCASPER ?= 0.0 cvbool =
+CASPERTEST ?= (Resource/Init/casperscript.ps) run casper $(TESTCASPER)
+CSBIN ?= $(wildcard csbin/*)
+ifeq ($(SHOWENV),)
 export CASPER XTRALIBS
-export VDIFF_TESTFILES GSNAME # for `make env` check
+else
+export
+endif
 ifeq ("$(wildcard $(ARCH).mak)","")
 	CS_DEFAULT := Makefile
 	CS_MAKEFILES := $(CS_DEFAULT)
@@ -36,15 +45,17 @@ else
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
 all: $(CS_MAKEFILES)
+	@echo building casperscript version $(CS_VERSION)
+	[ -e "$<" ] || $(MAKE) $<
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $<
 	# trick for cstestcmd.cs test on unix-y systems
-	if [ \! -e bin/cs.exe ]; then \
-		cd bin && ln -s $(GSNAME) cs.exe; \
-	fi
+	cd bin && ln -sf $(GSNAME) cs.exe
 	# make the same symlinks as for install, but in $(CWD)/bin
-	# we don't know what GSNAME is, so we just try 'em all and ignore errors
+	# NOTE: we're counting on GSNAME being unique per build!
 	cd bin && for symlink in cs gs ccs bccs; do \
-	 ln -s $(GSNAME) $$symlink || true; \
+	 [ -f $$symlink-$(CS_VERSION) ] || \
+	  ln -sf $(GSNAME) $$symlink-$(CS_VERSION); \
+	 ln -sf $(GSNAME) $$symlink; \
 	done
 install: $(CS_MAKEFILES)
 	make -f $< install
@@ -53,27 +64,31 @@ install: $(CS_MAKEFILES)
 	# cs "casperscript"
 	# ccs "console cs (cs -dNODISPLAY)"
 	# bccs "batch console cs"
-	# don't overwrite existing filenames but don't fail either (|| true)
+	# NOTE: GSNAME is unique for each build, so overwrite all aliases
 	cd $(INSTALL_PREFIX)/bin && for symlink in cs gs ccs bccs; do \
-	 ln -s $(GSNAME) $$symlink || true; \
+	 [ -f $$symlink-$(CS_VERSION) ] || \
+	  ln -sf $(GSNAME) $$symlink-$(CS_VERSION); \
+	 ln -sf $(GSNAME) $$symlink; \
 	done
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
 configure: | autogen.sh
 	./autogen.sh $(CONFIG_ARGS)
 env:
+ifeq ($(SHOWENV),)
+	$(MAKE) SHOWENV=1 $@
+else
 	$@
-%:	*/%.c
-	[ "$<" ] || (echo Nothing to do >&2; false)
-	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
-	mv $(<D)/$@ .
-%:	| $(CS_MAKEFILES)
-	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
+endif
 vdiff: vdiff.cs $(VDIFF_TESTFILES)
 	./$^
 /tmp/vdiff.pdf: vdiff.cs $(VDIFF_TESTFILES)
 	bin/gs -dNOSAFER -sDEVICE=pdfwrite -sOutputFile=$@ \
 	 -sPAPERSIZE=ledger -C -- $^ 1
+test_csbin: $(CSBIN)
+	for binfile in $+; do \
+	 ./$$binfile one two three; \
+	done
 tests:
 	make -f regression.mak
 help:
@@ -81,3 +96,31 @@ help:
 ghostscript:
 	-$(MAKE) distclean
 	$(MAKE) CASPER= all install
+gscasper:
+	$(GSCASPER)
+caspertest:
+	echo '$(CASPERTEST)' | $(GSCASPER)
+remake: # unlike `rebuild`, just uses last build's version number
+	XCFLAGS="-DDEBUG" $(MAKE) CS_VERSION=$(GS_BUILDVERSION)
+rebuild: remake caspertest
+	# if we changed anything, make sure we commit it before rebuild
+	git diff --name-only --exit-code || \
+	 (echo 'commit changes before `make rebuild`' >&2; false)
+	$(MAKE) distclean all install  # after all that, we can rebuild
+push:
+	git push  # to default repository
+	git push githost  # to personal repository
+test_splitargs:
+	XCFLAGS=-DTEST_SPLITARGS=1 $(MAKE) splitargs
+	./splitargs -option0 -option1 -- arg0 arg1
+	./splitargs -option0 -option1 -option2
+	./splitargs -option0 --
+	./splitargs -option - arg1
+	@echo 'Must `make distclean` before attempting new build' >&2
+%:	*/%.c
+	[ "$<" ] || (echo Nothing to do >&2; false)
+	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
+	mv $(<D)/$@ .
+	rm -f $(<:.c=.o)
+%:	| $(CS_MAKEFILES)
+	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"

@@ -1,4 +1,6 @@
-% top-level definitions go into systemdict
+% top-level definitions go into userdict (formerly systemdict), and local VM
+{.currentglobal //false .setglobal} stopped {currentglobal //false setglobal} if
+userdict begin
 % NOTE: cannot use <<>> format for dicts, use `n dict def`, `begin`, `end`.
 % NOTE: interpreter is languagelevel 1 at load time.
 % HINT: test changes using `/usr/bin/gs -dNOSAFER -dNODISPLAY`,
@@ -9,11 +11,19 @@
 % NOTE: for this to work, don't do anything in this file that *presupposes*
 % any casperscript extensions.
 /#! {{currentfile 128 string readline exch pop {exit} if} loop} bind def
-/# /#! load def  % also enable # comments
+% define #, ##, and ### as stderr equivalents of =, ==, and ===
+% NOTE: ghostscript buffers stderr, so we have to `flushfile` on write to it
+/#only  {(%stderr) (w) file dup 3 -1 roll write=only flushfile} bind def
+/#	{#only (\n) #only} bind def
+/##only {(%stderr) (w) file dup 3 -1 roll write==only flushfile} bind def
+/## {##only (\n) #only} bind def
+/###only {(%stderr) (w) file dup 3 -1 roll write===only flushfile} bind def
+/### {###only (\n) #only} bind def
 /.silent -112 def  % gs_error_silent in base/gserrors.h
 % PLRM recommends only allocating enough for immediate needs with `dict`
 % it will grow as needed (languagelevels 2+)
-/forthdict 16 dict def
+% NOTE though: this does not apply here! it's languagelevel 1 at this point!
+/forthdict 128 dict def
 forthdict begin
   % add some helpful words from FORTH, starting with `words`
   /dictwords {  % dict -
@@ -31,9 +41,19 @@ forthdict begin
   } bind def
 end  % forthdict
 
-/casperdict 64 dict def
+/casperdict 256 dict def
 casperdict begin
   % add some generally useful words without polluting systemdict
+  /docstrings 1024 dict def  % casperscript addition
+  /help { % casperscript adds context-specific help {
+    count 0 eq
+      {help}  % original ghostscript "help"
+      {dup docstrings exch known {docstrings exch get} if}
+      ifelse
+    {print (\n) print flush} stopped {
+      (no help for /) print 64 string cvs print (\n) print flush
+    } if
+  } bind def
   /docstring {  % name string - name
     % intended to be used just after /name and before function definition
     docstrings 2 index  % name string dict name
@@ -45,22 +65,47 @@ casperdict begin
     % phase of development, showing a placeholder for undefined words.
     % NEW as of 2023-08-16: parses dot-notation names to allow for syntax
     % like `os.path.split`
-    % the following uppercase constants should maybe be placed outside
-    % this definition once tested
     errordict /.undefined known
       {(topdown already initialized) =}
       {
-        /MAX_DOT_DEPTH 3 def
-        /MAX_CASPER_NAME_LENGTH 32 def
-        /MAX_IMPORT_NAME_LENGTH MAX_DOT_DEPTH dup MAX_CASPER_NAME_LENGTH *
-         1 - + def  % 32 times 3, plus 2 dots
+        % this needs to go into always-available dictionary (userdict?)
+        /.extract {  % dottedname - any  % for use by `topdown`
+          % assume dotted name pattern is dict.dict.procedure
+          % NOTE we cannot use /undefined for the thrown error
+          % or it will result in an infinite loop and /stackoverflow
+          mark 1 index length string 2 index exch cvs  % name to string
+          dup (.) string.count 1 add array
+          exch (.) string.split  % string to array
+          dup 0 get cvn where not
+            % need to duplicate name for .undefined signalerror to work
+            {
+              %(error in .extract: ) #only dup ##only ( not found) #
+              cleartomark dup /.undefined signalerror
+            }
+            if
+          % if we reached this point, containing dict for element 0 is on stack
+          exch {{cvn get} forall} stopped
+            {
+              %$error /errorname get (error in .extract: ) #only ##
+              cleartomark dup /.undefined signalerror
+            }
+            if
+          exch pop exch pop  % don't `exec` here, let caller do that
+        } bind def
         errordict /.undefined errordict /undefined get put
         errordict begin
           /undefined {
             dup type /nametype eq exch dup xcheck 3 -1 roll and
-              {(\(/) print =only ( not yet defined\)) =}
+              {{.extract} stopped
+                {
+                  %$error /errorname get (error in /undefined: ) #only ##
+                  (\(/) print =only ( not yet defined\)) =
+                }
+                {exec}
+                ifelse
+              }
               {pop /.undefined signalerror}
-            ifelse
+              ifelse
           } bind def
         end
       }
@@ -70,48 +115,351 @@ casperdict begin
     alias currentname to newname) docstring {
     exch load def
   } bind def
-  /printstack (  -
-    one-line version of pstack) docstring {
+  /ctrl (  (c) - (^C)
+    generate control character from given character) docstring {
+    ord 32 64 or not and chr
+  } bind def
+  /font.size (  font - size
+    guesses font size as being the x scale of the font) docstring {
+    dup /FontMatrix get 0 get
+    exch {/OrigFont get /FontMatrix get 0 get div} stopped
+    % see PLRM `scalefont` explanation
+    {pop (font ) #only ##only ( not scaled yet) # pop 1.0} if
+  } bind def
+  /swap ( index -
+    swap TOS with item at index (before placing said index on stack---
+    same as index itself works)) docstring {
+    % first put the part of the stack in play into an array
+    1 add array astore
+    % now get the first and last elements
+    dup array.first 1 index array.last
+    % store the final element in slot 0
+    2 index exch array.putfirst
+    % and the first element in slot arraylength-1
+    1 index exch array.putlast
+    % now put the modified array back on the stack, tossing the copy
+    aload pop
+  } bind def
+  /urand ( - integer
+    like `rand` but *real* random number
+    (not pseudorandom which gives identical series every run)) docstring {
+    (/dev/urandom) (r) file 0
+    % pop `true` flag after each read
+    4 {1 index read pop exch 8 bitshift or} repeat
+    exch closefile
+    1 31 bitshift 1 sub and  % chop sign bit using mask 0x7fffffff
+  } bind def
+  /=stack (  -
+    one-line version of pstack using ==) docstring {
     count array astore dup == aload pop
+  } bind def
+  /=stack /==stack alias  % for symmetry
+  /===stack (  -
+    =stack using ===) docstring {
+    count array astore dup === aload pop
+  } bind def
+  /#stack (  -
+    =stack, but to stderr) docstring {
+    count array astore dup ## aload pop
+  } bind def
+  /#stack /##stack alias  % for symmetry
+  /###stack (  -
+    #stack using ###) docstring {
+    count array astore dup ### aload pop
   } bind def
   /strlen {  % anystring - strlen  % length to first null (\000)
     % if no nulls, entire length of string (same as `length`)
     (\000) search {3 1 roll pop pop length} {length} ifelse
   } bind def
-  /append {  % stringbuffer string - combined
-    % add (concatenate) string to buffer without shortening buffer
-    % (a\000\000) (b) append -> (ab\000)
-    1 index dup strlen  % offset to first empty place in buffer
+  /string.append (  stringbuffer string -
+    add (concatenate) string to buffer without shortening buffer
+    (a\\000\\000) (b) append -> (ab\\000)
+    NOTE: must keep a reference to stringbuffer on stack or in userdict
+    or it will disappear after operation) docstring {
+    1 index strlen  % offset to first empty place in buffer
     % stack now: buffer string buffer offset
-    3 2 roll putinterval
+    exch putinterval
   } bind def
-  /strtruncate {  % stringbuffer - string
+  /array.append (  array any -
+    replace the first `null` element in array with `any`) docstring {
+    1 index length 1 sub 0 1 3 -1 roll
+    {2 index 1 index get null eq
+      {exch put exit}
+      {pop}
+      ifelse
+    }
+    for
+  } bind def
+  /inc {  % name -
+    % increments variable, e.g. `/a 1 def /a inc a =` shows `2`
+    dup cvx exec 1 add def
+  } bind def
+  /zero {  % name -
+    0 def
+  } bind def
+  /ord {  % numeric value of single-character string
+    0 get
+  } bind def
+  /chr {  % single-character string from number
+    1 string dup 0 4 -1 roll put
+  } bind def
+  % some constants that may be handy
+  /WhiteSpaces (  - string
+    white-space characters from table 3.1 of PLRM
+    notably, \\b (backspace) is not considered whitespace,
+    nor any other of the ASCII control characters) docstring
+    (\000\t\n\f\r ) def
+  /Space ( ) ord def
+  % NOTE: maybe string functions should all have the form string.something?
+  /substring ( string or array [startindex endindex?] - substring or subarray
+    like javascript, endindex if given is 1 + actual index) docstring {
+    dup 0 get 0 max  % startindex, no less than 0
+    2 index length min  % clamped on high side to length
+    exch {1 get} stopped {pop pop 1 index length} if  % endindex or length
+    2 index length min  % clamp maxindex to length
+    1 index max  % and clamp on low side to startindex
+    % now we have on stack: string startindex endindex
+    1 index sub getinterval
+  } bind def
+  /substring /subarray alias  % usable on arrays as well
+  /string.clear (  string -
+    empty string by replacing all characters with \\000) docstring {
+    dup length string 0 exch putinterval
+  } bind def
+  /string.random (  length - string
+    returns string with random binary contents) docstring {
+    string (/dev/urandom) (r) file exch readstring pop
+  } bind def
+  /array.clear (  array -
+    empty array by replacing all items with null) docstring {
+    dup length array 0 exch putinterval
+  } bind def
+  /string.fromarray (  array - string
+    convert array of numbers from 0 through 255 into string
+    from the Guru, Don Lancaster, at https://www.tinaja.com/glib/strconv.pdf
+    (he called it `makestring`)) docstring {
+    dup length string dup /NullEncode filter
+    3 -1 roll {1 index exch write} forall flushfile
+  } bind def
+  /array.fromstring (  string - array
+    convert string to array, also from Don Lancaster) docstring {
+    [ exch {} forall ]
+  } bind def
+  /array.random (  length - array
+    array with random contents, numbers from 0 through 255) docstring {
+    string.random array.fromstring
+  } bind def
+  /string.truncate {  % stringbuffer - string
     % remove trailing nulls at end of stringbuffer
     0 1 index strlen getinterval
   } bind def
-  /stradd {  % string1 string2 - combined
-    % add (concatenate) two strings: (a) (b) stradd -> (ab)
-    2 copy strlen exch strlen add string  % make new empty string
-    3 2 roll append exch append
+  /array.truncate ( array - array
+    truncate array to first `null` item) docstring {
+      /nullcount 0 def
+      dup
+      {null eq
+        {exit}
+        {/nullcount inc}
+        ifelse
+      }
+      forall
+      0 nullcount getinterval
   } bind def
-  /strmul {  % string multiplier - string
-    % multiply a string as does Python: (a) 5 strmul -> (aaaaa)
+  /string.count (  string substring - count
+    roughly equivalent to python's str.count) docstring {
+    1 dict begin
+    /counter zero
+    dup length
+      [
+        % python returns len(string) + 1 in '' case
+        {pop length 1 add /counter exch def}
+        {ord exch {1 index eq {/counter inc} if} forall pop}
+      ]
+    exch {get exec} stopped {
+      pop pop % get rid of array and searchstring length
+      {2 copy search  % post match pre true, or string false
+        {/counter inc pop pop 3 -1 roll pop exch}
+        {pop pop pop exit}
+        ifelse
+      } loop
+    } if
+    counter
+    end
+  } bind def
+  /string.split (  array string delimiter - array
+    similar to python's str.split, but treats all [(\\000)-( )]
+    characters as default whitespace) docstring {
+    dup length 0 gt
+      { % delimiter is not empty string, need to search for it
+        {2 copy search
+          {% post match pre true
+            5 index exch array.append pop 3 -1 roll pop exch
+          }
+          {% string false
+            3 index exch array.append
+            pop pop exit
+          }
+          ifelse
+        }
+        loop
+      }
+      { % delimiter is empty string, so first change all sub-() to ()
+        pop dup length 1 sub 0 1 3 -1 roll
+        {dup 2 index exch get Space le
+          {1 index exch 0 put}
+          {pop}
+          ifelse
+        } for
+        % now call recursively, but using (\000) as delimiter
+        (\000) string.split
+      }
+      ifelse
+    array.truncate  % get rid of any nulls following string contents
+  } bind def
+  /string.join (  array delimiter - string
+    join array of strings with delimiter to create string) docstring {
+    1024 dup mul string  % buffer for string creation
+    2 index length 2 sub 0 1 3 -1 roll  % set up for `for` loop
+      { % array delimiter buffer arrayindex
+        3 index exch get 1 index exch string.append  % array element appended
+        dup 2 index string.append  % delimiter appended
+      }
+      for
+    3 1 roll pop  % discard delimiter
+    dup length dup 0 gt
+      {
+        1 sub get  % grab final string from array
+        1 index exch string.append  % add to buffer
+      }
+      {pop pop}
+      ifelse
+    %(stack before string.truncate: ) #only #stack
+    string.truncate  % get rid of trailing null bytes
+  } bind def
+  /string.iscapital (  string - iscapital
+    somewhat similar to Python str.istitle()
+    but only checks first letter of first word
+    and only known to work with ASCII characters) docstring {
+    0 get dup 32 not and eq
+  } bind def
+  /array.last (  array - any
+    returns final element of array.
+    will /rangecheck on empty array) docstring {
+    dup length 1 sub get
+  } bind def
+  /array.first ( array - any
+    returns first element of array.
+    (not really needed; only for symmetry with array.last)) docstring {
+    0 get
+  } bind def
+  /array.putlast ( array any -
+    put an element into last bucket of array) docstring {
+    1 index length 1 sub exch put
+  } bind def
+  /array.putfirst ( array any -
+    put an element into first bucket of array
+    (only for symmetry with array.putlast)) docstring {
+    0 exch put
+  } bind def
+  /string.isheader (  string - isheader
+    similar to Python str.istitle()
+    but only checks first and final words for capitalization,
+    and ensures no periods (.) in it) docstring {
+    dup ( ) string.count 1 add array 1 index () string.split
+    dup array.last string.iscapital exch 0 get string.iscapital and
+    exch (.) string.count 0 eq and
+  } bind def
+  /string.add {  % string1 string2 - combined
+    % add (concatenate) two strings: (a) (b) string.add -> (ab)
+    2 copy strlen exch strlen add string  % make new empty string
+    dup 4 -1 roll string.append dup 3 -1 roll string.append
+  } bind def
+  /string.mul {  % string multiplier - string
+    % multiply a string as does Python: (a) 5 string.mul -> (aaaaa)
     1 index strlen 1 index mul string  % string multiplier buffer
-    exch {1 index append} repeat
+    exch {dup 2 index string.append} repeat
     exch pop
   } bind def
-  /add {  % redefine add to include stradd
-    {add} stopped {stradd} if
+  /add {  % redefine add to include string.add
+    {add} stopped {string.add} if
   } bind def
-  /mul {  % redefine mul to include strmul
-    {mul} stopped {strmul} if
+  /mul {  % redefine mul to include string.mul
+    {mul} stopped {string.mul} if
   } bind def
-  /truncate {  % redefine truncate to include strtruncate
-    {truncate} stopped {strtruncate} if
+  /truncate {  % redefine truncate to include string.truncate
+    {truncate} stopped {string.truncate} if
   } bind def
-  /strcopy {  % string - copyofstring
+  /string.copy {  % string - copyofstring
     % true copy as opposed to a reference
     dup length string copy
+  } bind def
+  /string.startswith (  string seek - flag
+    like Python str.startswith) docstring {
+    search
+      {3 1 roll pop pop length 0 eq}
+      {pop false}
+      ifelse
+  } bind def
+  /string.endswith (  string seek - flag
+    like Python str.endswith) docstring {
+    dup length dup  % stack now: string seek n n, where n is len(seek)
+    3 index length exch sub  % index of possible match
+    3 index exch 3 -1 roll getinterval eq exch pop
+  } bind def
+  % make a dictionary to translate symbols to numbers and back
+  % not sure how to go about this in a way that's more useful than
+  % `ord` and `chr`, but will figure it out eventually
+  /latin1 1024 dict dup begin
+    currentdict /C0 [
+      /NUL /SOH /STX /ETX /EOT /ENQ /ACK /BEL
+      /BS  /HT  /LF  /VT  /FF  /CR  /SO  /SI
+      /DLE /DC1 /DC2 /DC3 /DC4 /NAK /SYN /ETB
+      /CAN /EM  /SUB /ESC /FS  /GS  /RS  /US
+      /SP  % plus /DEL=\177
+    ] put
+    0 1 255 {dup chr currentdict 3 1 roll put} for
+    0 1 255 {dup chr cvn exch currentdict 3 1 roll put} for
+  end def
+  /cmp  (  n1 n2 - -1, 0, or 1 depending on the comparison
+    like the Python2 operator that was removed in Python3) docstring {
+      2 copy eq
+        {0}
+        {2 copy lt
+          {-1}
+          {1}
+          ifelse
+        }
+        ifelse
+      3 1 roll pop pop
+  } bind def
+  /range  ( [starts? stops steps?] - [range]
+    like the Python2 operator, returns an array of numbers) docstring {
+    % NOTE: postscript has `start` and `stop` operators/procedures!
+    3 dict begin
+    {dup 1 get /stops exch def  dup 0 get /starts exch def} stopped
+      {pop pop dup 0 get /stops exch def  /starts 0 def} if
+    {dup 2 get /steps exch def} stopped {pop pop /steps 1 def} if
+    pop  % discard starts-stops-steps array
+    [starts steps stops {} for]  % postscript has increment in middle, not end
+    % pythonic range excludes `stops` whereas postscript includes it
+    {dup length 1 sub 0 exch getinterval} stopped {[]} if
+    end
+  } bind def
+  /string.lower (  STRING - string
+    like Python str.lower(), converts entire string to lowercase
+    (but only known to work for ASCII)) docstring {
+    dup length dup string exch 0 1 3 -1 roll 1 sub
+    {dup 3 index exch get 32 or 2 index 3 1 roll put} for
+    exch pop
+  } bind def
+  /string.upper (  string - STRING
+    like Python str.upper(), converts entire string to uppercase
+    (but only known to work for ASCII)) docstring {
+    dup length dup string exch 0 1 3 -1 roll 1 sub
+    {dup 3 index exch get dup 64 and cvbool
+      {32 not and} if 2 index 3 1 roll put
+    } for
+    exch pop
   } bind def
   /add /+ alias  % allow use of `+` for `add`
   /sub /- alias  % allow use of `-` for `sub`
@@ -119,9 +467,9 @@ casperdict begin
   % cannot use `/` for `div`, nor `//` for `idiv`, until we hijack the parser
   % for the same reason we cannot use `%` for `mod`
   /reversed {  % for strings and arrays
-    % we make sure to make a copy with strcopy so as not to mess with
+    % we make sure to make a copy with string.copy so as not to mess with
     % the original; we were reversing argv[0] previously!
-    strcopy reverse
+    string.copy reverse
   } bind def
   /reverse {  % see comments for `reversed`
     % this is an *in-place* reverse, like Python!
@@ -141,16 +489,15 @@ casperdict begin
   } bind def
   /cvbool {  % something - boolean
     % convert anything (well, some things) to boolean
-    /booldict 3 dict def
-    booldict begin
-      /nulltype {pop false} def
-      /integertype {0 ne} def
-      /realtype {0 ne} def
-    end  % booldict
-    dup type dup booldict exch known
-      {booldict exch get exec}
+    3 dict begin
+    /nulltype {pop false} def
+    /integertype {0 ne} def
+    /realtype {0 ne} def
+    dup type dup currentdict exch known
+      {currentdict exch get exec}
       {pop length 0 ne}
       ifelse
+    end
   } bind def
   /pagewidth {currentpagedevice /PageSize get 0 get} bind def
   /pageheight {currentpagedevice /PageSize get 1 get} bind def
@@ -161,10 +508,12 @@ casperdict begin
   } bind def
   /.import {  % /dictname -
     % unconditionally import dict
+    2 dict begin  % for local variables
     /dottedname 1 index 64 string cvs (.) + def  % dotted name of imported dict
     /filename dottedname (cs) + def  % we look for file with .cs extension
     dup 5 dict def load
     begin filename runlibfile end  % loads file into dict of same name
+    end
   } bind def
   /import {  % /dictname reimport -
     % import the dict
@@ -173,13 +522,19 @@ casperdict begin
     currentdict 2 index known  % stack: /dictname reimport known
       {  % already in dict, so make sure correct type
         1 index load type /dicttype eq
-          {{(reimporting) = .import} {=only ( already imported) =} ifelse}
-          {1 index dup =only ( already exists and is not a dict) =
-           /typecheck signalerror}
+          {
+            {(reimporting) # .import}
+            {#only ( already imported) #}
+            ifelse
+          }
+          {
+            1 index dup #only ( already exists and is not a dict) #
+            /typecheck signalerror
+          }
           ifelse
       }
       {pop .import}  % not already in dict
-    ifelse
+      ifelse
   } bind def
 
   %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
@@ -196,6 +551,9 @@ casperdict begin
     /pathsep (:) def
     /linesep (\n) def
     /devnull (/dev/null) def
+    /mkdir /.mkdir {load} stopped
+      {pop {/undefinedresource signalerror}} if
+      def
   end  % os
   /posixpath 16 dict def
   posixpath begin
@@ -216,6 +574,9 @@ casperdict begin
         {reversed ()}  % pathwithnoext ''
       ifelse
       %(pstack after posixpath.splitext:) = pstack
+    } bind def
+    /exists {  % pathspec - flag
+      mark exch status {cleartomark true} {pop false} ifelse
     } bind def
   end  % posixpath
   os /path posixpath put
@@ -240,9 +601,15 @@ end  % casperdict
   % first copy above dictionaries into userdict
   forthdict userdict copy casperdict exch copy pop
   % put a minimal `sys.argv` into userdict in case a script is not being run
-  userdict /sys.argv [argv0] put
+  userdict /sys.argv {[argv0] put} stopped {pop [(gs)] put} if
   userdict /sys.argc 1 put
   % now enable top-down programming method
   topdown
+  count 0 gt
+    {(stack on casper exit: ) #only #stack /stackoverflow signalerror}
+    if
 } bind def
+end  % userdict
+{.setglobal} stopped {setglobal} if
+count 0 gt {(stack clutter on exit of casper.cs) /stackoverflow signalerror} if
 % vim: tabstop=8 shiftwidth=2 expandtab softtabstop=2

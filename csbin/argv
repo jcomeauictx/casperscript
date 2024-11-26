@@ -1,4 +1,4 @@
-#! bin/bccs
+#! bin/bccs --
 sys.argv dup length sys.argc ne {
  128 string (sys.argc (%d) incorrect, actual length %d)
    [sys.argc sys.argv length] sprintf =}

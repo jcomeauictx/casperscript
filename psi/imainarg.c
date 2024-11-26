@@ -131,6 +131,7 @@ char *argv0 = canonicalpath[0];
 char *programdirectory = canonicalpath[1];
 char *programname = canonicalpath[2];
 char *developmentlibs = canonicalpath[3];
+char prefix[8]; /* gs, cs, ccs, or bccs, plus final \0 */
 #endif
 
 /* ------ Main program ------ */
@@ -159,14 +160,18 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     const char *arg;
 #ifdef BUILD_CASPERSCRIPT
     char *argp[1024];
-    char *bccsprepend[] = {(char *)"--"};
-    int bccsprepended = sizeof(bccsprepend) / sizeof (char *);
     char *ccsprepend[] = {(char *)"-dNODISPLAY"};
     int ccsprepended = sizeof(ccsprepend) / sizeof(char *);
-    char *csprepend[] = {(char *)"-dNOSAFER", (char *)"-C"};
+    char *csprepend[] = {(char *)"-dNOSAFER"};
     int csprepended = sizeof(csprepend) / sizeof(char *);
-    char *bccsprepend2[] = {(char *)"-q", (char *)"-dBATCH"};
-    int bccsprepended2 = sizeof(bccsprepend2) / sizeof(char *);
+    char *bccsprepend[] = {(char *)"-q", (char *)"-dBATCH"};
+    int bccsprepended = sizeof(bccsprepend) / sizeof(char *);
+    char *ccsappend[] = {};
+    int ccsappended = sizeof(ccsappend) / sizeof(char *);
+    char *csappend[] = {(char *)"-C"};
+    int csappended = sizeof(csappend) / sizeof(char *);
+    char *bccsappend[] = {};
+    int bccsappended = sizeof(bccsappend) / sizeof (char *);
 #endif
     arg_list args;
     int code;
@@ -178,21 +183,23 @@ gs_main_init_with_args01(gs_main_instance * minst, int argc, char *argv[])
     /* assuming the use of bccs from the shebang line, which means that
      * the Linux kernel will already have appended the filename and any
      * supplied args. */
-    if (strcmp(programname, "bccs") == 0) {
-        argc = prependargs(argc, argv, argp, bccsprepend, bccsprepended);
+    if (strcmp(prefix, "bccs") == 0) {
+        argc = prependopts(argc, argv, argp, bccsprepend, bccsprepended);
+        argv = argp;
+        argc = appendopts(argc, argv, argp, bccsappend, bccsappended);
         argv = argp;
     }
-    if (endswith(programname, "cs")) {
-        argc = prependargs(argc, argv, argp, csprepend, csprepended);
+    if (endswith(prefix, "cs")) {
+        argc = prependopts(argc, argv, argp, csprepend, csprepended);
+        argv = argp;
+        argc = appendopts(argc, argv, argp, csappend, csappended);
         argv = argp;
     }
-    if (endswith(programname, "ccs")) {
+    if (endswith(prefix, "ccs")) {
         /* "console" casperscript doesn't use an X window */
-        argc = prependargs(argc, argv, argp, ccsprepend, ccsprepended);
+        argc = prependopts(argc, argv, argp, ccsprepend, ccsprepended);
         argv = argp;
-    }
-    if (strcmp(programname, "bccs") == 0) {  /* go back and put -q first */
-        argc = prependargs(argc, argv, argp, bccsprepend2, bccsprepended2);
+        argc = appendopts(argc, argv, argp, ccsappend, ccsappended);
         argv = argp;
     }
     syslog(LOG_USER | LOG_DEBUG, "modified argv follows");
@@ -372,6 +379,7 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
 #ifdef BUILD_CASPERSCRIPT
     char buffer[PATH_MAX + 256];
     char *temp;
+    char *s;
 #endif
     char *argp[1024];
     int code;
@@ -385,6 +393,13 @@ gs_main_init_with_args(gs_main_instance * minst, int argc, char *argv[])
     DISCARD(strcpy(canonicalpath[2], argv0));
     programdirectory = dirname(canonicalpath[1]);
     programname = chop_extension(basename(canonicalpath[2]));
+    strncpy(prefix, programname, 4);
+    if ((s = strchr(prefix, 's')) != NULL) *++s = '\0';
+    else {
+        errprintf(minst->heap,
+            "prefix %s must be one of: gs, cs, ccs, bccs\n", prefix);
+        return_error(gs_error_Fatal);
+    }
     strcat(strcpy(buffer, programdirectory), "/../Resource/Init");
     developmentlibs = realpath(buffer, canonicalpath[3]);
     syslog(LOG_USER | LOG_DEBUG, "Executable %s in directory %s, dev %s",

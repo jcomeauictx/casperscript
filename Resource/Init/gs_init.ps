@@ -269,15 +269,10 @@ currentdict /DEVICE known not
 
 % Define procedures to assist users who don't read the documentation.
 userdict begin
-/docstrings 16 dict def  % casperscript addition
-/help  % casperscript adds context-specific help
- { count 0 eq
-  {(Enter PostScript commands.  '(filename) run' runs a file, 'quit' exits.)}
-  {dup docstrings exch known {docstrings exch get} if}
-  ifelse {print (\n) print flush} stopped {
-   (no help for /) print 64 string cvs print (\n) print flush
-  } if
- } .bind def
+/help
+ { (Enter PostScript commands.  '(filename) run' runs a file, 'quit' exits.\n)
+   print flush
+ } .forcebind def
 end
 
 % Define =string, which is used by some PostScript programs even though
@@ -664,26 +659,26 @@ currentdict /.execute .undef
 	/promptname /programname where {pop programname} {(gs)} ifelse
 	dup (gs) eq {pop (GS)} if def
 	% steal from casperscript things that may not be available yet
-	/strlen {  % anystring - strlen  % length to first null (\000)
+	/.strlen {  % anystring - strlen  % length to first null (\000)
 		% if no nulls, entire length of string (same as `length`)
 		(\000) search {3 1 roll pop pop length} {length} ifelse
 	} bind def
-	/append { % stringbuffer string - combined
+	/.append {  % stringbuffer string -
 		% add (concatenate) string to buffer without shortening buffer
 		% (a\000\000) (b) append -> (ab\000)
-		1 index dup strlen  % offset to first empty place in buffer
+		1 index .strlen  % offset to first empty place in buffer
 		% stack now: buffer string buffer offset
-		3 2 roll putinterval
+		exch putinterval
 	} bind def
-	/stradd {  % string1 string2 - combined
+	/.stradd {  % string1 string2 - combined
 		% add (concatenate) two strings: (a) (b) stradd -> (ab)
-		2 copy strlen exch strlen add string  % make new empty string
-		3 2 roll append exch append
+		2 copy .strlen exch .strlen add string  % make new empty string
+		dup 4 -1 roll .append dup 3 -1 roll .append
 	} bind def
 	count  % get current stack count
         promptname
-        exch dup 0 ne {exch (<) stradd exch 6 string cvs stradd} {pop} ifelse
-        (>) stradd /promptmessage exch def
+        exch dup 0 ne {exch (<) .stradd exch 6 string cvs .stradd} {pop} ifelse
+        (>) .stradd /promptmessage exch def
 	promptmessage print flush
 } bind def
 /prompt	{ flush flushpage //systemdict /NOPROMPT get not { //.promptmsg exec} if } bind def
@@ -1488,18 +1483,35 @@ end
 /== {==only (\n) print} .internalbind def
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
-/.dict /write==only load 0 get dup length 2 add dict .copydict dup
-
-begin def
+% casperscript: fix for recursive references
+.currentglobal false .setglobal  % put .recursivecheck dict in local VM
+userdict /.recursivecheck 256 dict put
+.setglobal
+/.dict /write==only load 0 get dup length 3 add dict .copydict dup
+% (added 3 slots for the following definitions)
+% at this point the stack contains: /.dict and 2 copies of
+% << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
+%    /arraytype -packedarray- /packedarraytype -packedarray-
+%    /.dict -dict- /.cvp -packedarray- /.p -packedarray >>
+begin def  % `begin` takes new dict off stack, and `def` eats /.dict -dict-
+% stack is now empty, and dict is being built until `end`.
+  /erase  % -dict- -
+        { dup {pop 1 index exch undef} forall pop } .internalbind def
   /dicttype
-        { dup rcheck
-           { (<< ) .p1
-              { 2 index 3 -1 roll .print pop ( ) .p1
-                1 index exch .print pop ( ) .p
-              }
-             forall (>>) .p
-           }
+        { dup .recursivecheck exch known
            { .cvp
+           }
+           { dup rcheck
+              { dup .recursivecheck exch true put
+                (<< ) .p1
+                 { 2 index 3 -1 roll .print pop ( ) .p1
+                   1 index exch .print pop ( ) .p
+                 }
+                forall (>>) .p
+              }
+              { .cvp
+              }
+             ifelse
            }
           ifelse
         } .internalbind def
@@ -1507,7 +1519,12 @@ begin def
         { 1 index exch 2 .writecvp
         } .internalbind def
 
-{//.dict begin .print pop end}
+{//.dict begin
+  .recursivecheck erase
+  .print pop
+  .recursivecheck erase
+  end
+}
   .internalbind
 end
 
