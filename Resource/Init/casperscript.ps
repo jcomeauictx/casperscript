@@ -431,8 +431,21 @@ casperdict begin
       /CAN /EM  /SUB /ESC /FS  /GS  /RS  /US
       /SP  % plus /DEL=\177
     ] put
+    currentdict /C1 [
+      /PAD /HOP /BPH /NBH /IND /NEL /SSA /ESA
+      /HTS /HTJ /VTS /PLD /PLU /RI  /SS2 /SS3
+      /DCS /PU1 /PU2 /STS /CCH /MW  /SPA /EPA
+      /SOS /SGC /SCI /CSI /ST  /OSC /PM  /APC
+      /NBSP
+    ] put
+    % map numbers to strings
     0 1 255 {dup chr currentdict 3 1 roll put} for
+    % map characters (as names) to numbers
     0 1 255 {dup chr cvn exch currentdict 3 1 roll put} for
+    % map C0 and C1 control code names to numbers
+    0 1 32  {dup C0 exch get exch currentdict 3 1 roll put} for
+    currentdict /DEL 16#7F put
+    0 1 32  {dup C1 exch get exch 256 add currentdict 3 1 roll put} for
   end def
   /cmp  (  n1 n2 - -1, 0, or 1 depending on the comparison
     like the Python2 operator that was removed in Python3) docstring {
