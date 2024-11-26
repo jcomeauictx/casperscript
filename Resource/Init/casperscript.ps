@@ -441,7 +441,8 @@ casperdict begin
     % map numbers to strings
     0 1 255 {dup chr currentdict 3 1 roll put} for
     % map characters (as names) to numbers
-    0 1 255 {dup chr cvn exch currentdict 3 1 roll put} for
+    33 1 126 {dup chr cvn exch currentdict 3 1 roll put} for
+    128 33 add 1 255 {dup chr cvn exch currentdict 3 1 roll put} for
     % map C0 and C1 control code names to numbers
     0 1 32  {dup C0 exch get exch currentdict 3 1 roll put} for
     currentdict /DEL 16#7F put
