@@ -361,6 +361,20 @@ casperdict begin
     (only for symmetry with array.putlast)) docstring {
     0 exch put
   } bind def
+  /array.count ( array any - count
+    like string.count but less efficient.
+    counts all instances of `any` in the array) docstring {
+    0 2 index {2 index eq {1 add} if} forall
+    3 1 roll pop pop
+  } bind def
+  /array.contains ( array any - flag
+    equivalent of Python's `in` operator for arrays) docstring {
+    array.count 0 ne
+  } bind def
+  /string.contains ( string substring - flag
+    equivalent of Python's `in` operator for strings) docstring {
+    string.count 0 ne
+  } bind def
   /string.isheader (  string - isheader
     similar to Python str.istitle()
     but only checks first and final words for capitalization,
