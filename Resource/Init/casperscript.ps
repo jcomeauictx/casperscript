@@ -388,6 +388,17 @@ casperdict begin
     2 copy strlen exch strlen add string  % make new empty string
     dup 4 -1 roll string.append dup 3 -1 roll string.append
   } bind def
+  /string.sub ( string substring - string
+    string reduction, opposite of string concatenation) docstring {
+    2 copy string.endswith
+      {1 index length exch length sub 0 exch 2 array astore substring}
+      {pop}
+      ifelse
+  } bind def
+  /name.sub ( name string - name
+    like string.sub but takes and returns name) docstring {
+    exch dup length string cvs exch string.sub cvn
+  } bind def
   /string.mul {  % string multiplier - string
     % multiply a string as does Python: (a) 5 string.mul -> (aaaaa)
     1 index strlen 1 index mul string  % string multiplier buffer
