@@ -17,6 +17,46 @@ userdict begin
 /#	{#only (\n) #only} bind def
 /##only {(%stderr) (w) file dup 3 -1 roll write==only flushfile} bind def
 /## {##only (\n) #only} bind def
+% casperscript: redefine write===only for recursive references
+% otherwise code is copied almost verbatim from gs_init.ps
+userdict /.recursivecheck 256 dict put
+/.dict /write==only load 0 get dup length 3 add dict .copydict dup
+% (added 3 slots for the following definitions)
+% at this point the stack contains: /.dict and 2 copies of
+% << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
+%    /arraytype -packedarray- /packedarraytype -packedarray-
+%    /.dict -dict- /.cvp -packedarray- /.p -packedarray >>
+begin def  % `begin` takes new dict off stack, and `def` eats /.dict -dict-
+% stack is now empty, and dict is being built until `end`.
+  /erase  % -dict- -
+    {dup {pop 1 index exch undef} forall pop} bind def
+  /dicttype
+    { dup .recursivecheck exch known
+      {.cvp}
+      {dup rcheck
+        {dup .recursivecheck exch true put
+          (<< ) .p1
+          {2 index 3 -1 roll .print pop ( ) .p1
+            1 index exch .print pop ( ) .p
+          }
+          forall (>>) .p
+        }
+        {.cvp}
+        ifelse
+      }
+      ifelse
+    } bind def
+  /stringtype {1 index exch 2 .writecvp} bind def
+
+  {//.dict begin
+    .recursivecheck erase
+    .print pop
+    .recursivecheck erase
+    end
+  } bind
+end
+/write===only exch def
+
 /###only {(%stderr) (w) file dup 3 -1 roll write===only flushfile} bind def
 /### {###only (\n) #only} bind def
 /.silent -112 def  % gs_error_silent in base/gserrors.h
@@ -643,13 +683,13 @@ casperdict begin
     {(GS)}
     {programname}
     ifelse def
-  /.promptmsg  % overwrites the one defined in gs_init.ps
-    % define .promptstr in currentdict for libreadline to use
-    /.promptstr promptname count 0 eq
+  /.promptmsg {  % overwrites the one defined in gs_init.ps
+    % define .promptstr in userdict for libreadline to use
+    userdict /.promptstr .promptname count 0 eq
       {(>) string.add}
-      {(<) count 10 string cvs string.add (>) string.add}
-      def
-    .promptstr #
+      {(<) string.add count 10 string cvs string.add (>) string.add}
+      ifelse put
+    .promptstr print flush
   } bind def
   % now copying almost verbatim from gs_init.ps
   /prompt {flush flushpage //systemdict /NOPROMPT get not
