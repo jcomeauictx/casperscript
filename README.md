@@ -80,3 +80,8 @@ Don't forget to go back to digitalocean.com and delete (Destroy) your droplet!
 * when coding casperscript.cs itself, use the `caspertest` recipe in
   GNUmakefile to make sure it's compatible with vanilla gs, e.g.:
   `make TESTCASPER='(this is) string.split' caspertest`
+* `Resource/Init/gs_init.ps` says "The interpreter will run the initial
+   procedure (start).", but it's not clear how; the answer is to look in
+   `psi/gs.c` and `psi/dxmain.c`, both of which have the statements
+   `const char start_string[] = "systemdict /start get exec\n";`
+   and `gsapi_run_string(instance, start_string, ...`

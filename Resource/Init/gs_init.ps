@@ -654,34 +654,13 @@ currentdict /.execute .undef
 /languagelevel 1 def		% gs_lev2.ps may change this
 /makeimagedevice { //false makewordimagedevice } odef
 /matrix	{ 6 array identmatrix } odef
+
 /.promptmsg {
-	% use lowercase for cs and ccs so user quickly knows it's casper
-	/promptname /programname where {pop programname} {(gs)} ifelse
-	dup (gs) eq {pop (GS)} if def
-	% steal from casperscript things that may not be available yet
-	/.strlen {  % anystring - strlen  % length to first null (\000)
-		% if no nulls, entire length of string (same as `length`)
-		(\000) search {3 1 roll pop pop length} {length} ifelse
-	} bind def
-	/.append {  % stringbuffer string -
-		% add (concatenate) string to buffer without shortening buffer
-		% (a\000\000) (b) append -> (ab\000)
-		1 index .strlen  % offset to first empty place in buffer
-		% stack now: buffer string buffer offset
-		exch putinterval
-	} bind def
-	/.stradd {  % string1 string2 - combined
-		% add (concatenate) two strings: (a) (b) stradd -> (ab)
-		2 copy .strlen exch .strlen add string  % make new empty string
-		dup 4 -1 roll .append dup 3 -1 roll .append
-	} bind def
-	count  % get current stack count
-        promptname
-        exch dup 0 ne {exch (<) .stradd exch 6 string cvs .stradd} {pop} ifelse
-        (>) .stradd /promptmessage exch def
-	promptmessage print flush
-} bind def
-/prompt	{ flush flushpage //systemdict /NOPROMPT get not { //.promptmsg exec} if } bind def
+        (GS) print
+        count 0 ne { (<) print count =only } if
+        (>) print flush
+} .internalbind def
+/prompt	{ flush flushpage //systemdict /NOPROMPT get not { //.promptmsg exec} if } .internalbind def
 currentdict /.promptmsg .undef
 
 /pstack	{ 0 1 count 3 sub { index == } for } .internalbind def
@@ -1483,35 +1462,18 @@ end
 /== {==only (\n) print} .internalbind def
 % Define [write]===[only], an extension that prints dictionaries
 % in readable form and doesn't truncate strings.
-% casperscript: fix for recursive references
-.currentglobal false .setglobal  % put .recursivecheck dict in local VM
-userdict /.recursivecheck 256 dict put
-.setglobal
-/.dict /write==only load 0 get dup length 3 add dict .copydict dup
-% (added 3 slots for the following definitions)
-% at this point the stack contains: /.dict and 2 copies of
-% << /.p1 -packedarray- /.p2 -packedarray /.print -packedarray-
-%    /arraytype -packedarray- /packedarraytype -packedarray-
-%    /.dict -dict- /.cvp -packedarray- /.p -packedarray >>
-begin def  % `begin` takes new dict off stack, and `def` eats /.dict -dict-
-% stack is now empty, and dict is being built until `end`.
-  /erase  % -dict- -
-        { dup {pop 1 index exch undef} forall pop } .internalbind def
+/.dict /write==only load 0 get dup length 2 add dict .copydict dup
+
+begin def
   /dicttype
-        { dup .recursivecheck exch known
-           { .cvp
+        { dup rcheck
+           { (<< ) .p1
+              { 2 index 3 -1 roll .print pop ( ) .p1
+                1 index exch .print pop ( ) .p
+              }
+             forall (>>) .p
            }
-           { dup rcheck
-              { dup .recursivecheck exch true put
-                (<< ) .p1
-                 { 2 index 3 -1 roll .print pop ( ) .p1
-                   1 index exch .print pop ( ) .p
-                 }
-                forall (>>) .p
-              }
-              { .cvp
-              }
-             ifelse
+           { .cvp
            }
           ifelse
         } .internalbind def
@@ -1519,12 +1481,7 @@ begin def  % `begin` takes new dict off stack, and `def` eats /.dict -dict-
         { 1 index exch 2 .writecvp
         } .internalbind def
 
-{//.dict begin
-  .recursivecheck erase
-  .print pop
-  .recursivecheck erase
-  end
-}
+{//.dict begin .print pop end}
   .internalbind
 end
 
@@ -2920,5 +2877,3 @@ WRITESYSTEMDICT {
 userdict /AGM_preserve_spots //false put
 
 % The interpreter will run the initial procedure (start).
-% (but how? gs_main_run_start() is never run -- jc@unternet.net)
-% (answer: gs.c, dxmain.c -- jc@unternet.net)

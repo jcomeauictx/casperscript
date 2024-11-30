@@ -633,6 +633,29 @@ casperdict begin
     pop
     %(pstack after scriptname:) = pstack
   } bind def
+  % PLRM: `prompt` can be overridden by defining prompt in userdict or
+  % some other dictionary higher on the dictionary stack.
+  /programname where
+    {pop}
+    {/programname (gs) def}
+    ifelse
+  /.promptname programname (gs) eq
+    {(GS)}
+    {programname}
+    ifelse def
+  /.promptmsg  % overwrites the one defined in gs_init.ps
+    % define .promptstr in currentdict for libreadline to use
+    /.promptstr promptname count 0 eq
+      {(>) string.add}
+      {(<) count 10 string cvs string.add (>) string.add}
+      def
+    .promptstr #
+  } bind def
+  % now copying almost verbatim from gs_init.ps
+  /prompt {flush flushpage //systemdict /NOPROMPT get not
+    {//.promptmsg exec}
+    if
+  } bind def
 end  % casperdict
 
 /casper {  % -
