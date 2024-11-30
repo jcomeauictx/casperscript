@@ -685,11 +685,11 @@ casperdict begin
     ifelse def
   /.promptmsg {  % overwrites the one defined in gs_init.ps
     % define .promptstr in userdict for libreadline to use
-    count userdict /.promptstr .promptname 4 -1 roll 0 eq
+    count dup userdict /.promptstr .promptname 4 -1 roll 0 eq
       {(>) string.add}
-      {(<) string.add count 10 string cvs string.add (>) string.add}
+      {(<) string.add 4 -1 roll 6 string cvs string.add (>) string.add}
       ifelse put
-    .promptstr print flush
+    .promptstr #only
   } bind def
   % now copying almost verbatim from gs_init.ps
   /prompt {flush flushpage //systemdict /NOPROMPT get not
