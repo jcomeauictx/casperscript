@@ -686,7 +686,7 @@ casperdict begin
   /.promptmsg {  % overwrites the one defined in gs_init.ps
     % define .promptstr in userdict for libreadline to use
     count dup userdict /.promptstr .promptname 4 -1 roll 0 eq
-      {(>) string.add}
+      {(>) string.add 4 -1 roll pop}
       {(<) string.add 4 -1 roll 6 string cvs string.add (>) string.add}
       ifelse put
     .promptstr #only
