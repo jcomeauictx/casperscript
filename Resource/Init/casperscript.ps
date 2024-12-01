@@ -305,8 +305,9 @@ casperdict begin
       forall
       0 nullcount getinterval
   } bind def
-  /string.count (  string substring - count
+  /string.count (string#string string#substring|int#char - int#count
     roughly equivalent to python's str.count) docstring {
+    dup type /integertype eq {chr} if
     1 dict begin
     /counter zero
     dup length
@@ -411,7 +412,7 @@ casperdict begin
     equivalent of Python's `in` operator for arrays) docstring {
     array.count 0 ne
   } bind def
-  /string.contains ( string substring - flag
+  /string.contains (string#string string#substring|int#char - bool#flag
     equivalent of Python's `in` operator for strings) docstring {
     string.count 0 ne
   } bind def
