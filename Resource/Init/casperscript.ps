@@ -492,22 +492,27 @@ casperdict begin
     2 index dup type /integertype eq {chr 3 #stack swap} if pop
     % allow either `null` or -1 to mean "all occurrences"; in that case,
     % use length of string as count, since there can't be more than that
-    dup dup null eq exch -1 eq or {2 index length exch pop} if
+    dup dup null eq exch -1 eq or {3 index length exch pop} if
     () 5 1 roll  % create empty string to hold results
     % use flag at start of each iteration to indicate `done`
     % necessary because `(test string) (t) 1` would never hit "not found"
-    false exch
+    false exch (running ) #only dup #only ( iterations) #
       {
         pop 3 copy pop search  % returns post match pre true if successful
           {
+            (after successful search: ) #only #stack
             3 1 roll pop (discarded match: ) #only #stack  % discard `match`
             % make `post` the new string#original
-            3 swap pop (new string: ) #only #stack
-            3 index exch string.add (new result: ) #only #stack
-            3 swap pop false (ready for next iteration: ) #only #stack
+            4 swap pop (new string: ) #only #stack
+            % append `pre` and `string#new` to result
+            4 index exch string.add (partial result: ) #only #stack
+            1 index string.add (new result: ) #only #stack
+            4 swap pop false (ready for next iteration: ) #only #stack
           }
           {
-            (not found) # 4 index exch string.add 4 swap
+            % not found returns `string false`
+            (not found: ) #only #stack
+            4 index exch string.add 4 swap
             pop pop pop pop true exit
           }
           ifelse
@@ -517,7 +522,7 @@ casperdict begin
         {(ended successfully: ) #only #stack}
         {
           (never hit "not found" state: ) #only #stack
-          pop pop  % discard string#old an string#new
+          pop pop  % discard string#old and string#new
           string.add  % add last `post` to result
         }
         ifelse
