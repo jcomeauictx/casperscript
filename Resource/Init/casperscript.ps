@@ -493,20 +493,30 @@ casperdict begin
     % use length of string as count, since there can't be more than that
     dup dup null eq exch -1 eq or {2 index length exch pop} if
     () 4 1 roll  % create empty string to hold results
-    {
-      2 copy search  % returns post match pre true if successful
+    % use flag at start of each iteration to indicate `done`
+    % necessary because `(test string) (t) 1` would never hit "not found"
+    false exch
+      {
+        pop 2 copy search  % returns post match pre true if successful
+          {
+            3 1 roll pop (discarded match: ) #only #stack  % discard `match`
+            % make `post` the new string#original
+            3 swap pop (new string: ) #only #stack
+            3 index exch string.add (new result: ) #only #stack
+            3 swap pop false (ready for next iteration: ) #only #stack
+          }
+          {(not found) # 3 index exch string.add 3 swap pop pop pop true exit}
+          ifelse
+        (end repeat loop, stack: ) #only #stack
+      }
+      repeat
+        {(ended successfully: ) #only #stack}
         {
-          3 1 roll pop (discarded match: ) #only #stack  % discard `match`
-          % make `post` the new string#original
-          3 swap pop (new string: ) #only #stack
-          3 index exch string.add (new result: ) #only
-          #stack 3 swap pop #stack
+          (never hit "not found" state: ) #only #stack
+          pop  % discard string#toremove
+          string.add  % add last `post` to result
         }
-        {(not found) # 3 index exch string.add 3 swap pop exit}
         ifelse
-    }
-    repeat
-    pop pop
   } bind def
 
   % make a dictionary to translate symbols to numbers and back
