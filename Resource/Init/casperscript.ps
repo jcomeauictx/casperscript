@@ -471,6 +471,20 @@ casperdict begin
     3 index length exch sub  % index of possible match
     3 index exch 3 -1 roll getinterval eq exch pop
   } bind def
+  /string.removeprefix (string#prefixed string#prefix - string#unprefixed
+    like Python3's string.removeprefix) docstring {
+      2 copy string.startswith
+        {length 1 array astore substring}
+        {pop}
+        ifelse
+  } bind def
+  /string.removesuffix (string#suffixed string#suffix - string#unsuffixed
+    like Python3's string.removesuffix) docstring {
+      2 copy string.endswith
+        {1 index length exch length sub 0 exch 2 array astore substring}
+        {pop}
+        ifelse
+  } bind def
   % make a dictionary to translate symbols to numbers and back
   % not sure how to go about this in a way that's more useful than
   % `ord` and `chr`, but will figure it out eventually
