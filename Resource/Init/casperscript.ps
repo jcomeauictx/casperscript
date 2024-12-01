@@ -485,36 +485,39 @@ casperdict begin
         {pop}
         ifelse
   } bind def
-  /string.replace (string#original string#toremove int#count - string#modified
+  /string.replace (
+    string#original string#old string#new int#count - string#modified
     like Python's str.replace, count of -1 or `null` means "all") docstring {
-    % for convenience, allow string#toremove to be a character (integer)
-    1 index dup type /integertype eq {chr 2 #stack swap} if pop
+    % for convenience, allow string#old to be a character (integer)
+    2 index dup type /integertype eq {chr 3 #stack swap} if pop
     % allow either `null` or -1 to mean "all occurrences"; in that case,
     % use length of string as count, since there can't be more than that
     dup dup null eq exch -1 eq or {2 index length exch pop} if
-    () 4 1 roll  % create empty string to hold results
+    () 5 1 roll  % create empty string to hold results
     % use flag at start of each iteration to indicate `done`
     % necessary because `(test string) (t) 1` would never hit "not found"
     false exch
       {
-        pop 2 copy search  % returns post match pre true if successful
+        pop 3 copy pop search  % returns post match pre true if successful
           {
-            3 1 roll pop  % discard `match`
+            3 1 roll pop (discarded match: ) #only #stack  % discard `match`
             % make `post` the new string#original
-            3 swap pop
-            3 index exch string.add  % new result
-            3 swap pop false  % "not done", ready for next iteration if any
+            3 swap pop (new string: ) #only #stack
+            3 index exch string.add (new result: ) #only #stack
+            3 swap pop false (ready for next iteration: ) #only #stack
           }
-          {3 index exch string.add 3 swap pop pop pop true exit}  % done
+          {
+            (not found) # 4 index exch string.add 4 swap
+            pop pop pop pop true exit
+          }
           ifelse
+        (end repeat loop, stack: ) #only #stack
       }
       repeat
+        {(ended successfully: ) #only #stack}
         {
-          %(ended successfully: ) #only #stack
-        }
-        {
-          %(never hit "not found" state: ) #only #stack
-          pop  % discard string#toremove
+          (never hit "not found" state: ) #only #stack
+          pop pop  % discard string#old an string#new
           string.add  % add last `post` to result
         }
         ifelse
