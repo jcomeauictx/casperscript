@@ -499,20 +499,21 @@ casperdict begin
       {
         pop 2 copy search  % returns post match pre true if successful
           {
-            3 1 roll pop (discarded match: ) #only #stack  % discard `match`
+            3 1 roll pop  % discard `match`
             % make `post` the new string#original
-            3 swap pop (new string: ) #only #stack
-            3 index exch string.add (new result: ) #only #stack
-            3 swap pop false (ready for next iteration: ) #only #stack
+            3 swap pop
+            3 index exch string.add  % new result
+            3 swap pop false  % "not done", ready for next iteration if any
           }
-          {(not found) # 3 index exch string.add 3 swap pop pop pop true exit}
+          {3 index exch string.add 3 swap pop pop pop true exit}  % done
           ifelse
-        (end repeat loop, stack: ) #only #stack
       }
       repeat
-        {(ended successfully: ) #only #stack}
         {
-          (never hit "not found" state: ) #only #stack
+          %(ended successfully: ) #only #stack
+        }
+        {
+          %(never hit "not found" state: ) #only #stack
           pop  % discard string#toremove
           string.add  % add last `post` to result
         }
