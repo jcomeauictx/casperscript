@@ -485,6 +485,30 @@ casperdict begin
         {pop}
         ifelse
   } bind def
+  /string.replace (string#original string#toremove int#count - string#modified
+    like Python's str.replace, count of -1 or `null` means "all") docstring {
+    % for convenience, allow string#toremove to be a character (integer)
+    1 index dup type /integertype eq {chr 2 #stack swap} if pop
+    % allow either `null` or -1 to mean "all occurrences"; in that case,
+    % use length of string as count, since there can't be more than that
+    dup dup null eq exch -1 eq or {2 index length exch pop} if
+    () 4 1 roll  % create empty string to hold results
+    {
+      2 copy search  % returns post match pre true if successful
+        {
+          3 1 roll pop (discarded match: ) #only #stack  % discard `match`
+          % make `post` the new string#original
+          3 swap pop (new string: ) #only #stack
+          3 index exch string.add (new result: ) #only
+          #stack 3 swap pop #stack
+        }
+        {(not found) # 3 index exch string.add 3 swap pop exit}
+        ifelse
+    }
+    repeat
+    pop pop
+  } bind def
+
   % make a dictionary to translate symbols to numbers and back
   % not sure how to go about this in a way that's more useful than
   % `ord` and `chr`, but will figure it out eventually
