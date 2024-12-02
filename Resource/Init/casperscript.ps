@@ -472,6 +472,10 @@ casperdict begin
     3 index length exch sub  % index of possible match
     3 index exch 3 -1 roll getinterval eq exch pop
   } bind def
+  /name.endswith (name#name str#seek - bool#flag
+    Python str.endswith but for name objects) docstring {
+    exch dup length string cvs exch string.endswith
+  } bind def
   /string.removeprefix (string#prefixed string#prefix - string#unprefixed
     like Python3's string.removeprefix) docstring {
       2 copy string.startswith
