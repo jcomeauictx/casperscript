@@ -35,7 +35,7 @@ TESTCASPER ?= 0.0 cvbool =
 CASPERTEST ?= (Resource/Init/casperscript.ps) run casper $(TESTCASPER)
 CSBIN ?= $(wildcard csbin/*)
 ifeq ($(SHOWENV),)
-export CASPER XTRALIBS
+export CASPER XTRALIBS GS_TIFF_CONFIGURE_OPTS
 else
 export
 endif
