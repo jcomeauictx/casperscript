@@ -16,7 +16,7 @@ CONFIG_ARGS += --with-gs=$(GSNAME)
 # for some reason, although configure.ac has `--disable-pixarlog`, it is not reliable
 GS_TIFF_CONFIGURE_OPTS += --disable-pixarlog
 # *** No rule to make target 'obj/libocr_0_@OCR_SHARED@.dev', needed by 'obj/libocr.dev'.  Stop.
-CONFIG_ARGS += --without-tesseract
+CONFIG_ARGS += --with-tesseract
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
 XCFLAGS += -DSYSLOG_DEBUGGING
