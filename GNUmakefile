@@ -14,7 +14,7 @@ GSBUILDNAME ?= $(shell awk -F= '$$1 == "GS" {print $$2}' config.log | tr -d "'")
 GS_BUILDVERSION := $(shell string=$(GSBUILDNAME); echo $${string##*-})
 CONFIG_ARGS += --with-gs=$(GSNAME)
 # for some reason, although configure.ac has `--disable-pixarlog`, it is not reliable
-CONFIG_ARGS += --with-system-libtiff
+GS_TIFF_CONFIGURE_OPTS += --disable-pixarlogs
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
 XCFLAGS += -DSYSLOG_DEBUGGING
