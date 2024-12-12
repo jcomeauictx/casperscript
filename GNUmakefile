@@ -13,9 +13,8 @@ GSNAME := cs-$(CS_VERSION)
 GSBUILDNAME ?= $(shell awk -F= '$$1 == "GS" {print $$2}' config.log | tr -d "'")
 GS_BUILDVERSION := $(shell string=$(GSBUILDNAME); echo $${string##*-})
 CONFIG_ARGS += --with-gs=$(GSNAME)
-# for some reason, although configure.ac has `--disable-pixarlog`, it is not reliable
+# although configure.ac has `--disable-pixarlog`, unless ./configure is removed, it won't be rebuilt.
 GS_TIFF_CONFIGURE_OPTS += --disable-pixarlog
-# *** No rule to make target 'obj/libocr_0_@OCR_SHARED@.dev', needed by 'obj/libocr.dev'.  Stop.
 CONFIG_ARGS += --with-tesseract
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
@@ -121,6 +120,10 @@ test_splitargs:
 	./splitargs -option0 --
 	./splitargs -option - arg1
 	@echo 'Must `make distclean` before attempting new build' >&2
+distclean: | $(CS_MAKEFILES)
+	# because built-in distclean doesn't remove ./configure
+	$(MAKE) -f $< $@
+	rm -f configure
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
