@@ -123,7 +123,7 @@ test_splitargs:
 	@echo 'Must `make distclean` before attempting new build' >&2
 distclean: | $(CS_MAKEFILES)
 	# because built-in distclean doesn't remove ./configure
-	$(MAKE) -f $< $@
+	-$(MAKE) -f $< $@
 	rm -f configure
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
