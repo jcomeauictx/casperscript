@@ -105,7 +105,7 @@ caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
 remake: # unlike `rebuild`, just uses last build's version number
 	XCFLAGS="-DDEBUG" $(MAKE) CS_VERSION=$(GS_BUILDVERSION)
-rebuild: remake caspertest
+rebuild:
 	# if we changed anything, make sure we commit it before rebuild
 	git diff --name-only --exit-code || \
 	 (echo 'commit changes before `make rebuild`' >&2; false)
