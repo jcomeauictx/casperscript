@@ -1,6 +1,6 @@
 # allow bashisms in recipes
 SHELL := /bin/bash
-REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev libtesseract-dev libxt-dev
+REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev libtesseract-dev libxt-dev libxext-dev
 CASPER ?= 1
 # review `install` recipe if using other CONFIG_ARGS
 INSTALL_PREFIX ?= /usr/local/casperscript
@@ -120,9 +120,13 @@ test_splitargs:
 	./splitargs -option0 --
 	./splitargs -option - arg1
 	@echo 'Must `make distclean` before attempting new build' >&2
-distclean: | $(CS_MAKEFILES)
+distclean:
 	# because built-in distclean doesn't remove ./configure
-	-$(MAKE) -f $< $@
+	if [ -e Makefile ]; then \
+	 $(MAKE) -f Makefile $@; \
+	else \
+	 echo 'Makefile is gone, assuming clean' >&2; \
+	fi
 	rm -f configure
 required:
 	sudo apt update
