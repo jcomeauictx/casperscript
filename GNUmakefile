@@ -77,7 +77,7 @@ install: $(CS_MAKEFILES)
 	done
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
-configure: | autogen.sh
+configure: required | autogen.sh
 	./autogen.sh $(CONFIG_ARGS)
 env:
 ifeq ($(SHOWENV),)
@@ -127,6 +127,7 @@ distclean: | $(CS_MAKEFILES)
 	-$(MAKE) -f $< $@
 	rm -f configure
 required:
+	sudo apt update
 	sudo apt install $(REQUIRED)
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
