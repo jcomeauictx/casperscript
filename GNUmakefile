@@ -1,6 +1,6 @@
 # allow bashisms in recipes
 SHELL := /bin/bash
-REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev
+REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev libtesseract-dev libxt-dev
 CASPER ?= 1
 # review `install` recipe if using other CONFIG_ARGS
 INSTALL_PREFIX ?= /usr/local/casperscript
@@ -48,10 +48,8 @@ else
 	CS_DEFAULT := $(ARCH).mak
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
-all: $(CS_MAKEFILES)
+all:	Makefile configure
 	@echo building casperscript version $(CS_VERSION)
-	[ -e configure ] || $(MAKE) configure
-	[ -e "$<" ] || $(MAKE) $<
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $< 2>&1 | tee make.log
 	# trick for cstestcmd.cs test on unix-y systems
 	cd bin && ln -sf $(GSNAME) cs.exe
@@ -77,7 +75,7 @@ install: $(CS_MAKEFILES)
 	done
 Makefile: | configure
 	./configure $(CONFIG_ARGS)
-configure: required | autogen.sh
+configure: | autogen.sh
 	./autogen.sh $(CONFIG_ARGS)
 env:
 ifeq ($(SHOWENV),)
@@ -135,4 +133,4 @@ required:
 	mv $(<D)/$@ .
 	rm -f $(<:.c=.o)
 %:	| $(CS_MAKEFILES)
-	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
+	e(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
