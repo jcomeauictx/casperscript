@@ -48,7 +48,10 @@ else
 	CS_DEFAULT := $(ARCH).mak
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
-all:	Makefile configure
+all:	Makefile | configure
+	# these following two rules shouldn't be necessary, but leave them
+	[ -e configure ] || $(MAKE) configure
+	[ -e Makefile ] || $(MAKE) Makefile
 	@echo building casperscript version $(CS_VERSION)
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $< 2>&1 | tee make.log
 	# trick for cstestcmd.cs test on unix-y systems
@@ -137,4 +140,4 @@ required:
 	mv $(<D)/$@ .
 	rm -f $(<:.c=.o)
 %:	| $(CS_MAKEFILES)
-	e(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
+	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
