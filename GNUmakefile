@@ -1,5 +1,6 @@
 # allow bashisms in recipes
 SHELL := /bin/bash
+REQUIRED := autoconf gcc g++
 CASPER ?= 1
 # review `install` recipe if using other CONFIG_ARGS
 INSTALL_PREFIX ?= /usr/local/casperscript
@@ -125,6 +126,8 @@ distclean: | $(CS_MAKEFILES)
 	# because built-in distclean doesn't remove ./configure
 	-$(MAKE) -f $< $@
 	rm -f configure
+required:
+	sudo apt install $(REQUIRED)
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
