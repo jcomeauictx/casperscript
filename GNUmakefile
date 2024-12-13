@@ -1,6 +1,6 @@
 # allow bashisms in recipes
 SHELL := /bin/bash
-REQUIRED := autoconf gcc g++
+REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev
 CASPER ?= 1
 # review `install` recipe if using other CONFIG_ARGS
 INSTALL_PREFIX ?= /usr/local/casperscript
