@@ -180,8 +180,8 @@ int zreadlink(i_ctx_t *i_ctx_p) {
      * `readlink()` does not append a terminating null byte to `buf`.
      */
     /* NOTE: we're inverting the arg order, placing `buf` on stack first;
-     * this allows us to simply change `pathname` to the integer result
-     * rather than have to exchange stack elements.
+     * this allows us to simply pop `pathname` rather than have to
+     * exchange stack elements.
      */
     os_ptr op = osp;
     size_t bufsiz, result;
@@ -194,7 +194,8 @@ int zreadlink(i_ctx_t *i_ctx_p) {
     if (pathname == 0) return_error(gs_error_VMerror);
     result = readlink(pathname, (char *)op[-1].value.bytes, bufsiz);
     if (result == -1) return_error(gs_error_invalidaccess);
-    make_int(op, result);
+    else if (result == bufsiz) return_error(gs_error_rangecheck);
+    pop(1);
     return 0;
 }
 #endif  /* TEST_ZCASPER */
@@ -205,7 +206,7 @@ const op_def zcasper_op_defs[] =
     /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
     {"1savesession", zsavesession},
-    {"1.readlink", zreadlink},
+    {"2.readlink", zreadlink},
     {"2.symlink", zsymlink},
     {"2.mkdir", zmkdir},
     {"3sprintf", zsprintf},

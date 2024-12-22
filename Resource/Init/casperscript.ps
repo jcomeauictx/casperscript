@@ -691,6 +691,13 @@ casperdict begin
     /mkdir /.mkdir {load} stopped
       {pop {/undefinedresource signalerror}} if
       def
+    /symlink /.symlink {load} stopped
+      {pop {/undefinedresource signalerror}} if
+      def
+    /readlink /.readlink {load} stopped
+      {pop {/undefinedresource signalerror}}
+      {pop {.readlink string.truncate}}
+      ifelse bind def
   end  % os
   /posixpath 16 dict def
   posixpath begin
