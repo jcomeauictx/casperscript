@@ -26,7 +26,7 @@
 extern char *argv0;
 extern char *programname;
 
-int sleep(double seconds) {
+int cs_sleep(double seconds) {
     struct timespec requested;
     int iseconds = (int)seconds, code;
     double fractional = seconds - iseconds;
@@ -55,7 +55,7 @@ static int zsleep(i_ctx_t *i_ctx_p) {
             sleeptime = (double)op->value.intval;
             break;
     }
-    if (sleeptime > 0) sleep(sleeptime);
+    if (sleeptime > 0) cs_sleep(sleeptime);
     pop(1);
     return 0;
 }
@@ -157,16 +157,16 @@ int zsymlink(i_ctx_t *i_ctx_p) {
     char *target, *linkpath;
     os_ptr op = osp;
     check_op(2);
-    check_read_type(*op[-1], t_string);
+    check_read_type(op[-1], t_string);
     check_read_type(*op, t_string);
-    target = ref_to_string(op[-1], imemory, "symlink target");
+    target = ref_to_string(op - 1, imemory, "symlink target");
     if (target == 0) return_error(gs_error_VMerror);
     linkpath = ref_to_string(op, imemory, "symlink linkpath");
     if (linkpath == 0) return_error(gs_error_VMerror);
     result = symlink(target, linkpath);
-    ifree_string((byte *) linkpath, r_size(op[-1]) + 1, "symlink target");
+    ifree_string((byte *) linkpath, r_size(op - 1) + 1, "symlink target");
     ifree_string((byte *) target, r_size(op) + 1, "symlink linkpath");
-    pop(1)
+    pop(1);
     make_bool(op, !result);
     return 0;
 }
@@ -187,12 +187,12 @@ int zreadlink(i_ctx_t *i_ctx_p) {
     size_t bufsiz, result;
     char *pathname;
     check_op(2);
-    check_write_type(*op[-1], t_string);
+    check_write_type(op[-1], t_string);
     check_read_type(*op, t_string);
-    bufsiz = r_size(op[-1]);
+    bufsiz = r_size(op - 1);
     pathname = ref_to_string(op, imemory, "readlink pathname");
     if (pathname == 0) return_error(gs_error_VMerror);
-    result = readlink(pathname, op[-1]->value.bytes, bufsiz);
+    result = readlink(pathname, (char *)op[-1].value.bytes, bufsiz);
     if (result == -1) return_error(gs_error_invalidaccess);
     make_int(op, result);
     return 0;
@@ -219,7 +219,7 @@ int main(int argc, char **argv) {
         fprintf(stderr, "Must specify sleep time\n");
         code = 1;
     }
-    else code = sleep(atof(argv[1]));
+    else code = cs_sleep(atof(argv[1]));
     return code;
 }
 #endif  /* TEST_ZCASPER */
