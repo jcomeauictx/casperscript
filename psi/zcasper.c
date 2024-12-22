@@ -10,6 +10,7 @@
 #include "zcasper.h"
 #include "interp.h"  /* for i_initial_enter_name() */
 #include <readline/history.h>  /* for history functionality */
+#include <unistd.h>  /* for readlink() */
 #ifdef TEST_ZCASPER
 #include <stdio.h>   /* for fprintf(), ... */
 #else
@@ -184,6 +185,7 @@ int zreadlink(i_ctx_t *i_ctx_p) {
      */
     os_ptr op = osp;
     size_t bufsiz, result;
+    char *pathname;
     check_op(2);
     check_write_type(*op[-1], t_string);
     check_read_type(*op, t_string);
