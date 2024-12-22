@@ -167,7 +167,7 @@ int zsymlink(i_ctx_t *i_ctx_p) {
     ifree_string((byte *) linkpath, r_size(op - 1) + 1, "symlink target");
     ifree_string((byte *) target, r_size(op) + 1, "symlink linkpath");
     pop(1);
-    make_bool(op, !result);
+    make_bool(op - 1, !result);
     return 0;
 }
 int zreadlink(i_ctx_t *i_ctx_p);
