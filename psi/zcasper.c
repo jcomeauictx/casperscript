@@ -171,6 +171,29 @@ int zsymlink(i_ctx_t *i_ctx_p) {
 }
 int zreadlink(i_ctx_t *i_ctx_p);
 int zreadlink(i_ctx_t *i_ctx_p) {
+    /* from `man 2 readlink`:
+     * `readlink()` places the contents of symbolic link `pathname`
+     * in the buffer `buf`. It will silently truncate the contents to
+     * a length of `bufsiz` characters in case the buffer is too small
+     * to hold all of the contents
+     * `readlink()` does not append a terminating null byte to `buf`.
+     */
+    /* NOTE: we're inverting the arg order, placing `buf` on stack first;
+     * this allows us to simply change `pathname` to the integer result
+     * rather than have to exchange stack elements.
+     */
+    os_ptr op = osp;
+    size_t bufsiz, result;
+    check_op(2);
+    check_write_type(*op[-1], t_string);
+    check_read_type(*op, t_string);
+    bufsiz = r_size(op[-1]);
+    pathname = ref_to_string(op, imemory, "readlink pathname");
+    if (pathname == 0) return_error(gs_error_VMerror);
+    result = readlink(pathname, op[-1]->value.bytes, bufsiz);
+    if (result == -1) return_error(gs_error_invalidaccess);
+    make_int(op, result);
+    return 0;
 }
 #endif  /* TEST_ZCASPER */
 
