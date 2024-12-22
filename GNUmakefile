@@ -1,5 +1,6 @@
 # allow bashisms in recipes
 SHELL := /bin/bash
+REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev libtesseract-dev libxt-dev libxext-dev
 CASPER ?= 1
 # review `install` recipe if using other CONFIG_ARGS
 INSTALL_PREFIX ?= /usr/local/casperscript
@@ -13,6 +14,9 @@ GSNAME := cs-$(CS_VERSION)
 GSBUILDNAME ?= $(shell awk -F= '$$1 == "GS" {print $$2}' config.log | tr -d "'")
 GS_BUILDVERSION := $(shell string=$(GSBUILDNAME); echo $${string##*-})
 CONFIG_ARGS += --with-gs=$(GSNAME)
+# although configure.ac has `--disable-pixarlog`, unless ./configure is removed, it won't be rebuilt.
+GS_TIFF_CONFIGURE_OPTS += --disable-pixarlog
+CONFIG_ARGS += --with-tesseract
 XCFLAGS += -DBUILD_CASPERSCRIPT -DINSTALL_PREFIX=$(INSTALL_PREFIX)
 endif
 XCFLAGS += -DSYSLOG_DEBUGGING
@@ -33,7 +37,7 @@ TESTCASPER ?= 0.0 cvbool =
 CASPERTEST ?= (Resource/Init/casperscript.ps) run casper $(TESTCASPER)
 CSBIN ?= $(wildcard csbin/*)
 ifeq ($(SHOWENV),)
-export CASPER XTRALIBS
+export CASPER XTRALIBS GS_TIFF_CONFIGURE_OPTS
 else
 export
 endif
@@ -44,9 +48,11 @@ else
 	CS_DEFAULT := $(ARCH).mak
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
-all: $(CS_MAKEFILES)
+all:	Makefile | configure
+	# these following two rules shouldn't be necessary, but leave them
+	[ -e configure ] || $(MAKE) configure
+	[ -e Makefile ] || $(MAKE) Makefile
 	@echo building casperscript version $(CS_VERSION)
-	[ -e "$<" ] || $(MAKE) $<
 	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $< 2>&1 | tee make.log
 	# trick for cstestcmd.cs test on unix-y systems
 	cd bin && ln -sf $(GSNAME) cs.exe
@@ -102,7 +108,7 @@ caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
 remake: # unlike `rebuild`, just uses last build's version number
 	XCFLAGS="-DDEBUG" $(MAKE) CS_VERSION=$(GS_BUILDVERSION)
-rebuild: remake caspertest
+rebuild:
 	# if we changed anything, make sure we commit it before rebuild
 	git diff --name-only --exit-code || \
 	 (echo 'commit changes before `make rebuild`' >&2; false)
@@ -117,6 +123,17 @@ test_splitargs:
 	./splitargs -option0 --
 	./splitargs -option - arg1
 	@echo 'Must `make distclean` before attempting new build' >&2
+distclean:
+	# because built-in distclean doesn't remove ./configure
+	if [ -e Makefile ]; then \
+	 $(MAKE) -f Makefile $@; \
+	else \
+	 echo 'Makefile is gone, assuming clean' >&2; \
+	fi
+	rm -f configure
+required:
+	sudo apt update
+	sudo apt install $(REQUIRED)
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
