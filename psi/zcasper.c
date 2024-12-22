@@ -1,3 +1,4 @@
+/* NOTE: see zgetenv in psi/zmisc.c for the *right* way to handle strings */
 #ifdef BUILD_CASPERSCRIPT
 /* add support for casperscript extensions */
 #include <time.h>  /* for nanosleep(), ... */
@@ -148,6 +149,29 @@ int zsavesession(i_ctx_t *i_ctx_p) {
     pop(1);
     return code;
 }
+
+int zsymlink(i_ctx_t *i_ctx_p);
+int zsymlink(i_ctx_t *i_ctx_p) {
+    int result;
+    char *target, *linkpath;
+    os_ptr op = osp;
+    check_op(2);
+    check_read_type(*op[-1], t_string);
+    check_read_type(*op, t_string);
+    target = ref_to_string(op[-1], imemory, "symlink target");
+    if (target == 0) return_error(gs_error_VMerror);
+    linkpath = ref_to_string(op, imemory, "symlink linkpath");
+    if (linkpath == 0) return_error(gs_error_VMerror);
+    result = symlink(target, linkpath);
+    ifree_string((byte *) linkpath, r_size(op[-1]) + 1, "symlink target");
+    ifree_string((byte *) target, r_size(op) + 1, "symlink linkpath");
+    pop(1)
+    make_bool(op, !result);
+    return 0;
+}
+int zreadlink(i_ctx_t *i_ctx_p);
+int zreadlink(i_ctx_t *i_ctx_p) {
+}
 #endif  /* TEST_ZCASPER */
 
 /* ------ Initialization procedure ------ */
@@ -155,9 +179,11 @@ const op_def zcasper_op_defs[] =
 {
     /* FIXME: relocate these from systemdict to casperdict on startup */
     {"1sleep", zsleep},
+    {"1savesession", zsavesession},
+    {"1.readlink", zreadlink},
+    {"2.symlink", zsymlink},
     {"2.mkdir", zmkdir},
     {"3sprintf", zsprintf},
-    {"1savesession", zsavesession},
     op_def_end(0)
 };
 
