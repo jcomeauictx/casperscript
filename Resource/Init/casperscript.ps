@@ -643,11 +643,11 @@ casperdict begin
     % NOTE: original casperscript got this backwards!
     currentpagedevice /PageSize get dup 0 get exch 1 get
   } bind def
-  /.import { ( name#somename -
+  /.import ( name#somename -
     unconditionally import somename.cs) docstring {
     dup length string cvs (.cs) string.add runlibfile
   } bind def
-  /import { ( name#somename bool#reimport
+  /import ( name#somename bool#reimport
     import `somename`, which should be defined in `somename.cs`
     does nothing if `somename` already in currentdict
     and `reimport` is false) docstring {
@@ -660,7 +660,6 @@ casperdict begin
       {pop .import}
       ifelse  % known
   } bind def
-
   %(languagelevel: ) print /languagelevel where {pop languagelevel} {1} ifelse =
   %(version: ) print version =
   /os 16 dict def
