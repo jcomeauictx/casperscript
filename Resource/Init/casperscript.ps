@@ -650,7 +650,7 @@ casperdict begin
   /import { ( name#somename bool#reimport
     import `somename`, which should be defined in `somename.cs`
     does nothing if `somename` already in currentdict
-    and `reimport` is false) docstring
+    and `reimport` is false) docstring {
     currentdict 2 index known  % stack: somename reimport bool#known
       {
         {.import}
