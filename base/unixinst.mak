@@ -105,7 +105,7 @@ traceimg.ps traceop.ps uninfo.ps \
 viewcmyk.ps viewgif.ps viewjpeg.ps viewmiff.ps \
 viewpcx.ps viewpbm.ps viewps2a.ps \
 winmaps.ps zeroline.ps \
-urllib.cs \
+casperscript.ps urllib.cs \
 pdf2dsc.ps ;\
 	do if ( test -f $(PSLIBDIR)/$$f ); then $(INSTALL_DATA) $(PSLIBDIR)/$$f $(DESTDIR)$(gsdatadir)/lib; fi;\
 	done'
