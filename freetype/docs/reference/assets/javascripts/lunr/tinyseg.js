@@ -203,4 +203,4 @@
         lunr.TinySegmenter = TinySegmenter;
     };
 
-}));
+}));
