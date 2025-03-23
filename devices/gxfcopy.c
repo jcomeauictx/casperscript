@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -512,9 +512,9 @@ copy_glyph_data(gs_font *font, gs_glyph glyph, gs_font *copied, int options,
     case 0:			/* already defined */
         if ((options & COPY_GLYPH_NO_OLD) ||
             pcg->gdata.size != prefix_bytes + size ||
-            memcmp(pcg->gdata.data, prefix, prefix_bytes) ||
-            memcmp(pcg->gdata.data + prefix_bytes,
-                   pgdata->bits.data, size)
+            (prefix_bytes > 0 && memcmp(pcg->gdata.data, prefix, prefix_bytes)) ||
+            (size > 0 && memcmp(pcg->gdata.data + prefix_bytes,
+                   pgdata->bits.data, size))
             )
             code = gs_note_error(gs_error_invalidaccess);
         else
@@ -1043,14 +1043,17 @@ static int
 uncopy_glyph_type1(gs_font *font, gs_glyph glyph, gs_font *copied, int options)
 {
     gs_copied_glyph_t *pcg = NULL;
+    gs_copied_font_data_t *cfdata = cf_data(copied);
 
-    (void)copied_glyph_slot(cf_data(copied), glyph, &pcg);
+    (void)copied_glyph_slot(cfdata, glyph, &pcg);
     if (pcg != NULL) {
         if (pcg->gdata.data != NULL) {
             gs_free_string(copied->memory, (byte *)pcg->gdata.data, pcg->gdata.size, "Free copied glyph name");
             pcg->gdata.size = 0;
+            pcg->gdata.data = NULL;
         }
         pcg->used = 0;
+        cfdata->num_glyphs--;
     }
     return 0;
 }
@@ -1391,18 +1394,21 @@ static int uncopy_glyph_type42(gs_font *font, gs_glyph glyph, gs_font *copied, i
     gs_copied_glyph_t *pcg = NULL;
     gs_font_type42 *font42 = (gs_font_type42 *)font;
     gs_font_cid2 *fontCID2 = (gs_font_cid2 *)font;
+    gs_copied_font_data_t *cfdata = cf_data(copied);
     uint gid = (options & COPY_GLYPH_BY_INDEX ? glyph - GS_MIN_GLYPH_INDEX :
                 font->FontType == ft_CID_TrueType
                     ? fontCID2->cidata.CIDMap_proc(fontCID2, glyph)
                     : font42->data.get_glyph_index(font42, glyph));
 
-    (void)copied_glyph_slot(cf_data(copied), gid + GS_MIN_GLYPH_INDEX, &pcg);
+    (void)copied_glyph_slot(cfdata, gid + GS_MIN_GLYPH_INDEX, &pcg);
     if (pcg != NULL) {
         if (pcg->gdata.data != NULL) {
             gs_free_string(copied->memory, (byte *)pcg->gdata.data, pcg->gdata.size, "Free copied glyph name");
             pcg->gdata.size = 0;
+            pcg->gdata.data = NULL;
         }
         pcg->used = 0;
+        cfdata->num_glyphs--;
     }
 
     return 0;
@@ -1802,14 +1808,17 @@ static int
 uncopy_glyph_cid0(gs_font *font, gs_glyph glyph, gs_font *copied, int options)
 {
     gs_copied_glyph_t *pcg = NULL;
+    gs_copied_font_data_t *cfdata = cf_data(copied);
 
-    (void)copied_glyph_slot(cf_data(copied), glyph, &pcg);
+    (void)copied_glyph_slot(cfdata, glyph, &pcg);
     if (pcg != NULL) {
         if (pcg->gdata.data != NULL) {
             gs_free_string(copied->memory, (byte *)pcg->gdata.data, pcg->gdata.size, "Free copied glyph name");
             pcg->gdata.size = 0;
+            pcg->gdata.data = NULL;
         }
         pcg->used = 0;
+        cfdata->num_glyphs--;
     }
     return 0;
 }
@@ -1957,14 +1966,17 @@ static int
 uncopy_glyph_cid2(gs_font *font, gs_glyph glyph, gs_font *copied, int options)
 {
     gs_copied_glyph_t *pcg = NULL;
+    gs_copied_font_data_t *cfdata = cf_data(copied);
 
     (void)copied_glyph_slot(cf_data(copied), glyph, &pcg);
     if (pcg != NULL) {
         if (pcg->gdata.data != NULL) {
             gs_free_string(copied->memory, (byte *)pcg->gdata.data, pcg->gdata.size, "Free copied glyph name");
             pcg->gdata.size = 0;
+            pcg->gdata.data = NULL;
         }
         pcg->used = 0;
+        cfdata->num_glyphs--;
     }
     return 0;
 }
@@ -2793,12 +2805,14 @@ order_font_data(gs_copied_font_data_t *cfdata, gs_memory_t *memory)
     j = 0;
     for (i = 0; i < cfdata->glyphs_size; i++) {
         if (cfdata->glyphs[i].used) {
-            if (j >= cfdata->num_glyphs)
+            if (j >= cfdata->num_glyphs) {
+                gs_free_object(memory, a, "order_font_data");
                 return_error(gs_error_unregistered); /* Must not happen */
+            }
             a[j++] = &cfdata->names[i];
         }
     }
-    qsort(a, cfdata->num_glyphs, sizeof(*a), compare_glyph_names);
+    qsort(a, j, sizeof(*a), compare_glyph_names);
     for (j--; j >= 0; j--)
         cfdata->glyphs[j].order_index = a[j] - cfdata->names;
     gs_free_object(memory, a, "order_font_data");

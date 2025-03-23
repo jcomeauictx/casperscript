@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -553,7 +553,8 @@ typedef struct pdf_substream_save_s {
 typedef enum {
     pdf_compress_none,
     pdf_compress_LZW,        /* not currently used, thanks to Unisys */
-    pdf_compress_Flate
+    pdf_compress_Flate,
+    pdf_compress_Brotli
 } pdf_compression_type;
 
 typedef enum {
@@ -631,7 +632,7 @@ struct gx_device_pdf_s {
     bool HaveTransparency;
     bool PatternImagemask; /* The target viewer|printer handles imagemask
                               with pattern color. */
-    bool PDFX;                   /* Generate PDF/X */
+    int PDFX;                   /* Generate PDF/X */
     int PDFA;                   /* Generate PDF/A 0 = don't produce, otherwise level of PDF/A */
     bool AbortPDFAX;            /* Abort generation of PDFA or X, produce regular PDF */
     int64_t MaxClipPathSize;  /* The maximal number of elements of a clipping path
@@ -795,6 +796,7 @@ struct gx_device_pdf_s {
 
     /* Used for preserving text rendering modes with clip. */
     bool clipped_text_pending;
+    int saved_vgstack_bottom_for_textclip;
     int saved_vgstack_depth_for_textclip;
 
     /*
@@ -989,6 +991,8 @@ struct gx_device_pdf_s {
     bool WriteObjStms;              /* If true, (the default) store candidate objects in ObjStms rather than plain text in the PDF file. */
     int64_t PendingOC;              /* An OptionalContent object is pending */
     bool ToUnicodeForStdEnc;        /* Should we emit ToUnicode CMaps when a simple font has only standard glyph names. Defaults to true */
+    bool EmbedSubstituteFonts;      /* When we use a substitute font to replace a missing font, should we embed it in the output */
+    bool UseBrotli;                 /* Use Brotli compression in place of Flate */
 };
 
 #define is_in_page(pdev)\
@@ -1137,10 +1141,20 @@ int pdf_record_usage_by_parent(gx_device_pdf *const pdev, int64_t resource_id, i
 
 /*
  * Define the offset that indicates that a file position is in the
- * asides file rather than the main (contents) file.
- * Must be a power of 2, and larger than the largest possible output file.
+ * asides file rather than the main (contents) file. We just use the top bit
+ * as a flag. Complexity is due to ubsan and the possibility we have 32-bit offset type.
  */
-#define ASIDES_BASE_POSITION min_int64_t
+#ifdef ARCH_SIZEOF_GS_OFFSET_T
+# if ARCH_SIZEOF_GS_OFFSET_T == 8
+#define ASIDES_BASE_POSITION ((uint64_t)1 << ((sizeof(gs_offset_t) * 8) - 1))
+# elif ARCH_SIZEOF_GS_OFFSET_T == 4
+#define ASIDES_BASE_POSITION ((uint32_t)1 << ((sizeof(gs_offset_t) * 8) - 1))
+# else
+UNSUPPORTED
+# endif
+# else
+UNSUPPORTED
+# endif
 
 /* Begin an object logically separate from the contents. */
 /* (I.e., an object in the resource file.) */
@@ -1355,13 +1369,15 @@ typedef struct pdf_filter_names_s {
     const char *RunLengthDecode;
     const char *JBIG2Decode;
     const char *JPXDecode;
+    const char *BrotliDecode;
 } pdf_filter_names_t;
 #define PDF_FILTER_NAMES\
   "/ASCII85Decode", "/ASCIIHexDecode", "/CCITTFaxDecode",\
   "/DCTDecode",  "/DecodeParms", "/Filter", "/FlateDecode",\
-  "/LZWDecode", "/RunLengthDecode", "/JBIG2Decode", "/JPXDecode"
+  "/LZWDecode", "/RunLengthDecode", "/JBIG2Decode", "/JPXDecode",\
+  "/BrotliDecode"
 #define PDF_FILTER_NAMES_SHORT\
-  "/A85", "/AHx", "/CCF", "/DCT", "/DP", "/F", "/Fl", "/LZW", "/RL", "/???", "/???"
+  "/A85", "/AHx", "/CCF", "/DCT", "/DP", "/F", "/Fl", "/LZW", "/RL", "/???", "/???", "/Br"
 
 /* Write matrix values. */
 void pdf_put_matrix(gx_device_pdf *pdev, const char *before,

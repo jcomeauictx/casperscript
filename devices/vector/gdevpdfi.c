@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -38,6 +38,7 @@
 #include "gsicc_manage.h"
 #include "gsform1.h"
 #include "gxpath.h"
+#include "gxcdevn.h"
 
 extern_st(st_gs_gstate);
 
@@ -509,6 +510,31 @@ static int setup_image_process_colorspace(gx_device_pdf *pdev, image_union_t *im
     return 0;
 }
 
+static int check_colorants_for_pdfx4(const gs_color_space *pcs)
+{
+    int comp, all_present = 1;
+    char *ink;
+    gs_device_n_colorant *colorant = NULL;
+
+    if (pcs->params.device_n.colorants == NULL) {
+        return 0;
+    } else {
+        for (comp = 0; comp < pcs->params.device_n.num_components;comp++){
+            colorant = pcs->params.device_n.colorants;
+            ink = pcs->params.device_n.names[comp];
+            do {
+                if (memcmp(colorant->colorant_name, ink, strlen(ink)) == 0)
+                    break;
+                colorant = colorant->next;
+            }while(colorant);
+            if (!colorant) {
+                all_present = 0;
+                break;
+            }
+        }
+    }
+    return all_present;
+}
 /* 0 = write unchanged
    1 = convert to process
    2 = write as ICC
@@ -724,6 +750,16 @@ static int setup_image_colorspace(gx_device_pdf *pdev, image_union_t *image, con
                             return 3;
                         break;
                     case gs_color_space_index_DeviceN:
+                        if (pdev->PDFX > 0) {
+                            if (pdev->PDFX < 4) {
+                                *pcs_orig = (gs_color_space *)pcs;
+                                return 1;
+                            }
+                            if (!check_colorants_for_pdfx4(pcs2)){
+                                *pcs_orig = (gs_color_space *)pcs;
+                                return 1;
+                            }
+                        }
                         pcs2 = pcs;
                         while (pcs2->base_space)
                             pcs2 = pcs2->base_space;
@@ -1408,7 +1444,13 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
         || force_lossless)
         pie->writer.alt_writer_count = 1;
 
-    names = (in_line ? &pdf_color_space_names_short : &pdf_color_space_names);
+    if (image[0].pixel.ColorSpace != NULL && (image[0].pixel.ColorSpace->type->index != gs_color_space_index_DeviceGray &&
+        image[0].pixel.ColorSpace->type->index != gs_color_space_index_DeviceRGB &&
+        image[0].pixel.ColorSpace->type->index != gs_color_space_index_DeviceCMYK &&
+        image[0].pixel.ColorSpace->type->index != gs_color_space_index_Indexed))
+        names = &pdf_color_space_names;
+    else
+        names = (in_line ? &pdf_color_space_names_short : &pdf_color_space_names);
 
     /* We don't want to change the colour space of a mask, or an SMask (both of which are Gray) */
     if (!is_mask) {
@@ -1439,7 +1481,12 @@ pdf_begin_typed_image(gx_device_pdf *pdev, const gs_gstate * pgs,
             goto fail_and_fallback;
         }
         if (convert_to_process_colors == 4) {
-            code = convert_DeviceN_alternate(pdev, pgs, pcs, NULL, NULL, NULL, NULL, &cs_value, in_line);
+            if (pdev->PDFX == 1) {
+                convert_to_process_colors = 1;
+                code = 0;
+            }
+            else
+                code = convert_DeviceN_alternate(pdev, pgs, pcs, NULL, NULL, NULL, NULL, &cs_value, in_line);
             if (code < 0)
                 goto fail_and_fallback;
         }
@@ -1894,7 +1941,7 @@ use_image_as_pattern(gx_device_pdf *pdev, pdf_resource_t *pres1,
     }
 
     if (code >= 0)
-        pprintld1(pdev->strm, "/R%ld Do\n", pdf_resource_id(pres1));
+        pprinti64d1(pdev->strm, "/R%"PRId64" Do\n", pdf_resource_id(pres1));
     pres = pdev->accumulating_substream_resource;
     if (code >= 0)
         code = pdf_add_resource(pdev, pdev->substream_Resources, "/XObject", pres1);
@@ -1916,7 +1963,7 @@ use_image_as_pattern(gx_device_pdf *pdev, pdf_resource_t *pres1,
     }
     if (code >= 0) {
         cos_value_write(&v, pdev);
-        pprintld1(pdev->strm, " cs /R%ld scn ", pdf_resource_id(pres));
+        pprinti64d1(pdev->strm, " cs /R%"PRId64" scn ", pdf_resource_id(pres));
     }
     if (code >= 0) {
         /* The image offset weas broken in gx_begin_image3_generic,
@@ -2713,7 +2760,7 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
                     gs_free_object(pdev->memory->non_gc_memory, pdev->PDFFormName, "free Name of Form for pdfmark");
                     pdev->PDFFormName = 0x00;
                 } else {
-                    pprintld1(pdev->strm, "/R%ld Do Q\n", pdf_resource_id(pres));
+                    pprinti64d1(pdev->strm, "/R%"PRId64" Do Q\n", pdf_resource_id(pres));
                 }
             }
             return 0;
@@ -2980,7 +3027,7 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
         case gxdso_event_info:
             {
                 dev_param_req_t *request = (dev_param_req_t *)data;
-                if (memcmp(request->Param, "SubstitutedFont", 15) == 0 && pdev->PDFA) {
+                if (memcmp(request->Param, "SubstitutedFont", 15) == 0 && (pdev->PDFA || pdev->PDFX)) {
                     switch (pdev->PDFACompatibilityPolicy) {
                         case 0:
                         case 1:
@@ -2988,12 +3035,14 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
                              "\n **** A font missing from the input PDF has been substituted with a different font.\n\tWidths may differ, reverting to normal PDF output!\n");
                             pdev->AbortPDFAX = true;
                             pdev->PDFX = 0;
+                            pdev->PDFA = 0;
                             break;
                         case 2:
                             emprintf(pdev->memory,
                              "\n **** A font missing from the input PDF has been substituted with a different font.\n\tWidths may differ, aborting conversion!\n");
                             pdev->AbortPDFAX = true;
                             pdev->PDFX = 0;
+                            pdev->PDFA = 0;
                             return gs_note_error(gs_error_unknownerror);
                             break;
                         default:
@@ -3001,6 +3050,7 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
                              "\n **** A font missing from the input PDF has been substituted with a different font.\n\tWidths may differ, unknown PDFACompatibilityPolicy, reverting to normal PDF output!\n");
                             pdev->AbortPDFAX = true;
                             pdev->PDFX = 0;
+                            pdev->PDFA = 0;
                             break;
                     }
                 }
@@ -3047,7 +3097,7 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
             return 0;
             break;
         case gxdso_hilevel_text_clip:
-            if (data == 0) {
+            if (data == 0 && !pdev->accumulating_charproc) {
                 /* We are exiting a text render mode 'clip' by grestoring back to
                  *  a time when the clip wasn't active.
                  * First, check if we have a clip (this should always be true).
@@ -3064,7 +3114,9 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
                     /* Restore to our saved state */
 
                     /* The saved state in this case is the dpeth of the saved gstate stack at the time we
-                     * started the text clipping.
+                     * started the text clipping. Note; we cannot restore back past the 'bottom' of the
+                     * stack, which is why we alter vgstack_bottom here, rather than just using the saved
+                     * level in the loop below.
                      */
                     if (pdev->vgstack_bottom)
                         pdev->vgstack_bottom = pdev->saved_vgstack_depth_for_textclip;
@@ -3075,46 +3127,55 @@ gdev_pdf_dev_spec_op(gx_device *pdev1, int dev_spec_op, void *data, int size)
                             return code;
                     }
 
+                    pdev->vgstack_bottom = pdev->saved_vgstack_bottom_for_textclip;
                     pdf_reset_text(pdev);	/* because of Q */
                 }
             } else {
-                /* We are starting text in a clip mode
-                 * First make sure we aren't already in a clip mode (this shuld never be true)
-                 */
-                if (!pdev->clipped_text_pending) {
-                    /* Return to the content stream, this will (amongst other things) flush
-                     * any pending text.
+                if (!pdev->accumulating_charproc) {
+                    gs_gstate *pgs = (gs_gstate *)data;
+                    /* We are starting text in a clip mode
+                     * First make sure we aren't already in a clip mode (this should never be true)
                      */
-                    code = pdf_open_page(pdev, PDF_IN_STREAM);
-                    if (code < 0)
-                        return code;
-
-                    if (pdf_must_put_clip_path(pdev, NULL)) {
-                       code = pdf_unclip(pdev);
+                    if (!pdev->clipped_text_pending) {
+                        /* Return to the content stream, this will (amongst other things) flush
+                         * any pending text.
+                         */
+                        code = pdf_open_page(pdev, PDF_IN_STREAM);
                         if (code < 0)
                             return code;
+
+                        if (pdf_must_put_clip_path(pdev, pgs->clip_path)) {
+                           code = pdf_unclip(pdev);
+                            if (code < 0)
+                                return code;
+                            code = pdf_put_clip_path(pdev, pgs->clip_path);
+                            if (code < 0)
+                                return code;
+                        }
+
+                        pdev->saved_vgstack_depth_for_textclip = pdev->vgstack_depth;
+
+                        /* Save the current graphics state (or at least that bit which we track) so
+                         * that we can put it back later.
+                         */
+                        code = pdf_save_viewer_state(pdev, pdev->strm);
+                        if (code < 0)
+                            return code;
+                        pdev->clipped_text_pending = 1;
+
+                        /* Save the current 'bottom' of the saved gstate stack, we need to
+                         * restore back to this state when we exit the graphics state
+                         * with a text rendering mode involving a clip.
+                         */
+                        pdev->saved_vgstack_bottom_for_textclip = pdev->vgstack_bottom;
+                        /* And push the bottom of the stack up until it is where we are now.
+                         * This is because clip paths, images, and possibly other constructs
+                         * will emit a clip path if the 'depth - bottom' is not zero, to create
+                         * a clip path. We want to make sure that it doesn't try to restore back
+                         * to a point before we established the text clip.
+                         */
+                        pdev->vgstack_bottom = pdev->vgstack_depth;
                     }
-
-                    /* Save the current graphics state (or at least that bit which we track) so
-                     * that we can put it back later.
-                     */
-                    code = pdf_save_viewer_state(pdev, pdev->strm);
-                    if (code < 0)
-                        return code;
-                    pdev->clipped_text_pending = 1;
-
-                    /* Save the current 'bottom' of the saved gstate stack, we need to
-                     * restore back to this state when we exit the graphics state
-                     * with a text rendering mode involving a clip.
-                     */
-                    pdev->saved_vgstack_depth_for_textclip = pdev->vgstack_bottom;
-                    /* And push the bottom of the stack up until it is where we are now.
-                     * This is because clip paths, images, and possibly other constructs
-                     * will emit a clip path if the 'depth - bottom' is not zero, to create
-                     * a clip path. We want to make sure that it doesn't try to restore back
-                     * to a point before we established the text clip.
-                     */
-                    pdev->vgstack_bottom = pdev->vgstack_depth;
                 }
             }
             break;

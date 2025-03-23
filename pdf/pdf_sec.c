@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2024 Artifex Software, Inc.
+/* Copyright (C) 2020-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -201,7 +201,7 @@ static int apply_sasl(pdf_context *ctx, char *Password, int Len, char **NewPassw
 
 static int check_user_password_R5(pdf_context *ctx, char *Password, int Len, int KeyLen)
 {
-    char *UTF8_Password, *Test = NULL, Buffer[32], UEPadded[48];
+    char *UTF8_Password = NULL, *Test = NULL, Buffer[32], UEPadded[48];
     int NewLen;
     int code = 0;
     pdf_c_stream *stream = NULL, *filter_stream = NULL;
@@ -321,7 +321,7 @@ error:
  */
 
 static void
-pdf_compute_hardened_hash_r6(unsigned char *password, int pwlen, unsigned char salt[16], unsigned char *ownerkey, unsigned char hash[32])
+pdf_compute_hardened_hash_r6(unsigned char *password, int pwlen, unsigned char *salt, unsigned char *ownerkey, unsigned char *hash)
 {
 	unsigned char data[(128 + 64 + 48) * 64];
 	unsigned char block[64];
@@ -605,7 +605,7 @@ error:
 
 static int check_owner_password_R5(pdf_context *ctx, char *Password, int Len, int KeyLen)
 {
-    char *UTF8_Password, *Test = NULL, Buffer[32], OEPadded[48];
+    char *UTF8_Password = NULL, *Test = NULL, Buffer[32], OEPadded[48];
     int NewLen;
     int code = 0;
     pdf_c_stream *stream = NULL, *filter_stream = NULL;
@@ -709,7 +709,8 @@ error:
     pdfi_countdown(Key);
     gs_free_object(ctx->memory, Test, "R5 password test");
 #ifdef HAVE_LIBIDN
-    gs_free_object(ctx->memory, UTF8_Password, "free sasl result");
+    if (UTF8_Password != Password)
+        gs_free_object(ctx->memory, UTF8_Password, "free sasl result");
 #endif
     return code;
 }
@@ -1015,7 +1016,7 @@ static int pdfi_read_Encrypt_dict(pdf_context *ctx, int *KeyLen)
     double f;
 
     if (ctx->args.pdfdebug)
-        dmprintf(ctx->memory, "%% Checking for Encrypt dictionary\n");
+        outprintf(ctx->memory, "%% Checking for Encrypt dictionary\n");
 
     /* See comment in pdfi_read_Root() for details of why we indirect through 'd' */
     d1 = ctx->Trailer;

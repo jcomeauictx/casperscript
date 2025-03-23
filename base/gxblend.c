@@ -2901,7 +2901,7 @@ template_compose_group(byte *gs_restrict tos_ptr, bool tos_isolated,
             dst = nos_pixel;
             if (nos_knockout) {
                 /* We need to be knocking out what ever is on the nos, but may
-                   need to combine with it's backdrop */
+                   need to combine with its backdrop */
                 byte tos_shape = 255;
 
                 if (tos_has_shape)
@@ -2960,7 +2960,7 @@ template_compose_group(byte *gs_restrict tos_ptr, bool tos_isolated,
                                         has_alpha ? tos_ptr[tos_shape_offset] : group_shape,
                                         shape);
             }
-            if (dst)
+            if (dst && dst[n_chan] != 0)
             {
                 /* Complement the results for subtractive color spaces.  Again,
                  * if we are in an additive blending color space, we are not
@@ -3663,7 +3663,7 @@ template_compose_group16(uint16_t *gs_restrict tos_ptr, bool tos_isolated,
             dst = nos_pixel;
             if (nos_knockout) {
                 /* We need to be knocking out what ever is on the nos, but may
-                   need to combine with it's backdrop */
+                   need to combine with its backdrop */
                 uint16_t tos_shape = 65535;
 
                 if (tos_has_shape)
@@ -4653,7 +4653,7 @@ template_mark_fill_rect(int w, int h, byte *gs_restrict dst_ptr, byte *gs_restri
                                 dst_ptr[k * planestride] = 255 - pdst[k];
                             } else {
                                 /* We need val_new = (val_old * old_alpha) / new_alpha */
-                                uint32_t val = (scale * (255 - pdst[k]) + 128)>>8;
+                                uint32_t val = (scale * dst_ptr[k * planestride] + 128)>>8;
                                 if (val > 255)
                                     val = 255;
                                 dst_ptr[k * planestride] = val;
@@ -5262,7 +5262,7 @@ template_mark_fill_rect16(int w, int h, uint16_t *gs_restrict dst_ptr, uint16_t 
                                 dst_ptr[k * planestride] = 65535 - pdst[k];
                             } else  {
                                 /* We need val_new = (val_old * old_alpha) / new_alpha */
-                                uint64_t val = (scale * (65535 - pdst[k]) + 32768)>>16;
+                                uint64_t val = (scale * dst_ptr[k * planestride] + 32768)>>16;
                                 if (val > 65535)
                                     val = 65535;
                                 dst_ptr[k * planestride] = val;

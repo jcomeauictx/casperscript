@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -595,7 +595,6 @@ font_resource_simple_alloc(gx_device_pdf *pdev, pdf_font_resource_t **ppfres,
     pfres->u.simple.BaseEncoding = -1;
     pfres->u.simple.preferred_encoding_index = -1;
     pfres->u.simple.last_reserved_char = -1;
-    pfres->TwoByteToUnicode = 1;
     *ppfres = pfres;
     return 0;
 }
@@ -859,7 +858,7 @@ pdf_font_embed_status(gx_device_pdf *pdev, gs_font *font, int *pindex,
      */
     if (pindex)
         *pindex = index;
-    if (pdev->PDFX || pdev->PDFA != 0)
+    if (pdev->PDFX != 0 || pdev->PDFA != 0)
         return FONT_EMBED_YES;
     if (pdev->CompatibilityLevel < 1.3) {
         if (index >= 0 &&
@@ -883,12 +882,19 @@ pdf_font_embed_status(gx_device_pdf *pdev, gs_font *font, int *pindex,
         /* Ignore NeverEmbed for a non-standard font with a standard name */
         )
     {
+        /* We always mebed fonts that were embedded in the input, so if we embed substitutes as well then we are embedding everything
+         * which isn't explicitly *not* embedded, via the NeverEmbed test above
+         */
+        if (pdev->EmbedSubstituteFonts)
+            return FONT_EMBED_YES;
+        /* We aren't embedding subsitutes, check the AlwaysEmbed list, which overrides that */
         if (embed_list_includes(&pdev->params.AlwaysEmbed, chars, size))
                 return FONT_EMBED_YES;
         if (pdev->params.EmbedAllFonts) {
             if (!(info.members & FONT_INFO_EMBEDDED) || info.FontEmbedded)
                 return FONT_EMBED_YES;
         } else {
+            /* Always embed symbolic fonts (we have to ) */
             if (font_is_symbolic(font))
                 return FONT_EMBED_YES;
         }
@@ -1249,7 +1255,7 @@ pdf_convert_truetype_font(gx_device_pdf *pdev, pdf_resource_t *pres)
                     return 0;
                 pdfont->u.cidfont.CIDSystemInfo_id = pdev->IdentityCIDSystemInfo_id;
                 gs_snprintf(pdfont0->u.type0.Encoding_name, sizeof(pdfont0->u.type0.Encoding_name),
-                            "%ld 0 R", pdf_resource_id(pdev->OneByteIdentityH));
+                            "%"PRId64" 0 R", pdf_resource_id(pdev->OneByteIdentityH));
                 /* Move ToUnicode : */
                 pdfont0->res_ToUnicode = pdfont->res_ToUnicode; pdfont->res_ToUnicode = 0;
                 pdfont0->cmap_ToUnicode = pdfont->cmap_ToUnicode; pdfont->cmap_ToUnicode = 0;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2024 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -21,6 +21,7 @@
 #include "gscencs.h"
 #include "gxfont0.h"
 #include "gxfcid.h"
+#include "assert_.h"
 
 #include "pdf_types.h"
 #include "pdf_font_types.h"
@@ -843,10 +844,10 @@ pdfi_read_cff_integer(byte *p, byte *e, int b0, int *val)
 static inline void
 pdfi_cff_font_priv_defaults(pdfi_gs_cff_font_priv *ptpriv)
 {
-    ptpriv->type1data.BlueScale = 0.039625;
+    ptpriv->type1data.BlueScale = 0.039625f;
     ptpriv->type1data.BlueShift = 7;
     ptpriv->type1data.BlueFuzz = 1;
-    ptpriv->type1data.ExpansionFactor = 0.06;
+    ptpriv->type1data.ExpansionFactor = 0.06f;
 }
 
 #define PDFI_CFF_STACK_SIZE 48
@@ -914,10 +915,32 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off
                     break;
                 }
                 case 13: /* UniqueID */
+                  /* UID may not be less than 0, that makes it an XUID */
+                  if (args[0].ival >= 0)
+                      uid_set_UniqueID(&ptpriv->UID, args[0].ival);
                   break;
 
-                case 14:
-                    break; /* XUID */
+                case 14: /* XUID */
+                {
+                    long *xvalues = NULL;
+
+                    if (n > 0) {
+                        xvalues = (long *)gs_alloc_byte_array(font->pfont->memory, n, sizeof(long), "pdfi_read_cff_dict");
+                        if (xvalues == NULL) {
+                            uid_set_invalid(&ptpriv->UID);
+                        }
+                        else {
+                            for (i = 1; i <= n; i++) {
+                                xvalues[n - i] = args[i - 1].ival;
+                            }
+                            if (uid_is_XUID(&ptpriv->UID))
+                                uid_free(&ptpriv->UID, font->pfont->memory, "pdfi_read_cff_dict");
+                            uid_set_XUID(&ptpriv->UID, xvalues, n);
+                        }
+                    } else
+                        uid_set_invalid(&ptpriv->UID);
+                    break;
+                }
 
                 /* some CFF file offsets */
                 case 15:
@@ -1205,7 +1228,7 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off
             if (b0 == 30) {
                 p = pdfi_read_cff_real(p, e, &args[n].fval);
                 if (!p) {
-                    dmprintf(ptpriv->memory, "\nCFF: corrupt dictionary operand\n");
+                    dbgprintf("\nCFF: corrupt dictionary operand\n");
                     break;
                 }
                 args[n].ival = (int)args[n].fval;
@@ -1220,14 +1243,14 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off
                 if (!p) {
                     if (!near_end)
                         code = gs_note_error(gs_error_invalidfont);
-                    dmprintf(ptpriv->memory, "\nCFF: corrupt dictionary operand\n");
+                    dbgprintf("\nCFF: corrupt dictionary operand\n");
                     break;
                 }
                 args[n].fval = (float)args[n].ival;
                 n++;
             }
             else {
-                dmprintf1(ptpriv->memory, "CFF: corrupt dictionary operand (b0 = %d)", b0);
+                dbgprintf1("CFF: corrupt dictionary operand (b0 = %d)", b0);
             }
         }
         if (n >= PDFI_CFF_STACK_SIZE) {
@@ -1249,7 +1272,7 @@ pdfi_read_cff_dict(byte *p, byte *e, pdfi_gs_cff_font_priv *ptpriv, cff_font_off
             code = pdfi_read_cff_dict(font->cffdata + offsets->private_off, dend, ptpriv, offsets, false);
 
         if (code < 0)
-            dmprintf(ptpriv->memory, "CFF: cannot read private dictionary");
+            dbgprintf("CFF: cannot read private dictionary");
     }
 
     return code;
@@ -2092,7 +2115,7 @@ pdfi_alloc_cff_cidfont(pdf_context *ctx, pdf_cidfont_type0 ** font, uint32_t obj
 
 #if REFCNT_DEBUG
     cffcidfont->UID = ctx->UID++;
-    dmprintf2(ctx->memory, "Allocated object of type %c with UID %" PRIi64 "\n", cffcidfont->type,
+    outprintf(ctx->memory, "Allocated object of type %c with UID %" PRIi64 "\n", cffcidfont->type,
               cffcidfont->UID);
 #endif
 
@@ -2179,7 +2202,7 @@ pdfi_alloc_cff_font(pdf_context *ctx, pdf_font_cff ** font, uint32_t obj_num, bo
 
 #if REFCNT_DEBUG
     cfffont->UID = ctx->UID++;
-    dmprintf2(ctx->memory, "Allocated object of type %c with UID %" PRIi64 "\n", cfffont->type,
+    outprintf(ctx->memory, "Allocated object of type %c with UID %" PRIi64 "\n", cfffont->type,
               cfffont->UID);
 #endif
 
@@ -2565,9 +2588,6 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 else {
                     cffcid->W2 = NULL;
                 }
-                if (uid_is_XUID(&cffcid->pfont->UID))
-                    uid_free(&cffcid->pfont->UID, cffcid->pfont->memory, "pdfi_read_type1_font");
-                uid_set_invalid(&cffcid->pfont->UID);
                 cffcid->pfont->id = gs_next_ids(ctx->memory, 1);
             }
             else if (forcecid) {
@@ -2777,9 +2797,6 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                     cffcid->W2 = NULL;
                 }
 
-                if (uid_is_XUID(&cffcid->pfont->UID))
-                    uid_free(&cffcid->pfont->UID, cffcid->pfont->memory, "pdfi_read_type1_font");
-                uid_set_invalid(&cffcid->pfont->UID);
                 cffcid->pfont->id = gs_next_ids(ctx->memory, 1);
             }
             else {
@@ -2804,7 +2821,6 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                     cfffont->generation_num = font_dict->generation_num;
                     cfffont->indirect_num = font_dict->indirect_num;
                     cfffont->indirect_gen = font_dict->indirect_gen;
-
                     (void)pdfi_dict_knownget_type(ctx, font_dict, "BaseFont", PDF_NAME, &basefont);
                 }
 
@@ -2904,15 +2920,6 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                     cfffont->pfont->nearest_encoding_index = cffpriv.nearest_encoding_index;
                 }
 
-                /* Since the underlying font stream can be shared between font descriptors,
-                   and the font descriptors can be shared between font objects, if we change
-                   the encoding, we can't share cached glyphs with other instances of this
-                   underlying font, so invalidate the UniqueID/XUID so the glyph cache won't
-                   try.
-                */
-                if (uid_is_XUID(&cfffont->pfont->UID))
-                    uid_free(&cfffont->pfont->UID, cfffont->pfont->memory, "pdfi_read_type1_font");
-                uid_set_invalid(&cfffont->pfont->UID);
                 cfffont->pfont->id = gs_next_ids(ctx->memory, 1);
 
                 if (ctx->args.ignoretounicode != true && font_dict != NULL) {
@@ -3167,10 +3174,17 @@ pdfi_copy_cff_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, pd
         pdfi_countup(font->Encoding);
     }
 
-    /* Since various aspects of the font may differ (widths, encoding, etc)
-       we cannot reliably use the UniqueID/XUID for copied fonts.
-     */
-    uid_set_invalid(&font->pfont->UID);
+    code = uid_copy(&font->pfont->UID, font->pfont->memory, "pdfi_copy_cff_font");
+    if (code < 0) {
+        uid_set_invalid(&font->pfont->UID);
+    }
+
+    if (spdffont->filename == NULL) {
+        code = pdfi_font_generate_pseudo_XUID(ctx, font_dict, font->pfont);
+        if (code < 0) {
+            goto error;
+        }
+    }
 
     if (ctx->args.ignoretounicode != true) {
         code = pdfi_dict_get(ctx, font_dict, "ToUnicode", (pdf_obj **)&tmp);

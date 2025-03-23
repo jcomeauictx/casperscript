@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -105,11 +105,16 @@ typedef union stream_cursor_s {
  * rather than everywhere that uses short lived streams.
  * This allows localized disabling of the "array bounds" compiler
  * warning for this one specific case.
+ *
+ * The equally nasty "gs_fake_?buf" stuff avoids setting a pointer
+ * value of "NULL - 1" which UBSAN complains about.
  */
 #ifdef __GNUC__
 #  pragma GCC diagnostic push
 #  pragma GCC diagnostic ignored "-Warray-bounds"
 #endif
+static byte gs_fake_sbuf[1];
+
 static inline void
 stream_cursor_read_init(stream_cursor_read *r, const byte *buf, size_t length)
 {
@@ -119,8 +124,8 @@ stream_cursor_read_init(stream_cursor_read *r, const byte *buf, size_t length)
         r->limit = r->ptr + length;
     }
     else {
-        r->ptr = NULL;
-        r->limit = NULL;
+        r->ptr = gs_fake_sbuf - 1;
+        r->limit = r->ptr;
     }
 }
 
@@ -133,8 +138,8 @@ stream_cursor_write_init(stream_cursor_write *w, const byte *buf, size_t length)
         w->limit = (byte *)w->ptr + length;
     }
     else {
-        w->ptr = NULL;
-        w->limit = NULL;
+        w->ptr = gs_fake_sbuf - 1;
+        w->limit = w->ptr;
     }
 }
 #ifdef __GNUC__

@@ -1,4 +1,4 @@
-% Copyright (C) 2001-2024 Artifex Software, Inc.
+% Copyright (C) 2001-2025 Artifex Software, Inc.
 % All Rights Reserved.
 %
 % This software is provided AS-IS with no warranty, either express or
@@ -34,7 +34,7 @@
 % Interpreter library version number
 % NOTE: the interpreter code requires that the first non-comment token
 % in this file be an integer, and that it match the compiled-in version!
-10050
+10060
 
 % Check the interpreter revision.
 dup revision ne
@@ -264,7 +264,7 @@ currentdict /DEVICE known not
 % This avoids allocating space for the skipped procedures.
 % We can't use readline, because that imposes a line length limit.
 /.skipeof	% <string> .skipeof -
- { currentfile exch 1 exch .subfiledecode flushfile
+ { currentfile exch 1 exch /SubFileDecode filter flushfile
  } .forcebind def
 
 % Define procedures to assist users who don't read the documentation.
@@ -895,7 +895,8 @@ currentdict /.makeinternaldict .undef
           ifelse
         } .internalbind def
 /selectdevice
-        { finddevice setdevice .setdefaultscreen } .internalbind odef
+        { (    **** The selectdevice operator has been deprecated and will be removed in the next release.\n    **** You should use the setpagedevice operator and a dictionary parameter\n    **** containing the /OutputDevice key instead.\n) print
+        finddevice setdevice .setdefaultscreen } .internalbind odef
 /signalerror		% <object> <errorname> signalerror -
         { /errordict .systemvar exch get exec } .internalbind def
 /signaloperror {	% <object> <errorname> signaloperror -
@@ -1589,6 +1590,8 @@ currentdict
 % Special handling for device parameters. Must follow definition of 'type'
 % make -dPDFA equivalent to -dPDFA=1 (backwards compatible)
 currentdict /PDFA known { PDFA type /booleantype eq { /PDFA 1 def } if } if
+% make -dPDFX equivalent to -dPDFX=3 (backwards compatible)
+currentdict /PDFX known { PDFX type /booleantype eq { /PDFX 3 def } if } if
 
 % Construct a dictionary of all available devices.
 % These are (read-only) device prototypes that can't be
@@ -2551,9 +2554,6 @@ currentdict /.locksafeglobal .undef
 
 /UndefinePostScriptFilters {
   [
-   /BCPEncode /TBCPEncode /PNGPredictorEncode /PNGPredictorDecode /PixelDifferenceDecode /PixelDifferenceEncode
-   /zlibEncode /zlibDecode /PWGDecode /eexecEncode /ArcfourEncode /PSStringEncode /BCPDecode
-   /OLDPDF where {/OLDPDF get not {/SHA256Encode /MD5Encode /AESDecode /JPXDecode /JBIG2Decode /ArcfourDecode /.EOFDecode} if} if
   ]
   {filterdict exch undef} forall
 } .forcebind def
@@ -2591,7 +2591,7 @@ currentdict /.locksafeglobal .undef
   /.setpagedevice /.currentpagedevice /.knownundef /.setmaxlength /.rectappend /.initialize_dsc_parser /.parse_dsc_comments
   /.fillCIDMap /.fillIdentityCIDMap /.buildcmap /.filenamelistseparator /.libfile /.getfilename
   /.file_name_combine /.file_name_is_absolute /.file_name_separator /.file_name_directory_separator /.file_name_current /.filename
-  /.peekstring /.writecvp /.subfiledecode /.setupUnicodeDecoder /.jbig2makeglobalctx /.registerfont /.parsecff
+  /.peekstring /.writecvp /.setupUnicodeDecoder /.jbig2makeglobalctx /.registerfont /.parsecff
   /.getshowoperator /.getnativefonts /.beginform /.endform /.get_form_id /.repeatform /.reusablestream /.rsdparams
   /.buildfunction /.sethpglpathmode /.currenthpglpathmode
   /.currenthalftone /.sethalftone5 /.image1 /.imagemask1 /.image3 /.image4
@@ -2602,7 +2602,7 @@ currentdict /.locksafeglobal .undef
   /.shfill /.argindex /.bytestring /.namestring /.stringbreak /.stringmatch /.globalvmarray /.globalvmdict /.globalvmpackedarray /.globalvmstring
   /.localvmarray /.localvmdict /.localvmpackedarray /.localvmstring /.systemvmarray /.systemvmdict /.systemvmpackedarray /.systemvmstring /.systemvmfile /.systemvmlibfile
   /.systemvmSFD /.settrapparams /.currentsystemparams /.currentuserparams /.getsystemparam /.getuserparam /.setsystemparams /.setuserparams
-  /.checkpassword /.locale_to_utf8 /.currentglobal /.gcheck /.imagepath /.currentoutputdevice
+  /.checkpassword /.currentglobal /.gcheck /.imagepath /.currentoutputdevice
   /.type /.writecvs /.setSMask /.currentSMask /.needinput /.countexecstack /.execstack
   /filterdict /.cidfonttypes /.colorrenderingtypes
   /.formtypes /.halftonetypes /.imagetypes /.imagemasktypes

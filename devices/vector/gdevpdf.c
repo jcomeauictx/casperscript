@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -28,6 +28,7 @@
 #include "gdevpdfo.h"
 #include "smd5.h"
 #include "sarc4.h"
+#include "sbrotlix.h"
 #include "gscms.h"
 #include "gdevpdtf.h"
 #include "gdevpdtx.h"
@@ -577,9 +578,9 @@ pdf_compute_encryption_data(gx_device_pdf * pdev)
     byte digest[16], buf[32], t;
     stream_arcfour_state sarc4;
 
-    if (pdev->PDFX && pdev->KeyLength != 0) {
+    if (pdev->PDFX > 1 && pdev->KeyLength != 0) {
         emprintf(pdev->memory,
-                 "Encryption is not allowed in a PDF/X doucment.\n");
+                 "Encryption is not allowed in a PDF/X-3 doucment.\n");
         return_error(gs_error_rangecheck);
     }
     if (pdev->KeyLength == 0)
@@ -1215,12 +1216,12 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
         for (i=0;i<4;i++)
             mediabox[i] = temp[i];
     }
-    if (pdev->PDFX) {
+    if (pdev->PDFX != 0) {
         const cos_value_t *v_trimbox = NULL;
         const cos_value_t *v_artbox = NULL;
         const cos_value_t *v_cropbox = NULL;
         const cos_value_t *v_bleedbox = NULL;
-        float trimbox[4] = {0, 0}, bleedbox[4] = {0, 0};
+        float trimbox[4] = {0, 0}, bleedbox[4] = {0, 0}, artbox[4] = {0, 0}, cropbox[4] = {0, 0};
         bool print_bleedbox = false;
 
         if (page->Page != NULL) {
@@ -1230,8 +1231,8 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
             v_bleedbox = cos_dict_find_c_key(page->Page, "/BleedBox");
         }
 
-        trimbox[2] = bleedbox[2] = mediabox[2];
-        trimbox[3] = bleedbox[3] = mediabox[3];
+        cropbox[2] = trimbox[2] = bleedbox[2] = mediabox[2];
+        cropbox[3] = trimbox[3] = bleedbox[3] = mediabox[3];
         /* Offsets are [left right top bottom] according to the Acrobat 7.0
            distiller parameters manual, 12/7/2004, pp. 102-103. */
         if (v_trimbox != NULL && v_trimbox->value_type == COS_VALUE_SCALAR) {
@@ -1267,12 +1268,19 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
             buf[l] = 0;
             if (sscanf(buf, "[ %g %g %g %g ]",
                     &temp[0], &temp[1], &temp[2], &temp[3]) == 4) {
-                trimbox[0] = temp[0];
-                trimbox[1] = temp[1];
-                trimbox[2] = temp[2];
-                trimbox[3] = temp[3];
-                if (page->Page != NULL)
-                    cos_dict_delete_c_key(page->Page, "/ArtBox");
+                if (pdev->PDFX == 3) {
+                    trimbox[0] = temp[0];
+                    trimbox[1] = temp[1];
+                    trimbox[2] = temp[2];
+                    trimbox[3] = temp[3];
+                    if (page->Page != NULL)
+                        cos_dict_delete_c_key(page->Page, "/ArtBox");
+                } else {
+                    artbox[0] = temp[0];
+                    artbox[1] = temp[1];
+                    artbox[2] = temp[2];
+                    artbox[3] = temp[3];
+                }
             }
         } else {
             if (pdev->PDFXTrimBoxToMediaBoxOffset.size >= 4 &&
@@ -1392,6 +1400,10 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
                     temp[2] = mediabox[2];
                 if (temp[3] > mediabox[3])
                     temp[3] = mediabox[3];
+                cropbox[0] = temp[0];
+                cropbox[1] = temp[1];
+                cropbox[2] = temp[2];
+                cropbox[3] = temp[3];
                 pprintg4(s, "/CropBox [%g %g %g %g]\n",
                     temp[0], temp[1], temp[2], temp[3]);
                 /* Make sure TrimBox fits inside CropBox. Spec says 'must not extend
@@ -1435,7 +1447,7 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
             }
         }
 
-        if (page->Page != NULL) {
+        if (pdev->PDFX > 1 && page->Page != NULL) {
             if (cos_dict_find_c_key(page->Page, "/TrimBox") == NULL &&
                 cos_dict_find_c_key(page->Page, "/ArtBox") == NULL)
                 pprintg4(s, "/TrimBox [%g %g %g %g]\n",
@@ -1445,18 +1457,48 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
                 pprintg4(s, "/BleedBox [%g %g %g %g]\n",
                     bleedbox[0], bleedbox[1], bleedbox[2], bleedbox[3]);
         }
+        if (pdev->PDFX == 1 && page->Page != NULL) {
+            if (cos_dict_find_c_key(page->Page, "/ArtBox") == NULL) {
+                artbox[0] = mediabox[0];
+                artbox[1] = mediabox[1];
+                artbox[2] = mediabox[2];
+                artbox[3] = mediabox[3];
+            }
+            if (cos_dict_find_c_key(page->Page, "/CropBox") != NULL) {
+                if (artbox[0] < cropbox[0])
+                    artbox[0] = cropbox[0];
+                if (artbox[1] < cropbox[1])
+                    artbox[1] = cropbox[1];
+                if (artbox[2] < cropbox[2])
+                    artbox[2] = cropbox[2];
+                if (artbox[3] < cropbox[3])
+                    artbox[3] = cropbox[3];
+            }
+            if (cos_dict_find_c_key(page->Page, "/BleedBox") != NULL) {
+                if (artbox[0] < bleedbox[0])
+                    artbox[0] = bleedbox[0];
+                if (artbox[1] < bleedbox[1])
+                    artbox[1] = bleedbox[1];
+                if (artbox[2] < bleedbox[2])
+                    artbox[2] = bleedbox[2];
+                if (artbox[3] < bleedbox[3])
+                    artbox[3] = bleedbox[3];
+            }
+            pprintg4(s, "/ArtBox [%g %g %g %g]\n",
+                artbox[0], artbox[1], artbox[2], artbox[3]);
+        }
     }
     pdf_print_orientation(pdev, page);
     if (page->UserUnit != 1)
         pprintg1(s, "/UserUnit %g\n", page->UserUnit);
 
-    pprintld1(s, "/Parent %ld 0 R\n", pdev->Pages->id);
+    pprinti64d1(s, "/Parent %"PRId64" 0 R\n", pdev->Pages->id);
     if (pdev->ForOPDFRead && pdev->DoNumCopies && !pdev->ProduceDSC) {
         if (page->NumCopies_set)
-            pprintld1(s, "/NumCopies %ld\n", page->NumCopies);
+            pprinti64d1(s, "/NumCopies %"PRId64"\n", page->NumCopies);
     }
     if (page->group_id > 0) {
-        pprintld1(s, "/Group %ld 0 R\n", page->group_id);
+        pprinti64d1(s, "/Group %"PRId64" 0 R\n", page->group_id);
     }
     if (pdev->CompatibilityLevel <= 1.7) {
             stream_puts(s, "/Resources<</ProcSet[/PDF");
@@ -1478,7 +1520,7 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
         for (i = 0; i < countof(page->resource_ids); ++i)
             if (page->resource_ids[i] && pdf_resource_type_names[i]) {
                 stream_puts(s, pdf_resource_type_names[i]);
-                pprintld1(s, " %ld 0 R\n", page->resource_ids[i]);
+                pprinti64d1(s, " %"PRId64" 0 R\n", page->resource_ids[i]);
             }
     }
     stream_puts(s, ">>\n");
@@ -1527,7 +1569,7 @@ pdf_write_page(gx_device_pdf *pdev, int page_num)
      * Fortunately, the Contents entry is optional.
      */
     if (page->contents_id != 0)
-        pprintld1(s, "/Contents %ld 0 R\n", page->contents_id);
+        pprinti64d1(s, "/Contents %"PRId64" 0 R\n", page->contents_id);
 
     /* Write any elements stored by pdfmarks. */
 
@@ -1620,8 +1662,10 @@ static int find_end_xref_section (gx_device_pdf *pdev, gp_file *tfile, int64_t s
                     return(gs_note_error(gs_error_ioerror));
             } else
                 index = 0;
-            if (pos & ASIDES_BASE_POSITION)
-                pos += resource_pos - ASIDES_BASE_POSITION;
+            if (pos & ASIDES_BASE_POSITION) {
+                pos &= ~ASIDES_BASE_POSITION;
+                pos += resource_pos;
+            }
             pos -= pdev->OPDFRead_procset_length;
             if (pos == 0 && index == 0) {
                 return i;
@@ -1657,8 +1701,10 @@ static int write_xref_section(gx_device_pdf *pdev, gp_file *tfile, int64_t start
                     return(gs_note_error(gs_error_ioerror));
             }
 
-            if (pos & ASIDES_BASE_POSITION)
-                pos += resource_pos - ASIDES_BASE_POSITION;
+            if (pos & ASIDES_BASE_POSITION) {
+                pos &= ~ASIDES_BASE_POSITION;
+                pos += resource_pos;
+            }
             pos -= pdev->OPDFRead_procset_length;
 
             /* check to see we haven't got an offset which is too large to represent
@@ -1714,8 +1760,10 @@ static int write_xrefstm_section(gx_device_pdf *pdev, gp_file *tfile, int64_t st
             }
 
             if (!pdev->doubleXref || objstm == 0) {
-                if (pos & ASIDES_BASE_POSITION)
-                    pos += resource_pos - ASIDES_BASE_POSITION;
+                if (pos & ASIDES_BASE_POSITION) {
+                    pos &= ~ASIDES_BASE_POSITION;
+                    pos += resource_pos;
+                }
                 pos -= pdev->OPDFRead_procset_length;
 
                 /* check to see we haven't got an offset which is too large to represent
@@ -2047,10 +2095,10 @@ static int pdf_linearise(gx_device_pdf *pdev, pdf_linearisation_t *linear_params
      */
     linear_params->FirsttrailerOffset = gp_ftell(linear_params->Lin_File.file);
     if (pdev->OmitID)
-        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %ld/Info %d 0 R/Root %d 0 R/Prev %d>>\nstartxref\r\n0\n%%%%EOF\n        \n",
+        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %"PRId64"/Info %d 0 R/Root %d 0 R/Prev %d>>\nstartxref\r\n0\n%%%%EOF\n        \n",
         linear_params->LastResource + 3, pdev->ResourceUsage[linear_params->Info_id].NewObjectNumber, pdev->ResourceUsage[linear_params->Catalog_id].NewObjectNumber, 0);
     else
-        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %ld/Info %d 0 R/Root %d 0 R/ID[%s%s]/Prev %d>>\nstartxref\r\n0\n%%%%EOF\n        \n",
+        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %"PRId64"/Info %d 0 R/Root %d 0 R/ID[%s%s]/Prev %d>>\nstartxref\r\n0\n%%%%EOF\n        \n",
         linear_params->LastResource + 3, pdev->ResourceUsage[linear_params->Info_id].NewObjectNumber, pdev->ResourceUsage[linear_params->Catalog_id].NewObjectNumber, fileID, fileID, 0);
     gp_fwrite(LDict, strlen(LDict), 1, linear_params->Lin_File.file);
 
@@ -2587,10 +2635,10 @@ static int pdf_linearise(gx_device_pdf *pdev, pdf_linearisation_t *linear_params
         return_error(gs_error_ioerror);
 
     if (pdev->OmitID)
-        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %ld/Info %d 0 R/Root %d 0 R/Prev %"PRId64">>\nstartxref\r\n0\n%%%%EOF\n",
+        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %"PRId64"/Info %d 0 R/Root %d 0 R/Prev %"PRId64">>\nstartxref\r\n0\n%%%%EOF\n",
         linear_params->LastResource + 3, pdev->ResourceUsage[linear_params->Info_id].NewObjectNumber, pdev->ResourceUsage[linear_params->Catalog_id].NewObjectNumber, mainxref);
     else
-        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %ld/Info %d 0 R/Root %d 0 R/ID[%s%s]/Prev %"PRId64">>\nstartxref\r\n0\n%%%%EOF\n",
+        gs_snprintf(LDict, sizeof(LDict), "\ntrailer\n<</Size %"PRId64"/Info %d 0 R/Root %d 0 R/ID[%s%s]/Prev %"PRId64">>\nstartxref\r\n0\n%%%%EOF\n",
         linear_params->LastResource + 3, pdev->ResourceUsage[linear_params->Info_id].NewObjectNumber, pdev->ResourceUsage[linear_params->Catalog_id].NewObjectNumber, fileID, fileID, mainxref);
     gp_fwrite(LDict, strlen(LDict), 1, linear_params->sfile);
 
@@ -2950,7 +2998,7 @@ pdf_close(gx_device * dev)
             int i;
 
             for (i = 0; i < pdev->next_page; ++i)
-                pprintld1(s, "%ld 0 R\n", pdev->pages[i].Page->id);
+                pprinti64d1(s, "%"PRId64" 0 R\n", pdev->pages[i].Page->id);
         }
         pprintd1(s, "] /Count %d\n", pdev->next_page);
 
@@ -2981,7 +3029,7 @@ pdf_close(gx_device * dev)
                 code = code1;
             pdf_open_obj(pdev, pdev->outlines_id, resourceOutline);
             pprintd1(s, "<< /Type /Outlines /Count %d", pdev->outlines_open);
-            pprintld2(s, " /First %ld 0 R /Last %ld 0 R >>\n",
+            pprinti64d2(s, " /First %"PRId64" 0 R /Last %"PRId64" 0 R >>\n",
                   pdev->outline_levels[0].first.id,
                   pdev->outline_levels[0].last.id);
             pdf_end_obj(pdev, resourceOutline);
@@ -3052,7 +3100,7 @@ pdf_close(gx_device * dev)
             stream_puts(s, "[ ");
             while ((part = pdev->articles) != 0) {
                 pdev->articles = part->next;
-                pprintld1(s, "%ld 0 R\n", part->contents->id);
+                pprinti64d1(s, "%"PRId64" 0 R\n", part->contents->id);
                 COS_FREE(part->contents, "pdf_close(article contents)");
                 gs_free_object(mem, part, "pdf_close(article)");
             }
@@ -3064,31 +3112,31 @@ pdf_close(gx_device * dev)
 
         s = pdev->strm;
         stream_puts(s, "<<");
-        pprintld1(s, "/Type /Catalog /Pages %ld 0 R\n", Pages_id);
+        pprinti64d1(s, "/Type /Catalog /Pages %"PRId64" 0 R\n", Pages_id);
         if (pdev->outlines_id != 0)
-            pprintld1(s, "/Outlines %ld 0 R\n", pdev->outlines_id);
+            pprinti64d1(s, "/Outlines %"PRId64" 0 R\n", pdev->outlines_id);
         if (Threads_id) {
-            pprintld1(s, "/Threads %ld 0 R\n", Threads_id);
+            pprinti64d1(s, "/Threads %"PRId64" 0 R\n", Threads_id);
             pdf_record_usage(pdev, Threads_id, resource_usage_part1_structure);
         }
         if (pdev->CompatibilityLevel < 1.2) {
             if (pdev->Dests)
-                pprintld1(s, "/Dests %ld 0 R\n", pdev->Dests->id);
+                pprinti64d1(s, "/Dests %"PRId64" 0 R\n", pdev->Dests->id);
         } else {
             if (pdev->Dests || pdev->EmbeddedFiles) {
                 stream_puts(s, "/Names <<\n");
                 if (pdev->Dests)
-                    pprintld1(s, "/Dests <</Kids [%ld 0 R]>>\n", pdev->Dests->id);
+                    pprinti64d1(s, "/Dests <</Kids [%"PRId64" 0 R]>>\n", pdev->Dests->id);
                 if (pdev->EmbeddedFiles)
-                    pprintld1(s, "/EmbeddedFiles << /Kids [%ld 0 R]>>\n", pdev->EmbeddedFiles->id);
+                    pprinti64d1(s, "/EmbeddedFiles << /Kids [%"PRId64" 0 R]>>\n", pdev->EmbeddedFiles->id);
                 stream_puts(s, ">>\n");
             }
             if (pdev->AF)
                 if (!cos_dict_find_c_key(pdev->Catalog, "/AF"))
-                    pprintld1(s, "/AF %ld 0 R\n", pdev->AF->id);
+                    pprinti64d1(s, "/AF %"PRId64" 0 R\n", pdev->AF->id);
         }
         if (pdev->PageLabels)
-            pprintld1(s, "/PageLabels << /Nums  %ld 0 R >>\n",
+            pprinti64d1(s, "/PageLabels << /Nums  %"PRId64" 0 R >>\n",
                   pdev->PageLabels->id);
         cos_dict_elements_write(pdev->Catalog, pdev);
         stream_puts(s, ">>\n");
@@ -3216,7 +3264,7 @@ pdf_close(gx_device * dev)
                     pdf_write_page(pdev, pagecount++);
 
                     stream_puts(pdev->strm, "%%EndPageSetup\n");
-                    pprintld1(pdev->strm, "%ld 0 obj\n", pres->object->id);
+                    pprinti64d1(pdev->strm, "%"PRId64" 0 obj\n", pres->object->id);
                     code = cos_write(pres->object, pdev, pres->object->id);
                     stream_puts(pdev->strm, "endobj\n");
                     pres->object->written = true;
@@ -3310,7 +3358,7 @@ pdf_close(gx_device * dev)
             if (!pdev->Linearise) {
                 char xref_str[32];
                 stream_puts(s, "trailer\n");
-                pprintld3(s, "<< /Size %ld /Root %ld 0 R /Info %ld 0 R\n",
+                pprinti64d3(s, "<< /Size %"PRId64" /Root %"PRId64" 0 R /Info %"PRId64" 0 R\n",
                       pdev->next_id, Catalog_id, Info_id);
                 if (!pdev->OmitID) {
                     stream_puts(s, "/ID [");
@@ -3319,7 +3367,7 @@ pdf_close(gx_device * dev)
                     stream_puts(s, "]\n");
                 }
                 if (pdev->OwnerPassword.size > 0) {
-                    pprintld1(s, "/Encrypt %ld 0 R ", Encrypt_id);
+                    pprinti64d1(s, "/Encrypt %"PRId64" 0 R ", Encrypt_id);
                 }
                 stream_puts(s, ">>\n");
                 gs_snprintf(xref_str, sizeof(xref_str), "startxref\n%"PRId64"\n%%%%EOF\n", xref);
@@ -3340,7 +3388,7 @@ pdf_close(gx_device * dev)
             gs_snprintf(str, sizeof(str), "/Size %"PRId64"\n", (int64_t)(pdev->next_id + 1));
             stream_puts(s, str);
 
-            pprintld2(s, "/Root %ld 0 R /Info %ld 0 R\n", Catalog_id, Info_id);
+            pprinti64d2(s, "/Root %"PRId64" 0 R /Info %"PRId64" 0 R\n", Catalog_id, Info_id);
             if (!pdev->OmitID) {
                 stream_puts(s, "/ID [");
                 psdf_write_string(pdev->strm, pdev->fileID, sizeof(pdev->fileID), 0);
@@ -3348,7 +3396,7 @@ pdf_close(gx_device * dev)
                 stream_puts(s, "]\n");
             }
             if (pdev->OwnerPassword.size > 0) {
-                pprintld1(s, "/Encrypt %ld 0 R ", Encrypt_id);
+                pprinti64d1(s, "/Encrypt %"PRId64" 0 R ", Encrypt_id);
             }
 
             end_section = find_end_xref_section(pdev, tfile, start_section, resource_pos);
@@ -3391,13 +3439,23 @@ pdf_close(gx_device * dev)
 
                 xs1 = xref_temp.strm;
                 if (pdev->CompressStreams) {
-                    st = s_alloc_state(pdev->pdf_memory, s_zlibE_template.stype, "write_xref_strm");
-                    if (st == NULL)
-                        return_error(gs_error_VMerror);
-                    s_zlibE_template.set_defaults (st);
-                    xs = s_add_filter(&xref_temp.strm, &s_zlibE_template, st, pdev->pdf_memory);
-                    if (xs == NULL)
-                        xs = xref_temp.strm;
+                    if (pdev->UseBrotli) {
+                        st = s_alloc_state(pdev->pdf_memory, s_brotliE_template.stype, "write_xref_strm");
+                        if (st == NULL)
+                            return_error(gs_error_VMerror);
+                        s_brotliE_template.set_defaults (st);
+                        xs = s_add_filter(&xref_temp.strm, &s_brotliE_template, st, pdev->pdf_memory);
+                        if (xs == NULL)
+                            xs = xref_temp.strm;
+                    } else {
+                        st = s_alloc_state(pdev->pdf_memory, s_zlibE_template.stype, "write_xref_strm");
+                        if (st == NULL)
+                            return_error(gs_error_VMerror);
+                        s_zlibE_template.set_defaults (st);
+                        xs = s_add_filter(&xref_temp.strm, &s_zlibE_template, st, pdev->pdf_memory);
+                        if (xs == NULL)
+                            xs = xref_temp.strm;
+                    }
                 } else
                     xs = xref_temp.strm;
 
@@ -3440,8 +3498,12 @@ pdf_close(gx_device * dev)
                 sflush(xref_temp.strm);
                 length = stell(xref_temp.strm);
 
-                if (pdev->CompressStreams)
-                    gs_snprintf(str, sizeof(str), "]\n/W [1 %"PRId64" 2]\n/Filter /FlateDecode/Length %"PRId64"\n>>\nstream\n", offs_bytes, length);
+                if (pdev->CompressStreams) {
+                    if (pdev->UseBrotli)
+                        gs_snprintf(str, sizeof(str), "]\n/W [1 %"PRId64" 2]\n/Filter /BrotliDecode/Length %"PRId64"\n>>\nstream\n", offs_bytes, length);
+                    else
+                        gs_snprintf(str, sizeof(str), "]\n/W [1 %"PRId64" 2]\n/Filter /FlateDecode/Length %"PRId64"\n>>\nstream\n", offs_bytes, length);
+                }
                 else
                     gs_snprintf(str, sizeof(str), "]\n/W [1 %"PRId64" 2]\n/Length %"PRId64"\n>>\nstream\n", offs_bytes, length);
                 stream_puts(s, str);

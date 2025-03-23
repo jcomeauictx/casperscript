@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2024 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -25,6 +25,7 @@
 #include "pdf_doc.h"
 #include "pdf_mark.h"
 #include "pdf_optcontent.h"
+#include "pdf_loop_detect.h"
 
 
 /* Find the default value for an ocdict, based on contents of OCProperties */
@@ -193,7 +194,7 @@ pdfi_oc_check_OCMD_array(pdf_context *ctx, pdf_array *array, ocmd_p_type type)
         code = pdfi_array_get(ctx, array, i, &val);
         if (code < 0) continue;
         if (pdfi_type_of(val) != PDF_DICT) {
-            dmprintf1(ctx->memory, "WARNING: OCMD array contains item type %d, expected PDF_DICT or PDF_NULL\n", pdfi_type_of(val));
+            dbgprintf1("WARNING: OCMD array contains item type %d, expected PDF_DICT or PDF_NULL\n", pdfi_type_of(val));
             pdfi_countdown(val);
             val = NULL;
             continue;
@@ -267,7 +268,7 @@ pdfi_oc_check_OCMD(pdf_context *ctx, pdf_dict *ocdict)
     /* TODO: We don't support this, so log a warning and ignore */
     code = pdfi_dict_knownget_type(ctx, ocdict, "VE", PDF_ARRAY, &VE);
     if (code > 0) {
-        dmprintf(ctx->memory, "WARNING: OCMD contains VE, which is not supported (ignoring)\n");
+        dbgprintf("WARNING: OCMD contains VE, which is not supported (ignoring)\n");
     }
 
     code = pdfi_dict_knownget(ctx, ocdict, "OCGs", &obj);
@@ -384,14 +385,14 @@ pdfi_oc_is_ocg_visible(pdf_context *ctx, pdf_dict *ocdict)
         char str[100];
         memcpy(str, (const char *)type->data, type->length < 100 ? type->length : 99);
         str[type->length < 100 ? type->length : 99] = '\0';
-        dmprintf1(ctx->memory, "WARNING: OC dict type is %s, expected OCG or OCMD\n", str);
+        dbgprintf1("WARNING: OC dict type is %s, expected OCG or OCMD\n", str);
     }
 
  cleanup:
     pdfi_countdown(type);
 
     if (ctx->args.pdfdebug) {
-        dmprintf2(ctx->memory, "OCG: OC Dict %d %s visible\n", ocdict->object_num,
+        outprintf(ctx->memory, "OCG: OC Dict %d %s visible\n", ocdict->object_num,
                   is_visible ? "IS" : "IS NOT");
     }
     return is_visible;
@@ -766,9 +767,11 @@ int pdfi_op_BDC(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict)
         if (pdfi_type_of(properties) != PDF_NAME)
             goto exit;
 
+        code = pdfi_loop_detector_mark(ctx);
         /* If it's a name, look it up in Properties */
         code = pdfi_find_resource(ctx, (unsigned char *)"Properties", properties,
                                   (pdf_dict *)stream_dict, page_dict, (pdf_obj **)&oc_dict);
+        (void)pdfi_loop_detector_cleartomark(ctx);
         if (code != 0)
             goto exit;
         if (pdfi_type_of(oc_dict) != PDF_DICT)

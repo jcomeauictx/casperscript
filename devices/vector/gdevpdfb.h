@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -163,6 +163,7 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  0,				/* clip_path */
  0,             /* clipped_text_pending */
  0,             /* saved_vgstack_depth_for_textclip */
+ 0,             /* saved_vgstack_bottom_for_textclip */
  0,                             /* PageLabels */
  -1,                            /* PageLabels_current_page */
  0,                             /* PageLabels_current_label */
@@ -257,7 +258,9 @@ const gx_device_pdf PDF_DEVICE_IDENT =
  true,                  /* WriteXRefStm */
  true,                  /* WriteObjStms */
  0,                     /* PendingOC */
- true                   /* ToUnicodeForStdEnc */
+ true,                  /* ToUnicodeForStdEnc */
+ true,                  /* EmbedSubstituteFonts */
+ false                  /* Use Brotli */
 };
 
 #else

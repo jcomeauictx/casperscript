@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -25,6 +25,7 @@
 #include "strimpl.h"
 #include "slzwx.h"
 #include "szlibx.h"
+#include "sbrotlix.h"
 #include "sdct.h"
 #include "srlx.h"
 #include "gsicc_cache.h"
@@ -37,7 +38,8 @@ enum {
     COMPRESSION_LZW	= 2,    /* Lempel-Ziv & Welch */
     COMPRESSION_FLATE	= 3,
     COMPRESSION_JPEG	= 4,
-    COMPRESSION_RLE	= 5
+    COMPRESSION_RLE	= 5,
+    COMPRESSION_BROTLI	= 6
 };
 
 static struct compression_string {
@@ -49,6 +51,7 @@ static struct compression_string {
     { COMPRESSION_FLATE, "Flate" },
     { COMPRESSION_JPEG, "JPEG" },
     { COMPRESSION_RLE, "RLE" },
+    { COMPRESSION_BROTLI, "Brotli" },
     { 0, NULL }
 };
 
@@ -324,7 +327,7 @@ encode(gx_device *pdev, stream **s, const stream_template *t, gs_memory_t *mem)
         jcdp->Picky = 0;
         jcdp->Relax = 0;
         jcdp->cinfo.image_width = gx_downscaler_scale(pdf_dev->width, pdf_dev->downscale.downscale_factor);
-        jcdp->cinfo.image_height = pdf_dev->StripHeight;
+        jcdp->cinfo.image_height = gx_downscaler_scale(pdf_dev->height, pdf_dev->downscale.downscale_factor);
         switch (pdf_dev->color_info.depth) {
             case 32:
                 jcdp->cinfo.input_components = 4;
@@ -494,6 +497,12 @@ pdf_image_downscale_and_print_page(gx_device_printer *dev,
             stream_pos = stell(pdf_dev->strm);
             encode((gx_device *)pdf_dev, &pdf_dev->strm, &s_zlibE_template, pdf_dev->memory->non_gc_memory);
             break;
+        case COMPRESSION_BROTLI:
+            stream_puts(pdf_dev->strm, "/Filter /BrotliDecode\n");
+            stream_puts(pdf_dev->strm, ">>\nstream\n");
+            stream_pos = stell(pdf_dev->strm);
+            encode((gx_device *)pdf_dev, &pdf_dev->strm, &s_brotliE_template, pdf_dev->memory->non_gc_memory);
+            break;
         case COMPRESSION_JPEG:
             stream_puts(pdf_dev->strm, "/Filter /DCTDecode\n");
             stream_puts(pdf_dev->strm, ">>\nstream\n");
@@ -532,6 +541,7 @@ pdf_image_downscale_and_print_page(gx_device_printer *dev,
     switch(pdf_dev->Compression) {
         case COMPRESSION_LZW:
         case COMPRESSION_FLATE:
+        case COMPRESSION_BROTLI:
         case COMPRESSION_JPEG:
         case COMPRESSION_RLE:
             s_close_filters(&pdf_dev->strm, s);
@@ -1507,6 +1517,9 @@ PCLm_downscale_and_print_page(gx_device_printer *dev,
         case COMPRESSION_FLATE:
             encode((gx_device *)pdf_dev, &pdf_dev->temp_stream.strm, &s_zlibE_template, pdf_dev->memory->non_gc_memory);
             break;
+        case COMPRESSION_BROTLI:
+            encode((gx_device *)pdf_dev, &pdf_dev->temp_stream.strm, &s_brotliE_template, pdf_dev->memory->non_gc_memory);
+            break;
         case COMPRESSION_JPEG:
             encode((gx_device *)pdf_dev, &pdf_dev->temp_stream.strm, &s_DCTE_template, pdf_dev->memory->non_gc_memory);
             break;
@@ -1547,6 +1560,10 @@ PCLm_downscale_and_print_page(gx_device_printer *dev,
             switch (pdf_dev->Compression) {
                 case COMPRESSION_FLATE:
                     stream_puts(pdf_dev->strm, "/Filter /FlateDecode\n");
+                    stream_puts(pdf_dev->strm, ">>\nstream\n");
+                    break;
+                case COMPRESSION_BROTLI:
+                    stream_puts(pdf_dev->strm, "/Filter /BrotliDecode\n");
                     stream_puts(pdf_dev->strm, ">>\nstream\n");
                     break;
                 case COMPRESSION_JPEG:
@@ -1594,6 +1611,9 @@ PCLm_downscale_and_print_page(gx_device_printer *dev,
             switch (pdf_dev->Compression) {
                 case COMPRESSION_FLATE:
                     encode((gx_device *)pdf_dev, &pdf_dev->temp_stream.strm, &s_zlibE_template, pdf_dev->memory->non_gc_memory);
+                    break;
+                case COMPRESSION_BROTLI:
+                    encode((gx_device *)pdf_dev, &pdf_dev->temp_stream.strm, &s_brotliE_template, pdf_dev->memory->non_gc_memory);
                     break;
                 case COMPRESSION_JPEG:
                     {
@@ -1650,6 +1670,10 @@ PCLm_downscale_and_print_page(gx_device_printer *dev,
         switch (pdf_dev->Compression) {
             case COMPRESSION_FLATE:
                 stream_puts(pdf_dev->strm, "/Filter /FlateDecode\n");
+                stream_puts(pdf_dev->strm, ">>\nstream\n");
+                break;
+            case COMPRESSION_BROTLI:
+                stream_puts(pdf_dev->strm, "/Filter /BrotliDecode\n");
                 stream_puts(pdf_dev->strm, ">>\nstream\n");
                 break;
             default:

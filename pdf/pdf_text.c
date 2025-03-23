@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2024 Artifex Software, Inc.
+/* Copyright (C) 2018-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -100,8 +100,9 @@ static int do_ET(pdf_context *ctx)
             ctx->text.TextClip = false;
             /* Capture the current position */
             code = gs_currentpoint(ctx->pgs, &initial_point);
-            if (code >= 0) {
+            if (code >= 0 || code == gs_error_nocurrentpoint) {
                 gs_point adjust;
+                bool nocurrentpoint = code >= 0 ? false : true;
 
                 gs_currentfilladjust(ctx->pgs, &adjust);
                 code = gs_setfilladjust(ctx->pgs, (double)0.0, (double)0.0);
@@ -118,7 +119,9 @@ static int do_ET(pdf_context *ctx)
 
                 if (copy != NULL)
                     (void)gx_cpath_assign_free(ctx->pgs->clip_path, copy);
-                code = gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
+
+                if (nocurrentpoint == false)
+                    code = gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
             }
         }
     }
@@ -309,6 +312,7 @@ static int pdfi_show_set_params(pdf_context *ctx, pdf_string *s, gs_text_params_
         current_font->pdfi_font_type == e_pdf_font_type3 ||
         current_font->pdfi_font_type == e_pdf_font_cff ||
         current_font->pdfi_font_type == e_pdf_font_truetype ||
+        current_font->pdfi_font_type == e_pdf_font_microtype ||
         current_font->pdfi_font_type == e_pdf_font_type0)
     {
         /* For Type 0 fonts, we apply the DW/W/DW2/W2 values when we retrieve the metrics for
@@ -796,7 +800,7 @@ static int pdfi_show_Tr_preserve(pdf_context *ctx, gs_text_params_t *text)
         gx_device *dev = gs_currentdevice_inline(ctx->pgs);
 
         ctx->text.TextClip = true;
-        dev_proc(dev, dev_spec_op)(dev, gxdso_hilevel_text_clip, (void *)1, 1);
+        dev_proc(dev, dev_spec_op)(dev, gxdso_hilevel_text_clip, (void *)ctx->pgs, 1);
   }
 
     code = pdfi_show_simple(ctx, text);
@@ -1399,7 +1403,9 @@ int pdfi_Tr(pdf_context *ctx)
              * already extant path in the graphics state)
              */
             gs_newpath(ctx->pgs);
-            gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
+            if (code >= 0)
+                gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
+            code = 0;
         } else if (gs_currenttextrenderingmode(ctx->pgs) >= 4 && mode < 4 && ctx->text.BlockDepth != 0) {
             /* If we are switching from a clipping mode to a non-clipping
              * mode then behave as if we had an implicit ET to flush the

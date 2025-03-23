@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1419,6 +1419,32 @@ rescale_cie_color(gs_range_t *ranges, int num_colorants,
     }
 }
 
+static int check_colorants_for_pdfx4(const gs_color_space *pcs)
+{
+    int comp, all_present = 1;
+    char *ink;
+    gs_device_n_colorant *colorant = NULL;
+
+    if (pcs->params.device_n.colorants == NULL) {
+        return 0;
+    } else {
+        for (comp = 0; comp < pcs->params.device_n.num_components;comp++){
+            colorant = pcs->params.device_n.colorants;
+            ink = pcs->params.device_n.names[comp];
+            do {
+                if (memcmp(colorant->colorant_name, ink, strlen(ink)) == 0)
+                    break;
+                colorant = colorant->next;
+            }while(colorant);
+            if (!colorant) {
+                all_present = 0;
+                break;
+            }
+        }
+    }
+    return all_present;
+}
+
 /* Set the fill or stroke color. */
 int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                 const gx_drawing_color *pdc, gx_hl_saved_color * psc,
@@ -1623,7 +1649,21 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                 break;
                             case ccs_sRGB:
                             default:
-                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                if (pdev->PDFX > 0) {
+                                    if (pdev->PDFX >= 4) {
+                                        if (check_colorants_for_pdfx4(pcs)) {
+                                            if (csi != gs_color_space_index_DeviceCMYK)
+                                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                            else
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        } else
+                                            code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                    } else
+                                        code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                }
+                                else {
+                                    code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                }
                                 break;
                         }
                         break;
@@ -1706,7 +1746,17 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                 if (!force_process && csi2 == gs_color_space_index_Separation){
                                     code = convert_separation_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
                                 } else if (!force_process && csi2 == gs_color_space_index_DeviceN){
-                                    code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                    if (pdev->PDFX > 0) {
+                                        if (pdev->PDFX >= 4) {
+                                            if (check_colorants_for_pdfx4(pcs)) {
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                            } else
+                                                code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                        } else
+                                            code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                    }
+                                    else
+                                        code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
                                 } else
                                     code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
                                 pdev->params.ColorConversionStrategy = ccs_LeaveColorUnchanged;
@@ -1740,10 +1790,24 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                 csi = gs_color_space_get_index(pcs2);
                                 if (csi == gs_color_space_index_ICC)
                                     csi = gsicc_get_default_type(pcs2->cmm_icc_profile_data);
-                                if (csi != gs_color_space_index_DeviceCMYK)
-                                    code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
-                                else
-                                    code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                if (pdev->PDFX > 0) {
+                                    if (pdev->PDFX >= 4) {
+                                        if (check_colorants_for_pdfx4(pcs)) {
+                                            if (csi != gs_color_space_index_DeviceCMYK)
+                                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                            else
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        } else
+                                            code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                    } else
+                                        code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                }
+                                else {
+                                    if (csi != gs_color_space_index_DeviceCMYK)
+                                        code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                    else
+                                        code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                }
                                 break;
                             case gs_color_space_index_Indexed:
                                 pcs2 = pcs->base_space;
@@ -1770,10 +1834,24 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                         csi = gs_color_space_get_index(pcs2);
                                         if (csi == gs_color_space_index_ICC)
                                             csi = gsicc_get_default_type(pcs2->cmm_icc_profile_data);
-                                        if (csi != gs_color_space_index_DeviceCMYK)
-                                            code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
-                                        else
-                                            code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        if (pdev->PDFX > 0) {
+                                            if (pdev->PDFX >= 4) {
+                                                if (check_colorants_for_pdfx4(pcs)) {
+                                                    if (csi != gs_color_space_index_DeviceCMYK)
+                                                        code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                                    else
+                                                        code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                                } else
+                                                    code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                            } else
+                                                code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                        }
+                                        else {
+                                            if (csi != gs_color_space_index_DeviceCMYK)
+                                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                            else
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        }
                                         break;
                                     default:
                                         code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
@@ -1805,10 +1883,24 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                 csi = gs_color_space_get_index(pcs2);
                                 if (csi == gs_color_space_index_ICC)
                                     csi = gsicc_get_default_type(pcs2->cmm_icc_profile_data);
-                                if (csi != gs_color_space_index_DeviceGray)
-                                    code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
-                                else
-                                    code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                if (pdev->PDFX > 0) {
+                                    if (pdev->PDFX >= 4) {
+                                        if (check_colorants_for_pdfx4(pcs)) {
+                                            if (csi != gs_color_space_index_DeviceGray)
+                                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                            else
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        } else
+                                            code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                    } else
+                                        code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                }
+                                else {
+                                    if (csi != gs_color_space_index_DeviceGray)
+                                        code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                    else
+                                        code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                }
                                 break;
                             case gs_color_space_index_Indexed:
                                 pcs2 = pcs->base_space;
@@ -1834,10 +1926,24 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                         csi = gs_color_space_get_index(pcs2);
                                         if (csi == gs_color_space_index_ICC)
                                             csi = gsicc_get_default_type(pcs2->cmm_icc_profile_data);
-                                        if (csi != gs_color_space_index_DeviceGray)
-                                            code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
-                                        else
-                                            code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        if (pdev->PDFX > 0) {
+                                            if (pdev->PDFX >= 4) {
+                                                if (check_colorants_for_pdfx4(pcs)) {
+                                                    if (csi != gs_color_space_index_DeviceGray)
+                                                        code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                                    else
+                                                        code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                                } else
+                                                    code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                            } else
+                                                code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                        }
+                                        else {
+                                            if (csi != gs_color_space_index_DeviceGray)
+                                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                            else
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        }
                                         break;
                                     default:
                                         code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
@@ -1871,10 +1977,24 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                 csi = gs_color_space_get_index(pcs2);
                                 if (csi == gs_color_space_index_ICC)
                                     csi = gsicc_get_default_type(pcs2->cmm_icc_profile_data);
-                                if (csi != gs_color_space_index_DeviceRGB)
-                                    code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
-                                else
-                                    code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                if (pdev->PDFX > 0) {
+                                    if (pdev->PDFX >= 4) {
+                                        if (check_colorants_for_pdfx4(pcs)) {
+                                            if (csi != gs_color_space_index_DeviceRGB)
+                                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                            else
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        } else
+                                            code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                    } else
+                                        code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                }
+                                else {
+                                    if (csi != gs_color_space_index_DeviceRGB)
+                                        code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                    else
+                                        code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                }
                                 break;
                             case gs_color_space_index_Indexed:
                                 pcs2 = pcs->base_space;
@@ -1901,10 +2021,24 @@ int pdf_reset_color(gx_device_pdf * pdev, const gs_gstate * pgs,
                                         csi = gs_color_space_get_index(pcs2);
                                         if (csi == gs_color_space_index_ICC)
                                             csi = gsicc_get_default_type(pcs2->cmm_icc_profile_data);
-                                        if (csi != gs_color_space_index_DeviceRGB)
-                                            code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
-                                        else
-                                            code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        if (pdev->PDFX > 0) {
+                                            if (pdev->PDFX >= 4) {
+                                                if (check_colorants_for_pdfx4(pcs)) {
+                                                    if (csi != gs_color_space_index_DeviceRGB)
+                                                        code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                                    else
+                                                        code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                                } else
+                                                    code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                            } else
+                                                code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
+                                        }
+                                        else {
+                                            if (csi != gs_color_space_index_DeviceRGB)
+                                                code = convert_DeviceN_alternate(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc, NULL, false);
+                                            else
+                                                code = write_color_unchanged(pdev, pgs, pcc, &temp, psc, ppscc, used_process_color, pcs, pdc);
+                                        }
                                         break;
                                     default:
                                         code = write_color_as_process(pdev, pgs, pcs, pdc, used_process_color, ppscc, pcc);
@@ -2143,7 +2277,7 @@ pdf_write_transfer_map(gx_device_pdf *pdev, const gx_transfer_map *map,
     gs_function_free(pfn, false, mem);
     if (code < 0)
         return code;
-    gs_snprintf(ids, id_max, "%s%s%ld 0 R", key, (key[0] && key[0] != ' ' ? " " : ""), id);
+    gs_snprintf(ids, id_max, "%s%s%"PRId64" 0 R", key, (key[0] && key[0] != ' ' ? " " : ""), id);
     return 0;
 }
 static int
@@ -2440,7 +2574,7 @@ pdf_write_spot_halftone(gx_device_pdf *pdev, const gs_spot_halftone *psht,
     if (i < countof(ht_functions))
         pprints1(s, "/SpotFunction/%s", ht_functions[i].fname);
     else
-        pprintld1(s, "/SpotFunction %ld 0 R", spot_id);
+        pprinti64d1(s, "/SpotFunction %"PRId64" 0 R", spot_id);
     if (pdev->CompatibilityLevel <= 1.7)
         stream_puts(s, trs);
     if (psht->accurate_screens)
@@ -2795,7 +2929,7 @@ pdf_end_gstate(gx_device_pdf *pdev, pdf_resource_t *pres)
         code = pdf_add_resource(pdev, pdev->substream_Resources, "/ExtGState", pres);
         if (code < 0)
             return code;
-        pprintld1(pdev->strm, "/R%ld gs\n", pdf_resource_id(pres));
+        pprinti64d1(pdev->strm, "/R%"PRId64" gs\n", pdf_resource_id(pres));
         pres->where_used |= pdev->used_mask;
     }
     return 0;
@@ -2981,14 +3115,14 @@ pdf_prepare_drawing(gx_device_pdf *pdev, const gs_gstate *pgs,
         hts[0] = trs[0] = bgs[0] = ucrs[0] = 0;
         if (pdev->params.PreserveHalftoneInfo &&
             pdev->halftone_id != pgs->dev_ht[HT_OBJTYPE_DEFAULT]->id &&
-            !pdev->PDFX
+            pdev->PDFX == 0
             ) {
             code = pdf_update_halftone(pdev, pgs, hts, sizeof(hts));
             if (code < 0)
                 return code;
         }
         if (pdev->params.TransferFunctionInfo != tfi_Remove &&
-            !pdev->PDFX && pdev->PDFA == 0
+            pdev->PDFX == 0 && pdev->PDFA == 0
             ) {
             code = pdf_update_transfer(pdev, pgs, trs, sizeof(trs));
             if (code < 0)
@@ -3035,7 +3169,7 @@ pdf_prepare_drawing(gx_device_pdf *pdev, const gs_gstate *pgs,
             if (code < 0)
                 return code;
         }
-        if (!pdev->PDFX) {
+        if (pdev->PDFX == 0) {
             gs_currentscreenphase(pgs, &phase, 0);
             gs_currentscreenphase(&pdev->state, &dev_phase, 0);
             if ((dev_phase.x != phase.x || dev_phase.y != phase.y) && pdev->PDFA != 0) {

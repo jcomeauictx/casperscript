@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2024 Artifex Software, Inc.
+/* Copyright (C) 2020-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -17,14 +17,18 @@
 #include "strmio.h"
 #include "stream.h"
 #include "scanchar.h"
+#include "gsstrl.h"
 
 #include "pdf_int.h"
 #include "pdf_types.h"
+#include "pdf_font_types.h"
 #include "pdf_array.h"
 #include "pdf_dict.h"
 #include "pdf_stack.h"
 #include "pdf_file.h"
 #include "pdf_misc.h"
+#include "pdf_font.h"
+#include "pdf_fontmt.h"
 #include "pdf_fmap.h"
 
 typedef struct
@@ -45,7 +49,7 @@ static inline bool pdfi_fmap_file_exists(pdf_context *ctx, pdf_string *fname)
 }
 
 static int
-pdf_fontmap_open_file(pdf_context *ctx, const char *mapfilename, byte **buf, int *buflen)
+pdfi_fontmap_open_file(pdf_context *ctx, const char *mapfilename, byte **buf, int *buflen)
 {
     int code = 0;
     stream *s;
@@ -75,19 +79,25 @@ pdf_fontmap_open_file(pdf_context *ctx, const char *mapfilename, byte **buf, int
         if (file_size < 0 || file_size > max_int - poststringlen) {
             code = gs_note_error(gs_error_ioerror);
         } else {
+            byte *dbuf;
             *buflen = (int)file_size;
-            *buf = gs_alloc_bytes(ctx->memory, *buflen + poststringlen, "pdf_cmap_open_file(buf)");
+
+            (*buf) = gs_alloc_bytes(ctx->memory, *buflen + poststringlen, "pdf_cmap_open_file(buf)");
             if (*buf != NULL) {
                 sfread((*buf), 1, *buflen, s);
                 memcpy((*buf) + *buflen, poststring, poststringlen);
                 *buflen += poststringlen;
                 /* This is naff, but works for now
                    When parsing Fontmap in PS, ";" is defined as "def"
+                   Also some people use "cvn" to convert a string to a name.
                    We don't need either, because the dictionary is built from the stack.
                  */
-                for (i = 0; i < *buflen - 1; i++) {
-                    if ((*buf)[i] == ';') {
-                        (*buf)[i] = ' ';
+                for (i = 0, dbuf = *buf; i < *buflen - 1; i++, dbuf++) {
+                    if (*dbuf == ';') {
+                        *dbuf = ' ';
+                    }
+                    if (memcmp(dbuf, "cvn ", 4) == 0) {
+                        dbuf[0] = dbuf[1] = dbuf[2] = 0x20;
                     }
                 }
             }
@@ -98,6 +108,131 @@ pdf_fontmap_open_file(pdf_context *ctx, const char *mapfilename, byte **buf, int
         sfclose(s);
     }
     return code;
+}
+
+#ifdef UFST_BRIDGE
+/* we know fco_path is null terminated */
+static pdf_string *pdfi_make_fco_path_string(pdf_context *ctx, char *fco_path)
+{
+    pdf_string *fp;
+    int code = pdfi_object_alloc(ctx, PDF_STRING, strlen(fco_path), (pdf_obj **)&fp);
+    if (code < 0)
+        return NULL;
+    pdfi_countup(fp);
+    memcpy(fp->data, fco_path, strlen(fco_path));
+
+    return fp;
+}
+#endif /* UFST_BRIDGE */
+
+static inline int pdfi_populate_ufst_fontmap(pdf_context *ctx)
+{
+#ifdef UFST_BRIDGE
+    int status = 0;
+    int bSize, i;
+    char pthnm[gp_file_name_sizeof];
+    char *ufst_root_dir;
+    char *fco;
+    char *fco_start, *fco_lim;
+    size_t ufst_root_dir_len;
+
+    if (pdfi_fapi_ufst_available(ctx->memory) == false) {
+        return (0);
+    }
+
+    ufst_root_dir = (char *)pdfi_fapi_ufst_get_font_dir(ctx->memory);
+    ufst_root_dir_len = strlen(ufst_root_dir);
+    if (ufst_root_dir_len >= gp_file_name_sizeof) {
+        return gs_error_Fatal;
+    }
+    fco_start = fco = (char *)pdfi_fapi_ufst_get_fco_list(ctx->memory);
+    fco_lim = fco_start + strlen(fco_start) + 1;
+    while (fco < fco_lim && status == 0) {
+        pdf_string *fco_str;
+        status = 0;
+        /* build and open (get handle) for the k'th fco file name */
+        gs_strlcpy((char *)pthnm, ufst_root_dir, sizeof pthnm);
+
+        for (i = 2; fco[i] != gp_file_name_list_separator && (&fco[i]) < fco_lim - 1; i++)
+            ;
+
+        if (i + ufst_root_dir_len >= gp_file_name_sizeof) {
+            return gs_error_Fatal;
+        }
+        strncat(pthnm, fco, i);
+        fco += (i + 1);
+        fco_str = pdfi_make_fco_path_string(ctx, pthnm);
+        if (fco_str == NULL) {
+            return gs_error_Fatal;
+        }
+
+        /* enumerate the files in this fco */
+        for (i = 0; status == 0; i++) {
+            char *pname = NULL;
+            pdf_font_microtype *pdffont = NULL;
+            int font_number = 0;
+
+            status = pdfi_alloc_mt_font(ctx, fco_str, i, &pdffont);
+            if (status < 0)
+                break;
+            status = pdfi_fapi_passfont((pdf_font *)pdffont, i, (char *)"UFST", pthnm, NULL, 0);
+            if (status < 0){
+#ifdef DEBUG
+                outprintf(ctx->memory, "CGIFfco_Access error %d\n", status);
+#endif
+                pdfi_countdown(pdffont);
+                break;
+            }
+
+            /* For Microtype fonts, once we get here, these
+             * pl_fapi_get*() calls cannot fail, so we can
+             * safely ignore the return value
+             */
+            (void)pdfi_fapi_get_mtype_font_name((gs_font *)pdffont->pfont, NULL, &bSize);
+
+            pname = (char *)gs_alloc_bytes(ctx->memory, bSize, "pdfi: mt font name buffer");
+            if (!pname) {
+                pdfi_countdown(pdffont);
+                (void)pdfi_set_warning_stop(ctx, gs_note_error(gs_error_VMerror), NULL, W_PDF_VMERROR_BUILTIN_FONT, "pdfi_populate_ufst_fontmap", "");
+                outprintf(ctx->memory, "VM Error for built-in font %d", i);
+                continue;
+            }
+
+            (void)pdfi_fapi_get_mtype_font_name((gs_font *)pdffont->pfont, (byte *) pname, &bSize);
+            (void)pdfi_fapi_get_mtype_font_number((gs_font *)pdffont->pfont, &font_number);
+
+            if (bSize < gs_font_name_max) {
+                memcpy(pdffont->pfont->key_name.chars, pname, bSize);
+                pdffont->pfont->key_name.chars[bSize] = 0;
+                pdffont->pfont->key_name.size = bSize;
+                memcpy(pdffont->pfont->font_name.chars, pname, bSize);
+                pdffont->pfont->font_name.chars[bSize] = 0;
+                pdffont->pfont->font_name.size = bSize;
+            }
+            status = gs_definefont(ctx->font_dir, (gs_font *) pdffont->pfont);
+            if (status < 0) {
+                pdfi_countdown(pdffont);
+                status = 0;
+                continue;
+            }
+            gs_notify_release(&pdffont->pfont->notify_list);
+            status = pdfi_fapi_passfont((pdf_font *)pdffont, i, (char *)"UFST", pthnm, NULL, 0);
+            if (status < 0) {
+                pdfi_countdown(pdffont);
+                status = 0;
+                continue;
+            }
+            status = pdfi_dict_put(ctx, ctx->pdffontmap, pname, (pdf_obj *)pdffont);
+            pdfi_countdown(pdffont);
+            if (status < 0) {
+                status = 0;
+                continue;
+            }
+        }
+        pdfi_countdown(fco_str);
+    }
+#endif /* UFST_BRIDGE */
+    return 0;
 }
 
 static int
@@ -125,7 +260,7 @@ pdf_make_fontmap(pdf_context *ctx, const char *default_fmapname, int cidfmap)
             fmapname[ctx->fontmapfiles[j].size] = '\0';
         }
 
-        code = pdf_fontmap_open_file(ctx, (const char *)fmapname, &fmapbuf, &fmapbuflen);
+        code = pdfi_fontmap_open_file(ctx, (const char *)fmapname, &fmapbuf, &fmapbuflen);
         if (code < 0) {
             if (ctx->args.QUIET != true) {
                 (void)outwrite(ctx->memory, "Warning: ", 9);
@@ -217,6 +352,77 @@ done:
             pdfi_countup(ctx->pdffontmap);
         }
     }
+    if (code >= 0) {
+        code = pdfi_populate_ufst_fontmap(ctx);
+    }
+#ifdef DUMP_FONTMAP
+    if (ctx->pdffontmap != NULL) {
+        uint64_t ind;
+        int find = -1;
+        pdf_name *key = NULL;
+        pdf_obj *v = NULL;
+        pdf_string *val = NULL;
+        (void)pdfi_dict_key_first(ctx, ctx->pdffontmap, (pdf_obj **) &key, &ind);
+        (void)pdfi_dict_get_by_key(ctx, ctx->pdffontmap, key, (pdf_obj **)&v);
+        for (j = 0; j < key->length; j++)
+            dprintf1("%c", key->data[j]);
+        if (pdfi_type_of(v) == PDF_DICT) {
+            pdf_num *n;
+            pdf_string *val2;
+            code = pdfi_dict_get(ctx, (pdf_dict *)v, "Index", (pdf_obj **)&n);
+            if (code >= 0 && pdfi_type_of(n) == PDF_INT)
+                find = n->value.i;
+            else
+                code = 0;
+            (void)pdfi_dict_get(ctx, (pdf_dict *)v, "Path", (pdf_obj **)&val2);
+            val = val2;
+        }
+        else {
+            val = (pdf_string *)v;
+        }
+        dprintf("	");
+        for (j = 0; j < val->length; j++)
+            dprintf1("%c", val->data[j]);
+        if (find != -1) {
+            dprintf1("	Index = %d", find);
+            find = -1;
+        }
+
+        dprintf("\n");
+        pdfi_countdown(key);
+        pdfi_countdown(val);
+
+        while (pdfi_dict_key_next(ctx, ctx->pdffontmap, (pdf_obj **) &key, &ind) >= 0 && ind > 0) {
+            (void)pdfi_dict_get_by_key(ctx, ctx->pdffontmap, key, (pdf_obj **)&v);
+            for (j = 0; j < key->length; j++)
+                dprintf1("%c", key->data[j]);
+            if (pdfi_type_of(v) == PDF_DICT) {
+                pdf_num *n;
+                pdf_string *val2;
+                code = pdfi_dict_get(ctx, (pdf_dict *)v, "Index", (pdf_obj **)&n);
+                if (code >= 0 && pdfi_type_of(n) == PDF_INT)
+                    find = n->value.i;
+                else
+                    code = 0;
+                (void)pdfi_dict_get(ctx, (pdf_dict *)v, "Path", (pdf_obj **)&val2);
+                val = val2;
+            }
+            else {
+                val = (pdf_string *)v;
+            }
+            dprintf("       ");
+            for (j = 0; j < val->length; j++)
+                dprintf1("%c", val->data[j]);
+            if (find != -1) {
+                dprintf1("	Index = %d", find);
+                find = -1;
+            }
+            pdfi_countdown(key);
+            pdfi_countdown(val);
+            dprintf("\n");
+        }
+    }
+#endif
     pdfi_clearstack(ctx);
     return code;
 }
@@ -458,8 +664,9 @@ static int pdfi_ttf_add_to_native_map(pdf_context *ctx, stream *f, byte magic[4]
         include_index = true;
         ver = sru32(f);
         if (ver != 0x00010000 && ver !=0x00020000) {
-            dmprintf1(ctx->memory, "Unknown TTC header version %08X.\n", ver);
-            return_error(gs_error_invalidaccess);
+            code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_invalidaccess), NULL, E_PDF_BAD_TTC_VERSION, "pdfi_ttf_add_to_native_map", NULL);
+            outprintf(ctx->memory, "Unknown TTC header version %08X.\n", ver);
+            return code;
         }
         nfonts = sru32(f);
         /* There isn't a specific limit on the number of fonts,
@@ -544,7 +751,7 @@ static int pdfi_ttf_add_to_native_map(pdf_context *ctx, stream *f, byte magic[4]
                         int nl = u16(rec + 8);
                         int noffs = u16(rec + 10);
 
-                        if (nl + noffs + storageOffset > table_len) {
+                        if (nl + noffs + storageOffset > table_len || nl >= pname_size) {
                             break;
                         }
                         memcpy(pname, namet + storageOffset + noffs, nl);
@@ -582,7 +789,7 @@ static int pdfi_ttf_add_to_native_map(pdf_context *ctx, stream *f, byte magic[4]
                             int nl = u16(rec + 8);
                             int noffs = u16(rec + 10);
 
-                            if (nl + noffs + storageOffset > table_len) {
+                            if (nl + noffs + storageOffset > table_len || nl >= pname_size) {
                                 break;
                             }
                             memcpy(pname, namet + storageOffset + noffs, nl);
@@ -759,11 +966,13 @@ done:
 static int pdfi_generate_native_fontmap(pdf_context *ctx)
 {
     file_enum *fe;
-    int i;
+    int i, j;
     char *patrn= NULL;
     char *result = NULL;
     char *working = NULL;
     int code = 0, l;
+    gs_param_string *respaths[2];
+    int nrespaths[2];
 
     if (ctx->pdfnativefontmap != NULL) /* Only run this once */
         return 0;
@@ -776,6 +985,8 @@ static int pdfi_generate_native_fontmap(pdf_context *ctx)
         return 0;
     }
 
+    (void)pdfi_generate_platform_fontmap(ctx);
+
     patrn = (char *)gs_alloc_bytes(ctx->memory, gp_file_name_sizeof, "pdfi_generate_native_fontmap");
     result = (char *)gs_alloc_bytes(ctx->memory, gp_file_name_sizeof, "pdfi_generate_native_fontmap");
     working = (char *)gs_alloc_bytes(ctx->memory, gp_file_name_sizeof, "pdfi_generate_native_fontmap");
@@ -786,28 +997,34 @@ static int pdfi_generate_native_fontmap(pdf_context *ctx)
         return_error(gs_error_VMerror);
     }
 
-    for (i = 0; i < ctx->search_paths.num_font_paths; i++) {
+    respaths[0] = ctx->search_paths.font_paths;
+    nrespaths[0] = ctx->search_paths.num_font_paths;
+    respaths[1] = ctx->search_paths.resource_paths;
+    nrespaths[1] = ctx->search_paths.num_resource_paths;
 
-        memcpy(patrn, ctx->search_paths.font_paths[i].data, ctx->search_paths.font_paths[i].size);
-        memcpy(patrn + ctx->search_paths.font_paths[i].size, "/*", 2);
-        patrn[ctx->search_paths.font_paths[i].size + 2] = '\0';
+    for (j = 0; j < sizeof(respaths) / sizeof(respaths[0]); j++) {
+        for (i = 0; i < nrespaths[j]; i++) {
 
-        fe = gp_enumerate_files_init(ctx->memory, (const char *)patrn, strlen(patrn));
-        while ((l = gp_enumerate_files_next(ctx->memory, fe, result, gp_file_name_sizeof - 1)) != ~(uint) 0) {
-            result[l] = '\0';
+            memcpy(patrn, respaths[j][i].data, respaths[j][i].size);
+            memcpy(patrn + respaths[j][i].size, "/*", 2);
+            patrn[respaths[j][i].size + 2] = '\0';
 
-            code = pdfi_add_font_to_native_map(ctx, result, working);
+            fe = gp_enumerate_files_init(ctx->memory, (const char *)patrn, strlen(patrn));
+            while ((l = gp_enumerate_files_next(ctx->memory, fe, result, gp_file_name_sizeof - 1)) != ~(uint) 0) {
+                result[l] = '\0';
 
-            /* We ignore most errors, on the basis it probably means it wasn't a valid font file */
-            if (code == gs_error_VMerror)
-                break;
-            code = 0;
+                code = pdfi_add_font_to_native_map(ctx, result, working);
+
+                /* We ignore most errors, on the basis it probably means it wasn't a valid font file */
+                if (code == gs_error_VMerror)
+                    break;
+                code = 0;
+            }
+            /* We only need to explicitly destroy the enumerator if we exit before enumeration is complete */
+            if (code < 0)
+                gp_enumerate_files_close(ctx->memory, fe);
         }
-        /* We only need to explicitly destroy the enumerator if we exit before enumeration is complete */
-        if (code < 0)
-            gp_enumerate_files_close(ctx->memory, fe);
     }
-    (void)pdfi_generate_platform_fontmap(ctx);
 
 #ifdef DUMP_NATIVE_FONTMAP
     if (ctx->pdfnativefontmap != NULL) {
@@ -885,7 +1102,7 @@ static int pdfi_generate_native_fontmap(pdf_context *ctx)
 }
 
 int
-pdf_fontmap_lookup_font(pdf_context *ctx, pdf_dict *font_dict, pdf_name *fname, pdf_obj **mapname, int *findex)
+pdfi_fontmap_lookup_font(pdf_context *ctx, pdf_dict *font_dict, pdf_name *fname, pdf_obj **mapname, int *findex)
 {
     int code;
     pdf_obj *mname;
@@ -905,8 +1122,26 @@ pdf_fontmap_lookup_font(pdf_context *ctx, pdf_dict *font_dict, pdf_name *fname, 
         if (code < 0)
             return code;
     }
+    code = pdfi_dict_get_by_key(ctx, ctx->pdffontmap, fname, &mname);
+    if (code >= 0) {
+        /* Fontmap can map in multiple "jump" i.e.
+           name -> substitute name
+           subsitute name -> file name
+           So we want to loop until we no more hits.
+         */
+        while(1) {
+            pdf_obj *mname2;
+            code = pdfi_dict_get_by_key(ctx, ctx->pdffontmap, (pdf_name *)mname, &mname2);
+            if (code < 0) {
+                code = 0;
+                break;
+            }
+            pdfi_countdown(mname);
+            mname = mname2;
+        }
+    }
 
-    if (ctx->pdfnativefontmap != NULL) {
+    if (code < 0 && ctx->pdfnativefontmap != NULL) {
         pdf_obj *record;
         code = pdfi_dict_get_by_key(ctx, ctx->pdfnativefontmap, fname, &record);
         if (code >= 0) {
@@ -934,29 +1169,12 @@ pdf_fontmap_lookup_font(pdf_context *ctx, pdf_dict *font_dict, pdf_name *fname, 
         code = gs_error_undefined;
     }
 
-    if (code < 0) {
-        code = pdfi_dict_get_by_key(ctx, ctx->pdffontmap, fname, &mname);
-        if (code >= 0) {
-            /* Fontmap can map in multiple "jump" i.e.
-               name -> substitute name
-               subsitute name -> file name
-               So we want to loop until we no more hits.
-             */
-            while(1) {
-                pdf_obj *mname2;
-                code = pdfi_dict_get_by_key(ctx, ctx->pdffontmap, (pdf_name *)mname, &mname2);
-                if (code < 0) break;
-                pdfi_countdown(mname);
-                mname = mname2;
-            }
-        }
-    }
     if (mname != NULL && pdfi_type_of(mname) == PDF_STRING && pdfi_fmap_file_exists(ctx, (pdf_string *)mname)) {
         *mapname = mname;
         (void)pdfi_dict_put(ctx, font_dict, ".Path", mname);
         code = 0;
     }
-    else if (mname != NULL && pdfi_type_of(mname) == PDF_NAME) { /* If we map to a name, we assume (for now) we have the font as a "built-in" */
+    else if (mname != NULL && (pdfi_type_of(mname) == PDF_NAME || pdfi_type_of(mname) == PDF_FONT)) { /* If we map to a name, we assume (for now) we have the font as a "built-in" */
         *mapname = mname;
         code = 0;
     }
@@ -968,7 +1186,7 @@ pdf_fontmap_lookup_font(pdf_context *ctx, pdf_dict *font_dict, pdf_name *fname, 
 }
 
 int
-pdf_fontmap_lookup_cidfont(pdf_context *ctx, pdf_dict *font_dict, pdf_name *name, pdf_obj **mapname, int *findex)
+pdfi_fontmap_lookup_cidfont(pdf_context *ctx, pdf_dict *font_dict, pdf_name *name, pdf_obj **mapname, int *findex)
 {
     int code = 0;
     pdf_obj *cidname = NULL;
@@ -1017,9 +1235,6 @@ pdf_fontmap_lookup_cidfont(pdf_context *ctx, pdf_dict *font_dict, pdf_name *name
         pdf_dict *rec = (pdf_dict *)mname;
         pdf_name *filetype;
         pdf_name *path = NULL;
-        pdf_array *mcsi = NULL;
-        pdf_dict *ocsi = NULL;
-        pdf_string *ord1 = NULL, *ord2 = NULL;
         int64_t i64;
 
         code = pdfi_dict_get(ctx, rec, "FileType", (pdf_obj **)&filetype);
@@ -1030,48 +1245,6 @@ pdf_fontmap_lookup_cidfont(pdf_context *ctx, pdf_dict *font_dict, pdf_name *name
             return_error(gs_error_undefined);
         }
         pdfi_countdown(filetype);
-
-        code = pdfi_dict_get(ctx, rec, "CSI", (pdf_obj **)&mcsi);
-        if (code < 0 || pdfi_type_of(mcsi) != PDF_ARRAY) {
-            pdfi_countdown(mcsi);
-            pdfi_countdown(rec);
-            return_error(gs_error_undefined);
-        }
-
-        code = pdfi_dict_get(ctx, font_dict, "CIDSystemInfo", (pdf_obj **)&ocsi);
-        if (code < 0 || pdfi_type_of(ocsi) != PDF_DICT) {
-            pdfi_countdown(ocsi);
-            pdfi_countdown(mcsi);
-            pdfi_countdown(rec);
-            return_error(gs_error_undefined);
-        }
-        code = pdfi_dict_get(ctx, ocsi, "Ordering", (pdf_obj **)&ord1);
-        if (code < 0 || pdfi_type_of(ord1) != PDF_STRING) {
-            pdfi_countdown(ord1);
-            pdfi_countdown(ocsi);
-            pdfi_countdown(mcsi);
-            pdfi_countdown(rec);
-            return_error(gs_error_undefined);
-        }
-        code = pdfi_array_get(ctx, mcsi, 0, (pdf_obj **)&ord2);
-        if (code < 0 || pdfi_type_of(ord2) != PDF_STRING) {
-            pdfi_countdown(ord1);
-            pdfi_countdown(ord2);
-            pdfi_countdown(ocsi);
-            pdfi_countdown(mcsi);
-            pdfi_countdown(rec);
-            return_error(gs_error_undefined);
-        }
-        if (pdfi_string_cmp(ord1, ord2) != 0) {
-            pdfi_countdown(ord1);
-            pdfi_countdown(ord2);
-            pdfi_countdown(ocsi);
-            pdfi_countdown(mcsi);
-            pdfi_countdown(rec);
-            return_error(gs_error_undefined);
-        }
-        pdfi_countdown(ord1);
-        pdfi_countdown(ord2);
 
         code = pdfi_dict_get(ctx, rec, "Path", (pdf_obj **)&path);
         if (code < 0 || pdfi_type_of(path) != PDF_STRING || !pdfi_fmap_file_exists(ctx, (pdf_string *)path)) {

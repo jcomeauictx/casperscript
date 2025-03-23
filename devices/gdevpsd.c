@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -671,7 +671,7 @@ psd_prn_open(gx_device * pdev)
 
     /* The default code thinks that any number of spots over 4 must mean
      * that it's a CMYK space. Correct that for psdrgb and psdrgbtags. */
-    if (strcmp(pdev->dname, "psdrgb") == 0 || strcmp(pdev->dname, "psdrgbtags") == 0) {
+    if (strcmp(pdev->dname, "psdrgb") == 0 || strcmp(pdev->dname, "psdrgbtags") == 0 || strcmp(pdev->dname, "psdrgb16") == 0 || strcmp(pdev->dname, "psdrgbtags16") == 0) {
         if (pdev->icc_struct &&
             pdev->icc_struct->device_profile[gsDEFAULTPROFILE]) {
             rc_decrement(pdev->icc_struct->device_profile[gsDEFAULTPROFILE], "psd_prn_open");
@@ -1277,6 +1277,7 @@ psd_setup(psd_write_ctx *xc, gx_devn_prn_device *dev, gp_file *file, int w, int 
     /* If we had a specify order name, then we may need to adjust things */
     if (strcmp(dev->dname, "psdcmykog") != 0) {
         if (dev->devn_params.num_separation_order_names > 0) {
+            xc->num_channels -= has_tags;
             for (i = 0; i < dev->devn_params.num_separation_order_names; i++) {
                 int sep_order_num = dev->devn_params.separation_order_map[i];
                 if (sep_order_num >= NUM_CMYK_COMPONENTS) {
@@ -1284,6 +1285,7 @@ psd_setup(psd_write_ctx *xc, gx_devn_prn_device *dev, gp_file *file, int w, int 
                     xc->chnl_to_orig_sep[xc->num_channels++] = sep_order_num;
                 }
             }
+            xc->num_channels += has_tags;
         } else {
             /* If ICCOutputColors specified then just use that ordering, which
                has already been set. */

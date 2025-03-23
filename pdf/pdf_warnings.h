@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-2024 Artifex Software, Inc.
+/* Copyright (C) 2022-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -74,6 +74,7 @@ PARAM(W_PDF_MISSING_NAMED_RESOURCE, "Couldn't find a named resource"),
 PARAM(W_PDF_BAD_OUTLINES,           "A problem was encountered trying to preserve the Outlines"),
 PARAM(W_PDF_OUTLINECHILD_NO_COUNT,  "An Outline with descendants is missing the required /Count key"),
 PARAM(W_PDF_BAD_INFO,               "The file has a bad /Info dictionary"),
+PARAM(W_PDF_INFO_NOT_INDIRECT,      "The file trailer contains an Info dictionary object, not an indirect reference"),
 PARAM(W_PDF_BAD_EMBEDDEDFILES,      "File has Embedded files which could not be preserved"),
 PARAM(W_PDF_BAD_ACROFORM,           "Bad AcroForm detected"),
 PARAM(W_PDF_BAD_OUTPUTINTENTS,      "Bad OutputIntents detected"),
@@ -104,4 +105,9 @@ PARAM(W_PDF_DO_OC_FAILED,           "Failed to write optional content for an ima
 PARAM(W_PDF_BAD_CONFIG,             "A configuration or command line parameter was invalid or incorrect."),
 PARAM(W_PDF_INVALID_TTF_CMAP,       "A TrueType font contains invalid or no cmap table(s)"),
 PARAM(W_PDF_LIMITCHECK_TYPE0_CMAP,  "A CMap has too many code maps."),
+PARAM(W_PDF_INHERITED_STREAM_RESOURCE, "stream inherited a resource"),
+PARAM(W_PDF_BAD_COLLECTION,         "Failed to read Collection information."),
+PARAM(W_PDF_BAD_OUTPUTINTENT_INDEX, "UsePDFX3Profile specified invalid index for OutputIntents"),
+PARAM(W_PDF_VMERROR_BUILTIN_FONT,   "VM Error for built-in font."),
+PARAM(W_PDF_ERROR_IN_MATTE,         "Setting up a Matte for an image returned an error"),
 #undef PARAM

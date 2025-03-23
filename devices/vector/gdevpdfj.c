@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -429,7 +429,7 @@ pdf_begin_image_data(gx_device_pdf * pdev, pdf_image_writer * piw,
         if(code < 0)
             return code;
 
-        gs_snprintf(str, sizeof(str), "%ld 0 R", pco->id);
+        gs_snprintf(str, sizeof(str), "%"PRId64" 0 R", pco->id);
         if (piw->pres != NULL && piw->pres->object != NULL)
             code = cos_dict_put_string_copy((cos_dict_t *)piw->pres->object, "/OC", str);
 
@@ -700,7 +700,7 @@ pdf_copy_color_bits(stream *s, const byte *base, int sourcex, int raster,
 /* Choose image compression - auxiliary procs */
 static inline bool much_bigger__DL(long l1, long l2)
 {
-    return l1 > 1024*1024 && l2 < l1 / 3;
+    return l1 > 1024*1024 && (l2 > 0 && l2 < l1 / 3);
 }
 static void
 pdf_choose_compression_cos(pdf_image_writer *piw, cos_stream_t *s[2], bool force)

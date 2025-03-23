@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -302,13 +302,18 @@ sfnts_copy_except_glyf(sfnts_reader *r, sfnts_writer *w)
     {
         byte tag[4];
         ulong checkSum, offset, offset_new, length;
-    } tables[30];
+    } tables[40];
     const ushort alignment = 4; /* Not sure, maybe 2 */
     ulong version = r->rlong(r);
     ushort num_tables = r->rword(r);
     ushort i, num_tables_new = 0;
     ushort searchRange, entrySelector = 0, rangeShift, v;
     ulong size_new = 12;
+
+    if (num_tables > countof(tables)) {
+        r->error = gs_note_error(gs_error_invalidfont);
+        return r->error;
+    }
 
     r->rword(r);                /* searchRange */
     if (r->error < 0)
@@ -689,7 +694,7 @@ FAPI_FF_get_word(gs_fapi_font *ff, gs_fapi_font_feature var_id, int index, unsig
                     /* When reading the real proc, we add a space between each entry */
                     length++;
                     if (array_get(ff->memory, DBlend, i, &Element) < 0) {
-                        *ret = 0;
+                        length = 0;
                         break;
                     }
                     switch (r_btype(&Element)) {
@@ -716,7 +721,12 @@ FAPI_FF_get_word(gs_fapi_font *ff, gs_fapi_font_feature var_id, int index, unsig
                         default:
                             break;
                     }
-                }
+
+                    if (length > max_ushort) {
+                        length = 0;
+                        break;
+                    }
+                 }
                 *ret = length;
                 break;
             }
@@ -3488,7 +3498,7 @@ zFAPIpassfont(i_ctx_t *i_ctx_p)
 
     code =
         gs_fapi_passfont(pfont, subfont, font_file_path, NULL, fapi_request, xlatmap,
-                         &fapi_id, (gs_fapi_get_server_param_callback)ps_get_server_param);
+                         &fapi_id, NULL, (gs_fapi_get_server_param_callback)ps_get_server_param);
 
     if (font_file_path != NULL)
         gs_free_string(imemory_global, (byte *) font_file_path, r_size(v) + 1,

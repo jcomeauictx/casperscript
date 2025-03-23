@@ -1,4 +1,4 @@
-.. Copyright (C) 2001-2023 Artifex Software, Inc.
+.. Copyright (C) 2001-2025 Artifex Software, Inc.
 .. All Rights Reserved.
 
 .. title:: High Level Devices
@@ -773,6 +773,9 @@ The default image parameter dictionary is:
 
    << /QFactor 0.9 /Blend 1 /HSamples [2 1 1 2] /VSamples [2 1 1 2] >>
 
+The Acrobat Distiller parameters do not offer any means to set the parameters for image compression other than JPEG or, in recent versions JPX, compression. We don't support JPEG2000 (JPX) compression, but we would like ot be able to configure Flate compression which Distiller does not, apparently, permit. Rather than adding another dictionary, as per Distiller, we have noted that the JPEG key names in the (Gray|Color)ImageDict and (Gray|Color)ACSImageDict do not conflict with the standard Flate key names and so have added these keys to the (Gray|Color)ImageDict and (Gray|Color)ACSImageDict. Supported keys for Flate compression are /Predictor and /Effort. Please see the PostScript Language Reference Manual for details of thsse parameters. The pdfwrite device will look for, and use, the appropriate parameters for the compression selected; this allows a single (Gray|Color)ACSImageDict to configure both Flate and JPEG compression and leave the selection of the compression type to the auto-chooser.
+Default values are the default Flate value (normally 6, configurable at compile-time) for Effort and 15 (allow encoder to select) for /Predictor.
+
 .. _DistillerParameters_note_8:
 
 Note 8
@@ -782,6 +785,9 @@ The printer ACS image parameter dictionary is:
    .. code-block:: bash
 
       << /QFactor 0.4 /Blend 1 /ColorTransform 1 /HSamples [1 1 1 1] /VSamples [1 1 1 1] >>
+
+The Acrobat Distiller parameters do not offer any means to set the parameters for image compression other than JPEG or, in recent versions JPX, compression. We don't support JPEG2000 (JPX) compression, but we would like ot be able to configure Flate compression which Distiller does not, apparently, permit. Rather than adding another dictionary, as per Distiller, we have noted that the JPEG key names in the (Gray|Color)ImageDict and (Gray|Color)ACSImageDict do not conflict with the standard Flate key names and so have added these keys to the (Gray|Color)ImageDict and (Gray|Color)ACSImageDict. Supported keys for Flate compression are /Predictor and /Effort. Please see the PostScript Language Reference Manual for details of thsse parameters. The pdfwrite device will look for, and use, the appropriate parameters for the compression selected; this allows a single (Gray|Color)ACSImageDict to configure both Flate and JPEG compression and leave the selection of the compression type to the auto-chooser.
+Default values are the default Flate value (normally 6, configurable at compile-time) for Effort and 15 (allow encoder to select) for /Predictor.
 
 .. _DistillerParameters_note_9:
 
@@ -870,7 +876,7 @@ Note 16
 
 Note 17
 ^^^^^^^^^
-   When ``EmbedAllFonts`` is false only Fonts (not CIDFonts) which are symbolic will be embedded in the output file. When ``EmbedAllFonts`` is true the behaviour is dependent on the input type. Ordinarily (all interpreters except PDF) all the fonts will be embedded in the output. Fonts which are not embedded in the input will have a substitute assigned and that will be embedded in the output. For PDF input only, if the Font or CIDFont is not embedded in the input then it will not be embedded in the output. This is a change in behaviour with the release of 10.03.0. If you have defined a specific font as a known good substitute in Fontmap.GS or cidfmap then you will also need to add it to the ``AlwaysEmbed`` array in order that it gets embedded.
+   When ``EmbedAllFonts`` is false only Fonts (not CIDFonts) which are symbolic will be embedded in the output file. When ``EmbedAllFonts`` is true the behaviour is dependent on the input type. Ordinarily (all interpreters except PDF) all the fonts will be embedded in the output. Fonts which are not embedded in the input will have a substitute assigned and that will be embedded in the output. For PDF input only, if the Font or CIDFont is not embedded in the input and EmbedSubstituteFonts is false then it will not be embedded in the output. This is a change in behaviour with the release of 10.03.0. If you have defined a specific font as a known good substitute in Fontmap.GS or cidfmap then you will also need to add it to the ``AlwaysEmbed`` array in order that it gets embedded. Or leave EmbedSubstituteFonts set to the default (true).
 
 
 Color Conversion and Management
@@ -1042,27 +1048,25 @@ The following options are useful for creating PDF 1.3 files:
 ``-dHaveTransparency=boolean``
    With ``CompatibilityLevel ≥ 1.4`` it specifies whether the target viewer can handle PDF 1.4 transparency objects. If not, the page is converted into a single plain image with all transparency flattened. Default value is true.
 
-The following option specifies creation of a PDF/X-3 file:
+The following option specifies creation of a PDF/X file:
 
-``-dPDFX=boolean``
-   Specifies the generated document is to follow the PDF/X-3 standard. When true, a DefaultRGB ColorSpace resource must be defined, and options ``NOSUBSTDEVICECOLORS``, ``NOCIE`` must not be specified. Default value is false.
+``-dPDFX=integer``
+   Specifies the generated document is to follow a PDF/X-standard (value should be 1, 3 or 4, default is 3). The pdfx_def.ps example file in the lib directory supports some other actions which must be taken to produce a valid PDF/X file.
 
-   The :title:`pdfwrite` device does not currently support PDF/X versions other than 3.
+   The :title:`pdfwrite` device currently supports PDF/X versions 1, 3 and 4.
 
 
-When generating a PDF/X-3 document, Ghostscript performs the following special actions to satisfy the PDF/X-3 standard:
+When generating a PDF/X document, Ghostscript performs the following special actions to satisfy the PDF/X-3 standard:
 
 - All fonts are embedded.
 
-- ``DeviceRGB`` color space is substituted with the ``DefaultRGB`` color space, which must be defined in the ``ColorSpace`` category. The easiest way is to provide it in the ``DefaultRGB`` file in the resource directory.
-
-- ``DeviceRGB`` color values are passed unchanged. If a user needs a non trivial color adjustment, a non trivial ``DefaultRGB`` color space must be defined.
+- Unsupported colour spaces are converted to the space defined in the ColourConversionStrategy. PDF/X-1 only supports Gray, CMYK or /Separation spaces (with a Gray or CMYK alternate), PDF/X-3 also supports DeviceN (with a Gray or CMYK alternate). Alternate spaces which are not compliant are converted to compliant alternate spaces.
 
 - Transfer functions and halftone phases are skipped.
 
 - ``/PS pdfmark`` interprets the DataSource stream or file.
 
-- ``TrimBox`` and ``BleedBox`` entries are generated in page descriptions. Their values can be changed using the ``PDFXTrimBoxToMediaBoxOffset``, ``PDFXSetBleedBoxToMediaBox``, and ``PDFXBleedBoxToTrimBoxOffset`` distiller parameters (see below).
+- ``TrimBox``, ``BleedBox`` and/or ``ArtBox`` entries are generated as required in page descriptions. Their values can be changed using the ``PDFXTrimBoxToMediaBoxOffset``, ``PDFXSetBleedBoxToMediaBox``, and ``PDFXBleedBoxToTrimBoxOffset`` distiller parameters (see below).
 
 
 The following switches are used for creating encrypted documents:
@@ -1147,6 +1151,9 @@ The following switches are used for generating metadata according to the Adobe X
    
    Using ObjStms can significantly reduce the size of some PDF files, at the cost of somewhat reduced performance. Taking as an exmple the PDF 1.7 Reference Manual; the original file is ~32MB, producing a PDF file from it using pdfwrite without the XRefStm or ObjStms enabled produces a file ~19MB, with both these features enabled the output file is ~13.9MB. This is currently a new feature and can be disabled if problems arise.
 
+``-dEmbedSubstituteFonts=boolean``
+   When the input uses a font, but does not include the font itself, the interpreter selects a substitute font to use in place of the requested one. If ``EmbedSubstituteFonts`` is true (the default), then that substitute font will be embedded in the output file. This can lead to poor quality output, if the workflow includes rendering the output file in a process where the missing font is present then it is preferable not to embed the substitute font and let the later process use the correct font. If ``EmbedSubstituteFonts`` is false then this will be the behaviour. Note that if ``EmbedSubstituteFonts`` is false any explicit substitutions will need to be added to the ``AlwaysEmbed`` array to function.
+   
 ----
 
 
@@ -1245,29 +1252,32 @@ In addition EPS files may only contain a single page and may not contain device-
 
 
 
-Creating a PDF/X-3 document
+Creating a PDF/X document
 ----------------------------------
 
-To create a PDF/X-3 document from a Postscript or a PDF file, you should :
+.. warning::
+
+  Ghostscript supports creation of PDF/X-1 and PDF/X-3 formats, other formats of PDF/X are *not supported*.
+
+To create a document from a Postscript or a PDF file, you should :
 
 - Specify the :title:`pdfwrite` device or use the ``ps2pdf`` script.
 
 - Specify the ``-dPDFX`` option. It provides the document conformity and forces ``-dCompatibilityLevel=1.3``.
 
-- Specify ``-sColorConversionStrategy=Gray``, ``-sColorConversionStrategy=CMYK`` or ``-sColorConversionStrategy=UseDeviceIndependentColor`` (RGB is not allowed).
+- Specify ``-sColorConversionStrategy=Gray`` or ``-sColorConversionStrategy=CMYK`` (RGB is not allowed).
 
 - Specify a PDF/X definition file before running the input document. It provides additional information to be included into the output document. A sample PDF/X definition file may be found in ``gs/lib/PDFX_def.ps``. You will need to modify the content of this file; in particular you must alter the ``/ICCProfile`` so that it points to a valid ICC profile for your ``OutputCondition``. The string '(...)' defining the ICCProfile must be a fully qualified device and path specification appropriate for your Operating System.
 
 - If a registered printing condition is applicable, specify its identifier in the PDF/X definition file. Otherwise provide an ICC profile and specify it in the PDF/X definition file as explained below.
 
-- Provide a ``DefaultRGB`` resource file in the ``ColorSpace`` resource category. Either define it in the PDF/X definition file, or provide a definition of ``gs/Resource/ColorSpace/DefaultRGB``. ``gs/Resource/ColorSpace/DefaultRGB`` is usually distributed with Ghostscript, its content may not necessarily satisfy your needs, see below.
 
 
 .. note::
 
    Unless ``-dNOSAFER`` is specified (NOT reccomended!) the ICC profile will be read using the ``SAFER`` file permissions; you must ensure that the profile is in a directory which is readable according to the ``SAFER`` permissions, or that the file itself is specifically made readable. See :ref:`-dSAFER<Use Safer>` for details of how to set file permissions for ``SAFER``.
 
-As mentioned above, the PDF/X definition file provides special information, which the PDF/X-3 standard requires. You can find a sample file in ``gs/lib/PDFX_def.ps``, and edit it according to your needs. The file follows Postscript syntax and uses the operator ``pdfmark`` to pass the special information. To ease customisation the lines likely to need editing in the sample file are marked with the comment ``% Customize``. They are explained below.
+As mentioned above, the PDF/X definition file provides special information, which the PDF/X standard requires. You can find a sample file in ``gs/lib/PDFX_def.ps``, and edit it according to your needs. The file follows Postscript syntax and uses the operator ``pdfmark`` to pass the special information. To ease customisation the lines likely to need editing in the sample file are marked with the comment ``% Customize``. They are explained below.
 
 
 ``OutputCondition string``
@@ -1287,29 +1297,35 @@ As mentioned above, the PDF/X definition file provides special information, whic
 
 
 
-The Ghostscript distribution does not contain an ICC profile to be used for creating a PDF/X-3 document. Users should either create an appropriate one themselves, or use one from a public domain, or create one with the PDF/X-3 inspector freeware.
+The Ghostscript distribution does not contain an ICC profile to be used for creating a PDF/X document. Users should either create an appropriate one themselves, or use one from a public domain, or create one with the PDF/X-3 inspector freeware.
 
-The PDF/X-3 standard requires a ``TrimBox`` entry to be written for all page descriptions. This is an array of four offsets that specify how the page is to be trimmed after it has been printed. It is set to the same as ``MediaBox`` by default unless the ``PDFXTrimBoxToMediaBoxOffset`` distiller parameter is present. It accepts offsets to the ``MediaBox`` as an array [left right top bottom], e.g., the PostScript input code ``<< /PDFXTrimBoxToMediaBoxOffset [10 20 30 40] >> setdistillerparams`` specifies that 10 points will be trimmed at the left, 20 points at the right, 30 points at the top, and 40 points at the bottom.
+The PDF/X standard requires a various ``Box`` entries (Trim, or Art) to be written for all page descriptions. This is an array of four offsets that specify how the page is to be trimmed after it has been printed. It is set to the same as ``MediaBox`` by default unless the ``PDFXTrimBoxToMediaBoxOffset`` distiller parameter is present. It accepts offsets to the ``MediaBox`` as an array [left right top bottom], e.g., the PostScript input code ``<< /PDFXTrimBoxToMediaBoxOffset [10 20 30 40] >> setdistillerparams`` specifies that 10 points will be trimmed at the left, 20 points at the right, 30 points at the top, and 40 points at the bottom.
 
 Another page entry is the ``BleedBox``. It gives the area of the page to which actual output items may extend; cut marks, color bars etc. must be positioned in the area between the ``BleedBox`` and the ``MediaBox``. The ``TrimBox`` is always contained within the ``BleedBox``. By default, the ``PDFXSetBleedBoxToMediaBox`` distiller parameter is true, and the ``BleedBox`` is set to the same values as the ``MediaBox``. If it is set to false, the ``PDFXBleedBoxToTrimBoxOffset`` parameter gives offset to the ``TrimBox``. It accepts a four-value array in the same format as the ``PDFXTrimBoxToMediaBoxOffset`` parameter.
 
 
-Here is a sample command line to invoke Ghostscript for generating a PDF/X-3 document :
+Here is a sample command line to invoke Ghostscript for generating a PDF/X document :
 
 
 .. code-block:: bash
 
-   gs -dPDFX -dBATCH -dNOPAUSE -sColorConversionStrategy=CMYK -sDEVICE=pdfwrite -sOutputFile=out-x3.pdf PDFX_def.ps input.ps
+   gs -dPDFX=3 -dBATCH -dNOPAUSE -sColorConversionStrategy=CMYK -sDEVICE=pdfwrite -sOutputFile=out-x3.pdf PDFX_def.ps input.ps
 
 
 Please also see the ``PDFACompatibilityPolicy`` control described under `Creating a PDF/A document`_. The same control is now used to specify the desired behaviour when an input file cannot be converted 'as is' into a PDF/X file.
 
 
+.. _VectorDevices_Creating_PDFA:
 
 Creating a PDF/A document
 ------------------------------
 
-To create a PDF/A document, please follow the instructions for `Creating a PDF/X-3 document`_, with the following exceptions :
+.. warning::
+
+  Ghostscript only supports creation of PDF/A versions 1-3 and `conformance level b <https://en.wikipedia.org/wiki/PDF/A#Conformance_levels_and_versions>`_, other formats of PDF/A are *not supported*.
+
+
+To create a document, please follow the instructions for `Creating a PDF/X document`_, with the following exceptions :
 
 - Specify the :title:`pdfwrite` device or use the ``ps2pdf`` script.
 
