@@ -183,7 +183,7 @@ gdi_print_page(gx_device_printer *pdev, gp_file *prn_stream)
         int dots_per_inch = (int)pdev->y_pixels_per_inch;
         int raster = gx_device_raster((gx_device *)pdev, true);
         int real_line_width;
-        long ul_band_size, ul_comp_size;
+        size_t ul_band_size, ul_comp_size;
         /* long ul_tiff_size, ul_min_size; */
         byte *ibp=NULL, *obp=NULL, *tmp=NULL;
         byte paper_type=0, compression_type;
@@ -281,6 +281,8 @@ gdi_print_page(gx_device_printer *pdev, gp_file *prn_stream)
                     if (!fudge) {
                       ASSERT(use_band == ibp);
                       use_band = (byte*)gs_malloc(pdev->memory->non_gc_memory, ul_band_size, 1, "gdi_print_page/fudge");
+                      if (use_band == NULL)
+                          return_error(gs_error_VMerror);
                       fudge=1;
                     }
                     memcpy(use_band, ibp, ul_band_size);

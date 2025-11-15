@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2023 Artifex Software, Inc.
+/* Copyright (C) 2018-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -98,7 +98,7 @@ int pdfi_array_from_stack(pdf_context *ctx, uint32_t indirect_num, uint32_t indi
         return code;
 
     if (ctx->args.pdfdebug)
-        dmprintf (ctx->memory, " ]\n");
+        outprintf (ctx->memory, " ]\n");
 
     a->indirect_num = indirect_num;
     a->indirect_gen = indirect_gen;
@@ -322,9 +322,9 @@ int pdfi_array_put_int(pdf_context *ctx, pdf_array *a, uint64_t index, int64_t v
         return_error(gs_error_typecheck);
 
     code = pdfi_object_alloc(ctx, PDF_INT, 0, (pdf_obj **)&obj);
-    obj->value.i = val;
     if (code < 0)
         return code;
+    obj->value.i = val;
 
     return pdfi_array_put(ctx, a, index, (pdf_obj *)obj);
 }
@@ -338,9 +338,9 @@ int pdfi_array_put_real(pdf_context *ctx, pdf_array *a, uint64_t index, double v
         return_error(gs_error_typecheck);
 
     code = pdfi_object_alloc(ctx, PDF_REAL, 0, (pdf_obj **)&obj);
-    obj->value.d = val;
     if (code < 0)
         return code;
+    obj->value.d = val;
 
     return pdfi_array_put(ctx, a, index, (pdf_obj *)obj);
 }

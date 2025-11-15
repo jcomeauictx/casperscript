@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2024 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -431,8 +431,7 @@ pdfi_alloc_t1_font(pdf_context *ctx, pdf_font_type1 **font, uint32_t obj_num)
 
 #if REFCNT_DEBUG
     t1font->UID = ctx->UID++;
-    dmprintf2(ctx->memory,
-              "Allocated object of type %c with UID %" PRIi64 "\n", t1font->type, t1font->UID);
+    outprintf(ctx->memory, "Allocated object of type %c with UID %" PRIi64 "\n", t1font->type, t1font->UID);
 #endif
 
     pdfi_countup(t1font);
@@ -519,6 +518,7 @@ pdfi_type1_font_priv_defaults(ps_font_interp_private *pfpriv)
     pfpriv->gsu.gst1.data.BlueShift = 7;
     pfpriv->gsu.gst1.data.BlueFuzz = 1;
     pfpriv->gsu.gst1.data.BlueScale = 0.039625;
+    uid_set_invalid(&pfpriv->gsu.gst1.UID);
 }
 
 int
@@ -937,10 +937,16 @@ pdfi_copy_type1_font(pdf_context *ctx, pdf_font *spdffont, pdf_dict *font_dict, 
         pdfi_countup(font->Encoding);
     }
 
-    /* Since various aspects of the font may differ (widths, encoding, etc)
-       we cannot reliably use the UniqueID/XUID for copied fonts.
-     */
-    uid_set_invalid(&font->pfont->UID);
+    code = uid_copy(&font->pfont->UID, font->pfont->memory, "pdfi_copy_type1_font");
+    if (code < 0) {
+        uid_set_invalid(&font->pfont->UID);
+    }
+    if (spdffont->filename == NULL) {
+        code = pdfi_font_generate_pseudo_XUID(ctx, font_dict, font->pfont);
+        if (code < 0) {
+            goto error;
+        }
+    }
 
     if (ctx->args.ignoretounicode != true) {
         code = pdfi_dict_get(ctx, font_dict, "ToUnicode", (pdf_obj **)&tmp);

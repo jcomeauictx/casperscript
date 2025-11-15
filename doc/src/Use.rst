@@ -1,4 +1,4 @@
-.. Copyright (C) 2001-2023 Artifex Software, Inc.
+.. Copyright (C) 2001-2025 Artifex Software, Inc.
 .. All Rights Reserved.
 
 .. title:: Using Ghostscript
@@ -181,15 +181,15 @@ Once you invoke Ghostscript you can also find out what devices are available by 
 
 .. code-block:: bash
 
-   (epson) selectdevice
+   <</OutputDevice /epson>> setpagedevice
    (myfile.ps) run
 
-All output then goes to the Epson printer instead of the display until you do something to change devices. You can switch devices at any time by using the ``selectdevice`` procedure, for instance like one of these:
+All output then goes to the Epson printer instead of the display until you do something to change devices. You can switch devices at any time by using the ``setpagedevice`` operator, for instance like one of these:
 
 .. code-block:: bash
 
-   (x11alpha) selectdevice
-   (epson) selectdevice
+   <</OutputDevice /x11alpha>> setpagedevice
+   <</OutputDevice /epson>> setpagedevice
 
 
 
@@ -448,6 +448,13 @@ Switches for PDF files
 
 Here are some command line options specific to PDF:
 
+
+``-dPDFCACHE``
+""""""""""""""""""""""""""""""""""""""""""""""""""""""""""""
+
+A new addition for the 'C' PDF interpreter. This interpreter maintains a small cache of recently used objects which were indirectly referenced. If the same object is used again finding it in the cache is much faster than re-reading it from the PDF file. This controls the number of objects maintained in the cache, the default is 200.
+
+Note; this is not the total number of objects retained in memory by the interpreter which is highly variable. In most cases altering this value will not make any appreciable difference but some very oddly constructed PDF file may benefit from a larger cache.
 
 ``-dPDFINFO``
 """"""""""""""""""""""""""""""""""""""""""""""""""""""""""""
@@ -2207,6 +2214,10 @@ For details about the ICC controls see the document `GS9 Color Management`_.
 
    Note that if the build is performed with ``COMPILE_INITS=1``, then the profiles contained in ``gs/iccprofiles`` will be placed in the ROM file system. If a directory is specified on the command line using ``-sICCProfilesDir=``, that directory is searched before the ``iccprofiles/`` directory of the ROM file system is searched.
 
+**-dEmbedProfiler=** *bool*
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   Some devices (TIFF, JPEG and PNG) can embed the ICC profile which was used as the device colour space of the output (eg CMYK for tiff32nc). This can be useful if, for example, the input was in a xolour space different from the output, or a mixture of colour spaces. The embedded ICC profile will represent the colour values used by the ICC colour manager in XYZ space. However, if your workflow does not use end to end colour management, this embedded profile can be unhelpful. Setting this switch to 'false' will prevent the profile being embedded.
+   
 .. note ::
 
    A note for Windows users, Artifex recommends the use of the forward slash delimiter due to the special interpretation of ``\"`` by the Microsoft C startup code. See `Parsing C Command-Line Arguments`_ for more information.
@@ -2376,7 +2387,7 @@ Other parameters
 
       --permit-devices=devicelist
 
-   ``devicelist`` is a list of devices known to Ghostscript, separated by the OS-specific path list separator (eg ':' on Linux, ';' on Windows and OS/2), which may be selected using the ``/OutputDevice`` key in a dictionary supplied to ``setpagedevice`` or the Ghostscript-specific extension PostSript operator ``selectdevice``. The device names must be as they are known to Ghostscript (use ``gs --help`` for a list). Attempting to select a device not on this list will result in an ``invalidaccess`` error. For convenience the single character '``*``' may be used to permit any device.
+   ``devicelist`` is a list of devices known to Ghostscript, separated by the OS-specific path list separator (eg ':' on Linux, ';' on Windows and OS/2), which may be selected using the ``/OutputDevice`` key in a dictionary supplied to ``setpagedevice``. The device names must be as they are known to Ghostscript (use ``gs --help`` for a list). Attempting to select a device not on this list will result in an ``invalidaccess`` error. For convenience the single character '``*``' may be used to permit any device.
 
    In addition some devices have parameters which are inherently unsafe (e.g. the IJS device's ``IjsServer`` parameter). Attempting to alter these parameters after ``SAFER`` is active will result in an ``invalidaccess`` error. These parameters can only be set from the command line when ``SAFER`` is selected.   
 

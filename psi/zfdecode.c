@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -190,7 +190,7 @@ filter_read_predictor(i_ctx_t *i_ctx_p, int npop,
 int
 zlz_setup(os_ptr op, stream_LZW_state * plzs)
 {
-    int code;
+    int code, ech;
     const ref *dop;
 
     s_LZW_set_defaults_inline(plzs);
@@ -200,7 +200,7 @@ zlz_setup(os_ptr op, stream_LZW_state * plzs)
     } else
         dop = 0;
     if (   (code = dict_int_param(dop, "EarlyChange", 0, 1, 1,
-                                  &plzs->EarlyChange)) < 0 ||
+                                  &ech)) < 0 ||
            /*
             * The following are not PostScript standard, although
             * LanguageLevel 3 provides the first two under different
@@ -214,6 +214,7 @@ zlz_setup(os_ptr op, stream_LZW_state * plzs)
                                    &plzs->BlockData)) < 0
         )
         return code;
+    plzs->EarlyChange = ech != 0;
     return 0;
 }
 
@@ -270,32 +271,6 @@ zpd_setup(os_ptr op, stream_PDiff_state * ppds)
     return 0;
 }
 
-/* <target> <dict> PixelDifferenceEncode/filter <file> */
-static int
-zPDiffE(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    stream_PDiff_state pds;
-    int code = zpd_setup(op, &pds);
-
-    if (code < 0)
-        return code;
-    return filter_write(i_ctx_p, 0, &s_PDiffE_template, (stream_state *) & pds, 0);
-}
-
-/* <source> <dict> PixelDifferenceDecode/filter <file> */
-static int
-zPDiffD(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    stream_PDiff_state pds;
-    int code = zpd_setup(op, &pds);
-
-    if (code < 0)
-        return code;
-    return filter_read(i_ctx_p, 0, &s_PDiffD_template, (stream_state *) & pds, 0);
-}
-
 /* ------ PNG pixel predictor filters ------ */
 
 /* Common setup for encoding and decoding filters. */
@@ -321,32 +296,6 @@ zpp_setup(os_ptr op, stream_PNGP_state * ppps)
     return 0;
 }
 
-/* <target> <dict> PNGPredictorEncode/filter <file> */
-static int
-zPNGPE(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    stream_PNGP_state pps;
-    int code = zpp_setup(op, &pps);
-
-    if (code < 0)
-        return code;
-    return filter_write(i_ctx_p, 0, &s_PNGPE_template, (stream_state *) & pps, 0);
-}
-
-/* <source> <dict> PNGPredictorDecode/filter <file> */
-static int
-zPNGPD(i_ctx_t *i_ctx_p)
-{
-    os_ptr op = osp;
-    stream_PNGP_state pps;
-    int code = zpp_setup(op, &pps);
-
-    if (code < 0)
-        return code;
-    return filter_read(i_ctx_p, 0, &s_PNGPD_template, (stream_state *) & pps, 0);
-}
-
 /* ---------------- Initialization procedure ---------------- */
 
 const op_def zfdecode_op_defs[] = {
@@ -355,9 +304,5 @@ const op_def zfdecode_op_defs[] = {
     {"1ASCII85Decode", zA85D},
     {"2CCITTFaxDecode", zCFD},
     {"1LZWDecode", zLZWD},
-    {"2PixelDifferenceDecode", zPDiffD},
-    {"2PixelDifferenceEncode", zPDiffE},
-    {"2PNGPredictorDecode", zPNGPD},
-    {"2PNGPredictorEncode", zPNGPE},
     op_def_end(0)
 };

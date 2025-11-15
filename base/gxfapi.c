@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1818,14 +1818,14 @@ gs_fapi_get_font_info(gs_font *pfont, gs_fapi_font_info item, int index,
 int
 gs_fapi_passfont(gs_font *pfont, int subfont, char *font_file_path,
                  gs_string *full_font_buf, char *fapi_request, char *xlatmap,
-                 char **fapi_id, gs_fapi_get_server_param_callback get_server_param_cb)
+                 char **fapi_id, char **decodingID, gs_fapi_get_server_param_callback get_server_param_cb)
 {
     gs_font_base *pbfont;
     int code = 0;
     gs_fapi_server *I, **list;
     bool free_params = false;
     gs_memory_t *mem = pfont->memory;
-    const char *decodingID = NULL;
+    const char *ldecodingID = NULL;
     bool do_restart = false;
 
     list = gs_fapi_get_server_list(mem);
@@ -1865,8 +1865,11 @@ gs_fapi_passfont(gs_font *pfont, int subfont, char *font_file_path,
         char *server_param = NULL;
         int server_param_size = 0;
 
-        (*get_server_param_cb) (I, (const char *)I->ig.d->subtype,
+        code = (*get_server_param_cb) (I, (const char *)I->ig.d->subtype,
                                 &server_param, &server_param_size);
+
+        if (code < 0)
+            return code;
 
         if (server_param == NULL && server_param_size > 0) {
             server_param =
@@ -1898,8 +1901,10 @@ gs_fapi_passfont(gs_font *pfont, int subfont, char *font_file_path,
         pbfont->FAPI = I;       /* we need the FAPI server during this stage */
         code =
             gs_fapi_prepare_font(pfont, I, subfont, font_file_path,
-                                 full_font_buf, xlatmap, &decodingID);
+                                 full_font_buf, xlatmap, &ldecodingID);
         if (code >= 0) {
+            if (decodingID != NULL)
+                *decodingID = (char *)ldecodingID;
             (*fapi_id) = (char *)I->ig.d->subtype;
             return 0;
         }
@@ -1976,8 +1981,11 @@ gs_fapi_find_server(gs_memory_t *mem, const char *name, gs_fapi_server **server,
     }
 
     if (servs && *servs && get_server_param_cb) {
-        (*get_server_param_cb) ((*servs), (char *) (*servs)->ig.d->subtype,
+        code = (*get_server_param_cb) ((*servs), (char *) (*servs)->ig.d->subtype,
                                 &server_param, &server_param_size);
+
+        if (code < 0)
+            return code;
 
         if (server_param == NULL && server_param_size > 0) {
             server_param =
@@ -2030,7 +2038,7 @@ gs_fapi_init(gs_memory_t *mem)
 
     servs =
         (gs_fapi_server **) gs_alloc_bytes_immovable(mem->non_gc_memory,
-                                                     (num_servers +
+                                                     (size_t)(num_servers +
                                                       1) *
                                                      sizeof(gs_fapi_server *),
                                                      "gs_fapi_init");

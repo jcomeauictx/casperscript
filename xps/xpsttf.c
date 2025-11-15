@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -143,7 +143,7 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
     ulong format;
     int numGlyphs;
     uint glyph_name_index;
-    const byte *postp; /* post table pointer */
+    const byte *postp, *indexp; /* post table pointer */
     xps_font_t *font = pfont->client_data;
 
     if (glyph >= GS_MIN_GLYPH_INDEX) {
@@ -200,7 +200,7 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
          * persistent copy of the name data, so we have to make one, which means it leaks.
          */
         pstr->size = strlen(buf);
-        pstr->data = gs_alloc_bytes(pfont->memory, pstr->size + 1, "glyph to name");
+        pstr->data = gs_alloc_bytes(pfont->memory, (size_t)pstr->size + 1, "glyph to name");
         if ( pstr->data == 0 )
             return -1;
 
@@ -217,7 +217,11 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
     }
 
     /* glyph name index starts at post + 34 each entry is 2 bytes */
-    glyph_name_index = u16(postp + 34 + (glyph * 2));
+    indexp = postp + 34 + (glyph * 2);
+    if (indexp > (postp + table_length - 2))
+        return gs_throw(-1, "post table format error");
+
+    glyph_name_index = u16(indexp);
 
     /* this shouldn't happen */
     if ( glyph_name_index > 0x7fff )
@@ -226,7 +230,7 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
     /* mac easy */
     if ( glyph_name_index < 258 )
     {
-        // dmprintf2(pfont->memory, "glyph name (mac) %d = %s\n", glyph, pl_mac_names[glyph_name_index]);
+        /* dmprintf2(pfont->memory, "glyph name (mac) %d = %s\n", glyph, pl_mac_names[glyph_name_index]); */
         pstr->data = (byte*) pl_mac_names[glyph_name_index];
         pstr->size = strlen((char*)pstr->data);
         return 0;
@@ -249,6 +253,8 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
         {
             pascal_stringp += ((int)(*pascal_stringp)+1);
             glyph_name_index--;
+            if (pascal_stringp >= postp + table_length)
+                return gs_throw(-1, "data out of range");
         }
 
         /* length byte */
@@ -266,7 +272,7 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
            may be freed.  Track the allocated memory in our
            font 'wrapper' so we can free it when we free tha font wrapper.
          */
-        mydata = gs_alloc_bytes(pfont->memory, pstr->size + 1, "glyph to name");
+        mydata = gs_alloc_bytes(pfont->memory, (size_t)pstr->size + 1, "glyph to name");
         if ( mydata == 0 )
             return -1;
         memcpy(mydata, pascal_stringp + 1, pstr->size);
@@ -275,7 +281,7 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
         mydata[pstr->size] = 0;
 
         if (font->names == NULL) {
-            font->names = (char **)gs_alloc_bytes(pfont->memory, 256 * sizeof (char *), "names storage");
+            font->names = (char **)gs_alloc_bytes(pfont->memory, (size_t)256 * sizeof (char *), "names storage");
             if (font->names == NULL) {
                 gs_free_object(pfont->memory, (byte *)pstr->data, "free string on error");
                 pstr->data = NULL;
@@ -288,7 +294,7 @@ xps_true_callback_glyph_name(gs_font *pfont, gs_glyph glyph, gs_const_string *ps
         }
         if (font->next_name_index > font->max_name_index) {
             char **temp = NULL;
-            temp = (char **)gs_alloc_bytes(pfont->memory, (font->max_name_index + 256) * sizeof (char *), "names storage");
+            temp = (char **)gs_alloc_bytes(pfont->memory, ((size_t)font->max_name_index + 256) * sizeof (char *), "names storage");
             if (temp == NULL) {
                 gs_free_object(pfont->memory, (byte *)pstr->data, "free string on error");
                 pstr->data = NULL;
@@ -316,7 +322,7 @@ xps_true_callback_build_char(gs_show_enum *penum, gs_gstate *pgs, gs_font *pfont
     gs_fixed_point saved_adjust;
     int code;
 
-    // dmprintf1(pfont->memory, "build char ttf %d\n", glyph);
+    /* dmprintf1(pfont->memory, "build char ttf %d\n", glyph); */
 
     code = gs_type42_get_metrics(p42, glyph, sbw);
     if (code < 0)

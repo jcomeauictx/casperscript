@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -318,6 +318,9 @@ clist_file_offset(const stream_state * st, uint buffer_offset)
     uint offset0;
     int i = buffer_segment_index(ss, buffer_offset, &offset0);
 
+    if (i < 0)
+        return 0;
+
     return ss->offset_map[i].file_offset + (uint)(buffer_offset - offset0);
 }
 
@@ -572,7 +575,8 @@ clist_read_chunk(gx_device_clist_reader *crdev, int64_t position, int size, unsi
 int
 clist_read_color_usage_array(gx_device_clist_reader *crdev)
 {
-    int code, size_data = crdev->nbands * sizeof(gx_color_usage_t );
+    int code;
+    size_t size_data = crdev->nbands * sizeof(gx_color_usage_t );
     cmd_block cb;
 
     if (crdev->color_usage_array != NULL)
@@ -616,7 +620,8 @@ clist_unserialize_icctable(gx_device_clist_reader *crdev, cmd_block *cb)
     clist_file_ptr cfile = crdev->page_info.cfile;
     clist_icctable_t *icc_table = crdev->icc_table;
     int64_t save_pos;
-    int number_entries, size_data;
+    int number_entries;
+    size_t size_data;
     unsigned char *buf, *buf_start;
     clist_icctable_entry_t *curr_entry;
     int k;

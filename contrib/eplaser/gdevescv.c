@@ -183,7 +183,7 @@ esmv_initialize_device_procs(gx_device *dev)
         0,			/*   int           prev_paper_height; */\
         0,			/*   int           prev_num_copies; */\
         -1,			/*   int           prev_feed_mode; */\
-        0,			/*   int           orientation; */\
+        false,			/*   bool          orientation; */\
         ESCPAGE_FACEUP_DEFAULT,	/*   bool          faceup; */\
         ESCPAGE_MEDIATYPE_DEFAULT, /*   int           MediaType; */\
         0,			/*   bool          first_page; */\
@@ -363,8 +363,8 @@ static const gx_device_vector_procs escv_vector_procs =
     escv_endpath
   };
 
-static void escv_write_begin(gx_device *dev, int bits, int x, int y, int sw, int sh, int dw, int dh, int roll);
-static void escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int w, int ras);
+static int escv_write_begin(gx_device *dev, int bits, int x, int y, int sw, int sh, int dw, int dh, int roll);
+static int escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int w, int ras);
 static void escv_write_end(gx_device *dev, int bits);
 
 /* ---------------- Utilities ---------------- */
@@ -2166,13 +2166,18 @@ escv_copy_mono(gx_device * dev, const byte * data,
 
   }	/* ESC/Page-Color */
 
-  escv_write_begin(dev, depth, (int)x, (int)y, w, h, w, h, 0);
+  code = escv_write_begin(dev, depth, (int)x, (int)y, w, h, w, h, 0);
+  if (code < 0)
+      return code;
+
   {
     int		i, j;
     uint		width_bytes = (w + 7) >> 3;
-    uint		num_bytes = width_bytes * h;
+    size_t		num_bytes = width_bytes * h;
 
     byte *buf = gs_alloc_bytes(vdev->memory, num_bytes, "escv_copy_mono(buf)");
+    if (buf == NULL)
+        return_error(gs_error_VMerror);
 
     if (data_x % 8 == 0) {
       for (i = 0; i < h; ++i) {
@@ -2188,8 +2193,10 @@ escv_copy_mono(gx_device * dev, const byte * data,
       }
     }
 
-    escv_write_data(dev, depth, buf, num_bytes, w, h);
+    code = escv_write_data(dev, depth, buf, num_bytes, w, h);
     gs_free_object(vdev->memory, buf, "escv_copy_mono(buf)");
+    if (code < 0)
+        return code;
   }
   escv_write_end(dev, depth);
   return 0;
@@ -2207,6 +2214,7 @@ escv_copy_color(gx_device * dev,
   int			depth = dev->color_info.depth;
   int			num_components = (depth < 24 ? 1 : 3);
   uint		width_bytes = w * num_components;
+  int code = 0;
 
   if (pdev->MaskState != 0) {
 
@@ -2223,19 +2231,26 @@ escv_copy_color(gx_device * dev,
     pdev->MaskState = 0;
   }
 
-  escv_write_begin(dev, depth, (int)x, (int)y, w, h, w, h, 0);
+  code = escv_write_begin(dev, depth, (int)x, (int)y, w, h, w, h, 0);
+  if (code < 0)
+      return code;
 
   {
     int		i;
-    uint		num_bytes = width_bytes * h;
+    size_t		num_bytes = width_bytes * h;
     byte		*buf = gs_alloc_bytes(vdev->memory, num_bytes, "escv_copy_color(buf)");
+
+    if (buf == NULL)
+        return_error(gs_error_VMerror);
 
     for (i = 0; i < h; ++i) {
       memcpy(buf + i * width_bytes, data + ((data_x * depth) >> 3) + i * raster, width_bytes);
     }
 
-    escv_write_data(dev, depth, buf, num_bytes, w, h);
+    code = escv_write_data(dev, depth, buf, num_bytes, w, h);
     gs_free_object(vdev->memory, buf, "escv_copy_color(buf)");
+    if (code < 0)
+        return code;
   }
 
   escv_write_end(dev, depth);
@@ -2256,6 +2271,7 @@ escv_fill_mask(gx_device * dev,
 
   gx_color_index		color = gx_dc_pure_color(pdcolor);
   char			obuf[64];
+  int code = 0;
 
   const gs_gstate * pgs = (const gs_gstate *)0;
 
@@ -2304,12 +2320,14 @@ escv_fill_mask(gx_device * dev,
       char		obuf[128];
       int		i;
       uint		width_bytes = (w + 7) >> 3;
-      uint		num_bytes = width_bytes * h;
+      size_t	num_bytes = width_bytes * h;
       byte		*buf;
 
       if (pdev -> id_cache[id & VCACHE] != id) {
 
         buf = gs_alloc_bytes(vdev->memory, num_bytes, "escv_fill_mask(buf)");
+        if (buf == NULL)
+            return_error(gs_error_VMerror);
 
         /* cache entry */
         for (i = 0; i < h; ++i) {
@@ -2333,20 +2351,28 @@ escv_fill_mask(gx_device * dev,
     }
   }	/* ESC/Page-Color */
 
-  escv_write_begin(dev, depth, (int)x, (int)y, w, h, w, h, 0);
+  code = escv_write_begin(dev, depth, (int)x, (int)y, w, h, w, h, 0);
+  if (code < 0)
+      return code;
+
   {
     int		i;
     uint		width_bytes = (w + 7) >> 3;
-    uint		num_bytes = width_bytes * h;
+    size_t		num_bytes = width_bytes * h;
     byte		*buf = gs_alloc_bytes(vdev->memory, num_bytes, "escv_fill_mask(buf)");
+
+    if (buf == NULL)
+        return_error(gs_error_VMerror);
 
     for (i = 0; i < h; ++i) {
       memcpy(buf + i * width_bytes, data + (data_x >> 3) + i * raster, width_bytes);
     }
 
-    escv_write_data(dev, depth, buf, num_bytes, w, h);
-    escv_write_end(dev, depth);
+    code = escv_write_data(dev, depth, buf, num_bytes, w, h);
     gs_free_object(vdev->memory, buf, "escv_fill_mask(buf)");
+    if (code < 0)
+        return code;
+    escv_write_end(dev, depth);
   }
 
   return 0;
@@ -2356,10 +2382,14 @@ escv_fill_mask(gx_device * dev,
 
 static image_enum_proc_plane_data(escv_image_plane_data);
 static image_enum_proc_end_image(escv_image_end_image);
+static int escv_image_flush(gx_image_enum_common_t* info);
+static bool escv_image_planes_wanted(const gx_image_enum_common_t* info, byte* wanted);
+
 static const gx_image_enum_procs_t escv_image_enum_procs =
   {
-    escv_image_plane_data, escv_image_end_image
-  };
+    escv_image_plane_data, escv_image_end_image,
+    escv_image_flush, escv_image_planes_wanted
+};
 
 /* Start processing an image. */
 static int
@@ -2437,9 +2467,14 @@ escv_begin_typed_image(gx_device               *dev,
   }
   if (!can_do) {
 fallback:
-    return gx_default_begin_typed_image(dev, pgs, pmat, pic, prect,
-                                        pdcolor, pcpath, mem,
-                                        &pie->default_info);
+      code = gx_default_begin_typed_image(dev, pgs, pmat, pic, prect,
+          pdcolor, pcpath, mem,
+          &pie->default_info);
+      if (code >= 0) {
+          memcpy(pie, pie->default_info, sizeof(gx_image_enum_common_t));
+          pie->procs = &escv_image_enum_procs;
+      }
+      return code;
   }
 
   if (pim->ImageMask || (pim->BitsPerComponent == 1 && num_components == 1)) {
@@ -2549,9 +2584,9 @@ fallback:
 
   if (pdev -> reverse_y) return 0;
 
-  escv_write_begin(dev, pie->bits_per_pixel, (int)imat.tx, (int)imat.ty, pie->width, pie->height, sx, sy, pdev -> roll);
+  code = escv_write_begin(dev, pie->bits_per_pixel, (int)imat.tx, (int)imat.ty, pie->width, pie->height, sx, sy, pdev -> roll);
 
-  return 0;
+  return code;
 }
 
 /* Process the next piece of an image. */
@@ -2562,10 +2597,11 @@ escv_image_plane_data(gx_image_enum_common_t *info, const gx_image_plane_t *plan
   gx_device_vector *const	vdev = (gx_device_vector *) dev;
   gx_device_escv *const	pdev = (gx_device_escv *) dev;
   gdev_vector_image_enum_t	*pie = (gdev_vector_image_enum_t *) info;
+  int code = 0;
 
   int				y;
   int				plane;
-  int				width_bytes, tbyte;
+  size_t			width_bytes, tbyte;
   byte			*buf;
 
   if (pie->default_info) return gx_image_plane_data(pie->default_info, planes, height);
@@ -2579,6 +2615,8 @@ escv_image_plane_data(gx_image_enum_common_t *info, const gx_image_plane_t *plan
     width_bytes = (pie->width * pie->bits_per_pixel / pdev->ncomp + 7) / 8 * pdev->ncomp;
     tbyte = width_bytes * height;
     buf = gs_alloc_bytes(vdev->memory, tbyte, "escv_image_data(buf)");
+    if (buf == NULL)
+        return_error(gs_error_VMerror);
 
     if (pdev -> reverse_y) {
 
@@ -2602,7 +2640,11 @@ escv_image_plane_data(gx_image_enum_common_t *info, const gx_image_plane_t *plan
 
         }	/* ESC/Page-Color */
 
-        escv_write_begin(dev, pie->bits_per_pixel, (int)pdev -> xmat.tx, (int)pdev -> xmat.ty, pdev -> w, height, (int)pdev -> sx, (int)pdev -> sy, pdev -> roll);
+        code = escv_write_begin(dev, pie->bits_per_pixel, (int)pdev -> xmat.tx, (int)pdev -> xmat.ty, pdev -> w, height, (int)pdev -> sx, (int)pdev -> sy, pdev -> roll);
+        if (code < 0) {
+            gs_free_object(vdev->memory, buf, "escv_image_data(buf)");
+            return code;
+        }
 
       } else {
         float	yy, sy;
@@ -2622,7 +2664,11 @@ escv_image_plane_data(gx_image_enum_common_t *info, const gx_image_plane_t *plan
           sy = -sy;
         }
 
-        escv_write_begin(dev, pie->bits_per_pixel, (int)pdev -> xmat.tx, (int)pdev -> xmat.ty - (int)yy, pdev -> w, height, (int)pdev -> sx, (int)sy, pdev -> roll);
+        code = escv_write_begin(dev, pie->bits_per_pixel, (int)pdev -> xmat.tx, (int)pdev -> xmat.ty - (int)yy, pdev -> w, height, (int)pdev -> sx, (int)sy, pdev -> roll);
+        if (code < 0) {
+            gs_free_object(vdev->memory, buf, "escv_image_data(buf)");
+            return code;
+        }
 
         pdev -> by = (int)pdev -> xmat.ty - (int)yy;
       }
@@ -2724,6 +2770,8 @@ escv_image_plane_data(gx_image_enum_common_t *info, const gx_image_plane_t *plan
           }
         }
         buf = gs_alloc_bytes(vdev->memory, tbyte, "escv_image_data(buf)");
+        if (buf == NULL)
+            return_error(gs_error_VMerror);
         for(t = 0; t < tbyte; t++){
           buf[t] = 0xff;
         }
@@ -2742,6 +2790,8 @@ escv_image_plane_data(gx_image_enum_common_t *info, const gx_image_plane_t *plan
         }
 
         buf = gs_alloc_bytes(vdev->memory, tbyte, "escv_image_data(buf)");
+        if (buf == NULL)
+            return_error(gs_error_VMerror);
         for(t = 0; t < tbyte; t++){
           buf[t] = 0x00;
         }
@@ -2750,13 +2800,15 @@ escv_image_plane_data(gx_image_enum_common_t *info, const gx_image_plane_t *plan
 
     }
 
-    escv_write_data(dev, pie->bits_per_pixel, buf, tbyte, pdev -> w, height);
+    code = escv_write_data(dev, pie->bits_per_pixel, buf, tbyte, pdev -> w, height);
+    gs_free_object(vdev->memory, buf, "escv_image_data(buf)");
+    if (code < 0)
+        return code;
 
     if (pdev -> reverse_y) {
       escv_write_end(dev, pie->bits_per_pixel);
     }
 
-    gs_free_object(vdev->memory, buf, "escv_image_data(buf)");
   }
   return (pie->y += height) >= pie->height;
 }
@@ -2791,8 +2843,29 @@ escv_image_end_image(gx_image_enum_common_t * info, bool draw_last)
   code = gdev_vector_end_image(vdev, (gdev_vector_image_enum_t *) pie, draw_last, pdev->white);
   return code;
 }
+static int
+escv_image_flush(gx_image_enum_common_t* info)
+{
+    gdev_vector_image_enum_t* pie = (gdev_vector_image_enum_t*)info;
+    gx_device* saved_dev = pie->dev;
+    int code = 0;
 
-static void escv_write_begin(gx_device *dev, int bits, int x, int y, int sw, int sh, int dw, int dh, int roll)
+    code = pie->default_info->procs->flush(pie->default_info);
+    return code;
+}
+
+static bool
+escv_image_planes_wanted(const gx_image_enum_common_t* info, byte* wanted)
+{
+    gdev_vector_image_enum_t* pie = (gdev_vector_image_enum_t*)info;
+    if (pie->default_info->procs->planes_wanted)
+        return pie->default_info->procs->planes_wanted(pie->default_info, wanted);
+    else
+        memset(wanted, 0xff, info->num_planes);
+    return true;
+}
+
+static int escv_write_begin(gx_device *dev, int bits, int x, int y, int sw, int sh, int dw, int dh, int roll)
 {
   gx_device_vector *const     vdev = (gx_device_vector *) dev;
   gx_device_escv   *const     pdev = (gx_device_escv *)dev;
@@ -2844,6 +2917,8 @@ static void escv_write_begin(gx_device *dev, int bits, int x, int y, int sw, int
         /* カラーマップ登録 */
         lputs(s, ESC_GS "64;2;2;16;16plr{E");
         p = tmp = gs_alloc_bytes(vdev->memory, 64, "escv_write_begin(tmp4)");
+        if (p == NULL)
+            return_error(gs_error_VMerror);
         for (i = 0; i < 16; i++) {
           *p++ = i << 4;
           *p++ = i << 4;
@@ -2860,6 +2935,8 @@ static void escv_write_begin(gx_device *dev, int bits, int x, int y, int sw, int
         /* カラーマップ登録 */
         lputs(s, ESC_GS "1024;4;2;256;256plr{E");
         p = tmp = gs_alloc_bytes(vdev->memory, 1024, "escv_write_begin(tmp)");
+        if (p == NULL)
+            return_error(gs_error_VMerror);
         for (i = 0; i < 256; i++) {
           *p++ = i;
           *p++ = i;
@@ -2880,10 +2957,10 @@ static void escv_write_begin(gx_device *dev, int bits, int x, int y, int sw, int
 
   lputs(s, obuf);
 
-  return;
+  return 0;
 }
 
-static void escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int w, int ras)
+static int escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int w, int ras)
 {
   gx_device_vector *const  vdev = (gx_device_vector *) dev;
   gx_device_escv   *const  pdev = (gx_device_escv *) dev;
@@ -2894,13 +2971,16 @@ static void escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int 
   unsigned char           *rgbbuf;
   unsigned char           *ucp;
   double                   gray8;
+  size_t                   bsize2 = bsize * 2;
 
   if( 0 == pdev->colormode ) { /* ESC/Page (Monochrome) */
 
     tmps = 0;
 
     if (bits == 12) {
-      p = tmps = gs_alloc_bytes(vdev->memory, bsize * 2, "escv_write_data(tmp)");
+      p = tmps = gs_alloc_bytes(vdev->memory, bsize2, "escv_write_data(tmp)");
+      if (p == NULL)
+          return_error(gs_error_VMerror);
       for (size = 0; size < bsize; size++) {
         *p++ = buf[size] & 0xF0;
         *p++ = buf[size] << 4;
@@ -2910,7 +2990,9 @@ static void escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int 
     }
 
     if(bits == 4) {
-      p = tmps = gs_alloc_bytes(vdev->memory, bsize * 2, "escv_write_data(tmp)");
+      p = tmps = gs_alloc_bytes(vdev->memory, bsize2, "escv_write_data(tmp)");
+      if (p == NULL)
+          return_error(gs_error_VMerror);
       for (size = 0; size < bsize; size++) {
         *p++ = ((buf[size] & 0xF0) * 0xFF / 0xF0);
         *p++ = ((buf[size] << 4 & 0xF0) * 0xFF / 0xF0);
@@ -2921,6 +3003,8 @@ static void escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int 
 
     if(bits == 24) {		/* 8bit RGB */
       tmps = gs_alloc_bytes(vdev->memory, bsize / 3, "escv_write_data(tmp)");
+      if (tmps == NULL)
+          return_error(gs_error_VMerror);
 
       /* convert 24bit RGB to 8bit Grayscale */
       rgbbuf = buf;
@@ -2961,7 +3045,9 @@ static void escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int 
 
     tmps = 0;
     if (bits == 12) {
-      p = tmps = gs_alloc_bytes(vdev->memory, bsize * 2, "escv_write_data(tmp)");
+      p = tmps = gs_alloc_bytes(vdev->memory, bsize2, "escv_write_data(tmp)");
+      if (p == NULL)
+          return_error(gs_error_VMerror);
       for (size = 0; size < bsize; size++) {
         tmp = buf[size] & 0xF0;
         *p++ = (tmp + (tmp >> 4 & 0x0F));
@@ -2981,7 +3067,7 @@ static void escv_write_data(gx_device *dev, int bits, byte *buf, int bsize, int 
     }
   }	/* ESC/Page-Color */
 
-  return;
+  return 0;
 }
 
 static void escv_write_end(gx_device *dev, int bits)

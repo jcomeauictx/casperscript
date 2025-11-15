@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2024 Artifex Software, Inc.
+# Copyright (C) 2001-2025 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -648,9 +648,9 @@ $(PSD)level1.dev : $(PSD)psl1.dev $(INT_MAK) $(MAKEDIRS)
 	$(CP_) $(PSD)psl1.dev $(PSD)level1.dev
 
 $(PSD)psl1.dev : $(ECHOGS_XE)\
- $(PSD)psbase.dev $(PSD)bcp.dev $(PSD)path1.dev $(PSD)type1.dev\
+ $(PSD)psbase.dev $(PSD)path1.dev $(PSD)type1.dev\
  $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)psl1 -include $(PSD)psbase $(PSD)bcp $(PSD)path1 $(PSD)type1
+	$(SETMOD) $(PSD)psl1 -include $(PSD)psbase $(PSD)path1 $(PSD)type1
 	$(ADDMOD) $(PSD)psl1 -emulator PostScript PostScriptLevel1
 
 # -------- Level 1 color extensions (CMYK color and colorimage) -------- #
@@ -725,20 +725,6 @@ $(PSOBJ)zpath1.$(OBJ) : $(PSSRC)zpath1.c $(OP) $(memory__h)\
 	$(PSCC) $(PSO_)zpath1.$(OBJ) $(C_) $(PSSRC)zpath1.c
 
 # ================ Level-independent PostScript options ================ #
-
-# ---------------- BCP filters ---------------- #
-
-bcp_=$(GLOBJ)sbcp.$(OBJ) $(PSOBJ)zfbcp.$(OBJ)
-$(PSD)bcp.dev : $(ECHOGS_XE) $(bcp_)\
- $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)bcp $(bcp_)
-	$(ADDMOD) $(PSD)bcp -oper zfbcp
-
-$(PSOBJ)zfbcp.$(OBJ) : $(PSSRC)zfbcp.c $(OP) $(memory__h)\
- $(gsstruct_h) $(ialloc_h) $(ifilter_h)\
- $(sbcp_h) $(stream_h) $(strimpl_h)\
- $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)zfbcp.$(OBJ) $(C_) $(PSSRC)zfbcp.c
 
 # ---------------- Double-precision floats ---------------- #
 
@@ -955,6 +941,20 @@ $(PSOBJ)zfzlib.$(OBJ) : $(PSSRC)zfzlib.c $(OP)\
  $(spdiffx_h) $(spngpx_h) $(strimpl_h) $(szlibx_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zfzlib.$(OBJ) $(C_) $(PSSRC)zfzlib.c
 
+# ---------------- Brotli filters ---------------- #
+
+fbrotli_=$(PSOBJ)zfbrotli.$(OBJ)
+$(PSD)fbrotli.dev : $(ECHOGS_XE) $(fbrotli_)\
+ $(GLD)sbrotlie.dev $(GLD)sbrotlid.dev $(INT_MAK) $(MAKEDIRS)
+	$(SETMOD) $(PSD)fbrotli -include $(GLD)sbrotlie $(GLD)sbrotlid
+	$(ADDMOD) $(PSD)fbrotli -obj $(fbrotli_)
+#	$(ADDMOD) $(PSD)fbrotli -oper zfbrotli
+
+$(PSOBJ)zfbrotli.$(OBJ) : $(PSSRC)zfbrotli.c $(OP)\
+ $(idict_h) $(idparam_h) $(ifilter_h) $(ifrpred_h) $(ifwpred_h)\
+ $(spdiffx_h) $(spngpx_h) $(strimpl_h) $(sbrotlix_h) $(INT_MAK) $(MAKEDIRS)
+	$(PSCC) $(PSO_)zfbrotli.$(OBJ) $(C_) $(PSSRC)zfbrotli.c
+
 # ---------------- ReusableStreamDecode filter ---------------- #
 # This is also used by the implementation of CIDFontType 0 fonts.
 
@@ -1158,114 +1158,6 @@ $(PSOBJ)zfilter2.$(OBJ) : $(PSSRC)zfilter2.c $(OP) $(memory__h)\
  $(sfilter_h) $(scfx_h) $(slzwx_h) $(spdiffx_h) $(spngpx_h) $(strimpl_h)\
  $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zfilter2.$(OBJ) $(C_) $(PSSRC)zfilter2.c
-
-# MD5 digest filter
-fmd5_=$(PSOBJ)zfmd5.$(OBJ)
-$(PSD)fmd5.dev : $(ECHOGS_XE) $(fmd5_) $(GLD)smd5.dev\
- $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)fmd5 $(fmd5_)
-	$(ADDMOD) $(PSD)fmd5 -include $(GLD)smd5
-	$(ADDMOD) $(PSD)fmd5 -oper zfmd5
-
-$(PSOBJ)zfmd5.$(OBJ) : $(PSSRC)zfmd5.c $(OP) $(memory__h)\
- $(gsstruct_h) $(ialloc_h) $(ifilter_h)\
- $(smd5_h) $(stream_h) $(strimpl_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)zfmd5.$(OBJ) $(C_) $(PSSRC)zfmd5.c
-
-# SHA-256 digest filter
-fsha2_=$(PSOBJ)zfsha2.$(OBJ)
-$(PSD)fsha2.dev : $(ECHOGS_XE) $(fsha2_) $(GLD)ssha2.dev\
- $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)fsha2 $(fsha2_)
-	$(ADDMOD) $(PSD)fsha2 -include $(GLD)ssha2
-	$(ADDMOD) $(PSD)fsha2 -oper zfsha2
-
-$(PSOBJ)zfsha2.$(OBJ) : $(PSSRC)zfsha2.c $(OP) $(memory__h)\
- $(ghost_h) $(oper_h) $(gsstruct_h) $(stream_h) $(strimpl_h)\
- $(ialloc_h) $(ifilter_h) $(ssha2_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)zfsha2.$(OBJ) $(C_) $(PSSRC)zfsha2.c
-
-# Arcfour cipher filter
-farc4_=$(PSOBJ)zfarc4.$(OBJ)
-$(PSD)farc4.dev : $(ECHOGS_XE) $(farc4_) $(GLD)sarc4.dev\
- $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)farc4 $(farc4_)
-	$(ADDMOD) $(PSD)farc4 -include $(GLD)sarc4
-	$(ADDMOD) $(PSD)farc4 -oper zfarc4
-
-$(PSOBJ)zfarc4.$(OBJ) : $(PSSRC)zfarc4.c $(OP) $(memory__h)\
- $(gsstruct_h) $(ialloc_h) $(idict_h) $(ifilter_h)\
- $(sarc4_h) $(stream_h) $(strimpl_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)zfarc4.$(OBJ) $(C_) $(PSSRC)zfarc4.c
-
-# AES cipher filter
-faes_=$(PSOBJ)zfaes.$(OBJ)
-$(PSD)faes.dev : $(ECHOGS_XE) $(faes_) $(GLD)saes.dev\
- $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)faes $(faes_)
-	$(ADDMOD) $(PSD)faes -include $(GLD)saes
-	$(ADDMOD) $(PSD)faes -oper zfaes
-
-$(PSOBJ)zfaes.$(OBJ) : $(PSSRC)zfaes.c $(OP) $(memory__h)\
- $(gsstruct_h) $(ialloc_h) $(idict_h) $(idparam_h) $(ifilter_h)\
- $(saes_h) $(stream_h) $(strimpl_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)zfaes.$(OBJ) $(C_) $(PSSRC)zfaes.c
-
-# JBIG2 compression filter
-# this can be turned on and off with a FEATURE_DEV
-
-fjbig2_=$(PSOBJ)zfjbig2_$(JBIG2_LIB).$(OBJ)
-
-$(PSD)jbig2_jbig2dec.dev : $(ECHOGS_XE) $(fjbig2_) $(GLD)sjbig2.dev\
- $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)jbig2_jbig2dec $(fjbig2_)
-	$(ADDMOD) $(PSD)jbig2_jbig2dec -include $(GLD)sjbig2
-	$(ADDMOD) $(PSD)jbig2_jbig2dec -oper zfjbig2
-
-$(PSD)jbig2_.dev : $(ECHOGS_XE) $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)jbig2_
-
-$(PSD)jbig2.dev : $(PSD)jbig2_$(JBIG2_LIB).dev $(INT_MAK) $(MAKEDIRS)
-	$(CP_) $(PSD)jbig2_$(JBIG2_LIB).dev $(PSD)jbig2.dev
-
-
-$(PSOBJ)zfjbig2_jbig2dec.$(OBJ) : $(PSSRC)zfjbig2.c $(OP) $(memory__h)\
- $(gsstruct_h) $(gstypes_h) $(ialloc_h) $(idict_h) $(ifilter_h)\
- $(store_h) $(stream_h) $(strimpl_h) $(sjbig2_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSJBIG2CC) $(PSO_)zfjbig2_jbig2dec.$(OBJ) $(C_) $(PSSRC)zfjbig2.c
-
-# JPX (jpeg 2000) compression filter
-# this can be turned on and off with a FEATURE_DEV
-
-$(PSD)jpx.dev : $(ECHOGS_XE) $(PSD)jpx_$(JPX_LIB).dev\
- $(INT_MAK) $(MAKEDIRS)
-	$(CP_) $(PSD)jpx_$(JPX_LIB).dev $(PSD)jpx.dev
-
-$(PSD)jpx_.dev : $(ECHOGS_XE) $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)jpx_
-
-$(PSOBJ)zfjpx.$(OBJ) : $(PSSRC)zfjpx.c $(OP) $(memory__h)\
- $(gsstruct_h) $(gstypes_h) $(ialloc_h) $(idict_h) $(ifilter_h)\
- $(store_h) $(stream_h) $(strimpl_h) $(ialloc_h) $(iname_h)\
- $(gdebug_h) $(sjpx_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSJASCC) $(PSO_)zfjpx.$(OBJ) $(C_) $(PSSRC)zfjpx.c
-
-fjpx_openjpeg=$(PSOBJ)zfjpx_openjpeg.$(OBJ)
-
-$(PSD)jpx_openjpeg.dev : $(ECHOGS_XE) $(fjpx_openjpeg)\
- $(GLD)sjpx.dev $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)jpx_openjpeg $(fjpx_openjpeg)
-	$(ADDMOD) $(PSD)jpx_openjpeg -include $(GLD)sjpx
-	$(ADDMOD) $(PSD)jpx_openjpeg -include $(GLD)openjpeg
-	$(ADDMOD) $(PSD)jpx_openjpeg -oper zfjpx
-
-$(PSOBJ)zfjpx_openjpeg.$(OBJ) : $(PSSRC)zfjpx.c $(OP) $(memory__h)\
- $(gsstruct_h) $(gstypes_h) $(ialloc_h) $(idict_h) $(ifilter_h)\
- $(store_h) $(stream_h) $(strimpl_h) $(sjpx_openjpeg_h)\
- $(INT_MAK) $(MAKEDIRS)
-	$(PSOPJJPXCC) $(PSO_)zfjpx_openjpeg.$(OBJ) \
-		$(C_) $(PSSRC)zfjpx.c
-
 
 # imagemask scaling filter
 fimscale_=$(PSOBJ)zfimscale.$(OBJ)
@@ -1757,17 +1649,14 @@ $(PSOBJ)zform.$(OBJ) : $(PSSRC)zform.c $(OP) $(ghost_h) $(oper_h)\
 $(PSD)pdf.dev : $(ECHOGS_XE)\
  $(GLD)dps2lib.dev $(PSD)dps2read.dev\
  $(PSD)pdffonts.dev $(PSD)psl3.dev $(PSD)pdfread.dev\
- $(PSD)fmd5.dev $(PSD)fsha2.dev $(PSD)farc4.dev $(PSD)faes.dev\
- $(PSD)type2.dev $(PSD)pdfops.dev\
- $(PSD)pdf_r6.dev $(INT_MAK) $(MAKEDIRS)
+ $(PSD)type2.dev $(PSD)pdfops.dev $(PSD)fbrotli.dev\
+ $(INT_MAK) $(MAKEDIRS)
 	$(SETMOD) $(PSD)pdf -include $(PSD)psbase $(GLD)dps2lib
 	$(ADDMOD) $(PSD)pdf -include $(PSD)dps2read $(PSD)pdffonts $(PSD)psl3
 	$(ADDMOD) $(PSD)pdf -include $(GLD)psl2lib $(PSD)pdfread
-	$(ADDMOD) $(PSD)pdf -include $(PSD)fmd5 $(PSD)fsha2
-	$(ADDMOD) $(PSD)pdf -include $(PSD)farc4 $(PSD)faes.dev
 	$(ADDMOD) $(PSD)pdf -include $(PSD)type2
+	$(ADDMOD) $(PSD)pdf -include $(PSD)fbrotli
 	$(ADDMOD) $(PSD)pdf -include $(PSD)pdfops
-	$(ADDMOD) $(PSD)pdf -include $(PSD)pdf_r6
 	$(ADDMOD) $(PSD)pdf -include $(PSD)cff
 	$(ADDMOD) $(PSD)pdf -include $(PSD)ttfont
 	$(ADDMOD) $(PSD)pdf -functiontype 4
@@ -1822,24 +1711,6 @@ $(PSOBJ)zpdfops.$(OBJ) : $(PSSRC)zpdfops.c $(OP) $(MAKEFILE)\
  $(igstate_h) $(istack_h) $(iutil_h) $(gspath_h) $(math__h) $(ialloc_h)\
  $(igc_h) $(string__h) $(store_h) $(iminst_h) $(idstack_h) $(INT_MAK) $(MAKEDIRS)
 	$(PSCC) $(PSO_)zpdfops.$(OBJ) $(C_) $(PSSRC)zpdfops.c
-
-zutf8_=$(PSOBJ)zutf8.$(OBJ)
-$(PSD)utf8.dev : $(ECHOGS_XE) $(zutf8_) $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)utf8 $(zutf8_)
-	$(ADDMOD) $(PSD)utf8 -oper zutf8
-
-$(PSOBJ)zutf8.$(OBJ) : $(PSSRC)zutf8.c $(OP)\
- $(ghost_h) $(oper_h) $(iutil_h) $(ialloc_h) $(malloc__h) $(string__h)\
- $(store_h) $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)zutf8.$(OBJ) $(C_) $(PSSRC)zutf8.c
-
-zpdf_r6_=$(PSOBJ)zpdf_r6.$(OBJ)
-$(PSD)pdf_r6.dev : $(ECHOGS_XE) $(zpdf_r6_) $(INT_MAK) $(MAKEDIRS)
-	$(SETMOD) $(PSD)pdf_r6 $(zpdf_r6_)
-	$(ADDMOD) $(PSD)pdf_r6 -oper zpdf_r6
-
-$(PSOBJ)zpdf_r6.$(OBJ) : $(PSSRC)zpdf_r6.c $(OP) $(MAKEFILE) $(INT_MAK) $(MAKEDIRS)
-	$(PSCC) $(PSO_)zpdf_r6.$(OBJ) $(C_) $(PSSRC)zpdf_r6.c
 
 # ================ Dependencies for auxiliary programs ================ #
 

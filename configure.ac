@@ -1,4 +1,4 @@
-dnl Copyright (C) 2001-2024 Artifex Software, Inc.
+dnl Copyright (C) 2001-2025 Artifex Software, Inc.
 dnl All Rights Reserved.
 dnl
 dnl This software is provided AS-IS with no warranty, either express or
@@ -138,7 +138,7 @@ if test x"$host" != x"$build" ; then
   echo $AUXFLAGS_MAK_LINE07 >> $AUXFLAGS_MAK.in
 
   AC_MSG_NOTICE([Begin recursive call to configure script (for auxiliary tools)])
-  "$absolute_source_path/configure" CC="$CCAUX" CFLAGS="$CFLAGSAUX" CPPFLAGS="$CPPFLAGSAUX" LDFLAGS="$LDFLAGSAUX" CCAUX= CFLAGSAUX= CFLAGSAUX= MAKEFILE=$AUXFLAGS_MAK --host=$build --build=$build --enable-auxtools_only --disable-hidden-visibility --with-local-zlib --without-libtiff --disable-contrib --disable-fontconfig --disable-dbus --disable-freetype --disable-cups --disable-openjpeg --disable-gtk --with-libiconv=no --without-libidn --without-libpaper --without-pdftoraster --without-ijs --without-jbig2dec --without-x --with-drivers=""
+  "$absolute_source_path/configure" CC="$CCAUX" CFLAGS="$CFLAGSAUX" CPPFLAGS="$CPPFLAGSAUX" LDFLAGS="$LDFLAGSAUX" CCAUX= CFLAGSAUX= CFLAGSAUX= MAKEFILE=$AUXFLAGS_MAK --host=$build --build=$build --enable-auxtools_only --disable-hidden-visibility --with-local-zlib --with-local-brotli --without-libtiff --disable-contrib --disable-fontconfig --disable-dbus --disable-freetype --disable-cups --disable-openjpeg --disable-gtk --with-libiconv=no --without-libidn --without-libpaper --without-pdftoraster --without-ijs --without-jbig2dec --without-x --with-drivers=""
   status=$?
   cp config.log "$olddir/configaux.log"
   if test $status -eq 0 ; then
@@ -331,6 +331,7 @@ case $host in
             CC_DBG_FLAGS_TO_TRY="-gdwarf-2 -g3 -O0"
             SET_DT_SONAME="so"
             CC_VISIBILITY_FLAGS_TO_TRY="-fvisibility=hidden"
+            LDFLAGS="-Wl,-bbigtoc $LD_FLAGS"
         fi
         ;;
 esac
@@ -394,7 +395,7 @@ if test x"$with_arch_h" = x""; then
             ARCH_CONF_HEADER="\$(GLSRCDIR)/../arch/windows-x86-msvc.h"
           ;;
           *-darwin*)
-            ARCH_CONF_HEADER="\$(GLSRCDIR)/../arch/osx-x86-x86_64-ppc-gcc.h"
+            ARCH_CONF_HEADER="\$(GLSRCDIR)/../arch/osx-x86-x86_64-ppc_arm64-gcc.h"
           ;;
           *)
             ARCH_CONF_HEADER=
@@ -633,35 +634,51 @@ if test "$ac_cv_c_const" != yes; then
         GCFLAGS="$GCFLAGS -Dconst="
 fi
 if test "x$ac_cv_header_stdint_h" = "xyes"; then
-        GCFLAGS="$GCFLAGS -DHAVE_STDINT_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_STDINT_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_STDINT_H=0"
 fi
 
 if test "x$ac_cv_header_dirent_h" = "xyes"; then
-        GCFLAGS="$GCFLAGS -DHAVE_DIRENT_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_DIRENT_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_DIRENT_H=0"
 fi
 
 if test "x$ac_cv_header_ndir_h" = xyes; then
-        GCFLAGS="$GCFLAGS -DHAVE_NDIR_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_NDIR_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_NDIR_H=0"
 fi
 
 if test "x$ac_cv_header_sys_dir_h" = "xyes"; then
-        GCFLAGS="$GCFLAGS -DHAVE_SYS_DIR_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_DIR_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_DIR_H=0"
 fi
 
 if test "x$ac_cv_header_sys_ndir_h" = "xyes"; then
-        GCFLAGS="$GCFLAGS -DHAVE_SYS_NDIR_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_NDIR_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_NDIR_H=0"
 fi
 
 if test "x$ac_cv_header_sys_time_h" = "xyes"; then
-        GCFLAGS="$GCFLAGS -DHAVE_SYS_TIME_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_TIME_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_TIME_H=0"
 fi
 
 if test "x$ac_cv_header_sys_times_h" = "xyes"; then
-        GCFLAGS="$GCFLAGS -DHAVE_SYS_TIMES_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_TIMES_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_SYS_TIMES_H=0"
 fi
 
 if test "x$ac_cv_header_inttypes_h" = "xyes"; then
-        GCFLAGS="$GCFLAGS -DHAVE_INTTYPES_H=1"
+  GCFLAGS="$GCFLAGS -DHAVE_INTTYPES_H=1"
+else
+  GCFLAGS="$GCFLAGS -DHAVE_INTTYPES_H=0"
 fi
 
 AC_CHECK_LIB([dl], [dlopen],
@@ -1018,27 +1035,31 @@ if test x$with_tesseract != xno; then
             AC_MSG_RESULT(no)
           fi
 
-          AC_MSG_CHECKING([neon support])
-          CXXFLAGS="$save_cxxflags"
-          LDFLAGS="$save_ldflags -mfpu=neon -mcpu=cortex-a53"
-
-          TESS_NEON=""
-          AC_LINK_IFELSE(
-           [AC_LANG_PROGRAM([#include "arm_neon.h"],
-                            [int32x4_t round = vdupq_n_s32(10);
-                             return(0);])],
-           [TESS_NEON="-D__ARM_NEON__"],
-           [TESS_NEON=""])
-
-          if test "x$TESS_NEON" != x && test "x$enable_neon" != xno; then
-            AC_MSG_RESULT(yes)
-            TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_NEON"
-            LDFLAGS="$save_ldflags -mfpu=neon -mcpu=cortex-a53"
-          else
-            AC_MSG_RESULT(no)
-            TESS_NEON=""
-            LDFLAGS="$save_ldflags"
-          fi
+#          The conditions for including neon code in tesseract are
+#          dismally inconsistent in different parts of the code, so
+#          I'm disabling it completely until I have time to look in
+#          more detail.
+#          AC_MSG_CHECKING([neon support])
+#          CXXFLAGS="$save_cxxflags"
+#          LDFLAGS="$save_ldflags -mfpu=neon -mcpu=cortex-a53"
+#
+#          TESS_NEON=""
+#          AC_LINK_IFELSE(
+#           [AC_LANG_PROGRAM([#include "arm_neon.h"],
+#                            [int32x4_t round = vdupq_n_s32(10);
+#                             return(0);])],
+#           [TESS_NEON="-D__ARM_NEON__"],
+#           [TESS_NEON=""])
+#
+#          if test "x$TESS_NEON" != x && test "x$enable_neon" != xno; then
+#            AC_MSG_RESULT(yes)
+#            TESS_CXXFLAGS="$TESS_CXXFLAGS -DHAVE_NEON"
+#            LDFLAGS="$save_ldflags -mfpu=neon -mcpu=cortex-a53"
+#          else
+#            AC_MSG_RESULT(no)
+#            TESS_NEON=""
+#            LDFLAGS="$save_ldflags"
+#          fi
 
           CXXFLAGS="$save_cxxflags"
 
@@ -1198,14 +1219,7 @@ if test x$with_libidn != xno; then
   fi
 fi
 
-UTF8DEVS=''
-if test x$with_libidn != xno; then
-  if test x$found_iconv != xno; then
-    UTF8DEVS='$(PSD)utf8.dev'
-  fi
-fi
 AC_SUBST(HAVE_LIBIDN)
-AC_SUBST(UTF8DEVS)
 
 if test x"$GPL_CONF" = x"yes" ; then
 
@@ -1330,6 +1344,7 @@ if test x"$enable_fapi" != xno; then
   if test x"$with_ufst" != xno; then
     if test -d $with_ufst; then
       INSERT_UFST_BRIDGE_EQUAL_ONE="UFST_BRIDGE=1"
+      CFLAGS="$CFLAGS -DUFST_BRIDGE=1"
       case $with_ufst in
         /*) UFST_ROOT=$with_ufst ;;
          *) UFST_ROOT=`pwd`/$with_ufst ;;
@@ -1609,6 +1624,63 @@ fi
 AC_SUBST(SHARE_LIBPNG)
 AC_SUBST(LIBPNGDIR)
 #AC_SUBST(PNGDEVS)
+
+# this option is useful if you're cross-compiling and want to use
+# your toolchain's brotli for $host but the local one for $build
+AC_ARG_WITH([local-brotli], AS_HELP_STRING([--without-local-brotli],
+  [do not check for local brotli sources (has no effect on AUX toolchain when cross-building)]))
+
+AC_MSG_CHECKING([for local brotli source])
+BROTLIDIR=src
+SHARE_BROTLI=
+BROTLICFLAGS=""
+
+BROTLI_COMMON_NAME=""
+BROTLI_ENCODE_NAME=""
+BROTLI_DECODE_NAME=""
+
+if test x"$with_local_brotli" = x"no" || [[ ! -d $srcdir/brotli ]] ; then
+  AC_MSG_RESULT([no.])
+
+  AC_CHECK_LIB(brotlicommon, BrotliDefaultAllocFunc, [
+          AC_CHECK_HEADERS(brotli/shared_dictionary.h, [BROTLI_COMMON_NAME="brotlicommon"])
+        ], [], [-lbrotlicommon])
+
+  AC_CHECK_LIB(brotlienc, BrotliEncoderCreateInstance, [
+          AC_CHECK_HEADERS(brotli/encode.h, [BROTLI_ENCODE_NAME="brotlienc"])
+        ], [], [-lbrotlicommon])
+
+
+  AC_CHECK_LIB(brotlidec, BrotliDecoderCreateInstance, [
+          AC_CHECK_HEADERS(brotli/decode.h, [BROTLI_DECODE_NAME="brotlidec"])
+        ], [], [-lbrotlicommon])
+
+  if test x"$BROTLI_COMMON_NAME" = x"" || test x"$BROTLI_ENCODE_NAME" = x"" || test x"$BROTLI_DECODE_NAME" = x"" ; then
+    BROTLI_COMMON_NAME=""
+    BROTLI_ENCODE_NAME=""
+    BROTLI_DECODE_NAME=""
+  else
+    SHARE_BROTLI=1
+  fi
+else
+  AC_MSG_RESULT([yes])
+  SHARE_BROTLI=0
+  BROTLIDIR=$srcdir/brotli
+  if test x"$GCC" = x"yes"; then
+    BROTLICFLAGS="-Wno-write-strings"
+  fi
+fi
+if test -z "$SHARE_BROTLI"; then
+  AC_MSG_WARN([I did not find a copy of brotli on your system.])
+fi
+
+AC_SUBST(BROTLI_COMMON_NAME)
+AC_SUBST(BROTLI_ENCODE_NAME)
+AC_SUBST(BROTLI_DECODE_NAME)
+
+AC_SUBST(SHARE_BROTLI)
+AC_SUBST(BROTLICFLAGS)
+AC_SUBST(BROTLIDIR)
 
 WHICHLCMS=
 
@@ -2273,7 +2345,6 @@ if test "x$JPX_DECODER" = "x"; then
 
       JPX_AUTOCONF_CFLAGS="$JPX_AUTOCONF_CFLAGS -DOPJ_STATIC -DMUTEX_pthread=0 $OPJ_LRINTF_SUBST -DUSE_JPIP -DUSE_OPENJPEG_JP2 $CFLAGS_OPJ_HAVE_STDINT_H $CFLAGS_OPJ_HAVE_INTTYPES_H $CFLAGS_OPJ_BIGENDIAN $CFLAGS_OPJ_HAVE_FSEEKO $CFLAGS_OPJ_HAVE_MALLOC_H $CFLAGS_OPJ_HAVE_ALIGNED_ALLOC $CFLAGS_OPJ_HAVE__ALIGNED_ALLOC $CFLAGS_OPJ_HAVE_MEMALIGN $CFLAGS_OPJ_HAVE_POSIX_MEMALIGN"
 
-      JPXDEVS='$(PSD)jpx.dev'
     else
       AC_MSG_RESULT([no])
       check_for_opj_stream_set_user_data=no
@@ -2538,49 +2609,50 @@ X_CFLAGS=""
 X_DEVS=""
 X_LIBS=""
 
-if test x$no_x != xyes; then
-        if test "$x_libraries" = "/usr/lib"; then
-                echo "Ignoring X library directory \"$x_libraries\" requested by configure."
-                x_libraries="NONE"
-        fi
-        if test ! "$x_libraries" = "NONE" -a ! "$x_libraries" = ""; then
-                X_LDFLAGS="-L$x_libraries"
-                case $host in
-                    *-sun*|*-solaris*)
-                        X_LDFLAGS="$X_LDFLAGS -R$x_libraries"
-                    ;;
-                    *)
-                    ;;
-                esac
+if test x"$no_x" != x"yes"; then
+  if test "$x_libraries" = "/usr/lib"; then
+          echo "Ignoring X library directory \"$x_libraries\" requested by configure."
+          x_libraries="NONE"
+  fi
+  if test ! "$x_libraries" = "NONE" -a ! "$x_libraries" = ""; then
+          X_LDFLAGS="-L$x_libraries"
+          case $host in
+              *-sun*|*-solaris*)
+                  X_LDFLAGS="$X_LDFLAGS -R$x_libraries"
+              ;;
+              *)
+              ;;
+          esac
 
-        fi
+  fi
 
-        if test "$x_includes" = "/usr/include"; then
-                echo "Ignoring X include directory \"$x_includes\" requested by configure."
-                x_includes="NONE"
-        fi
-        if test ! "$x_includes" = "NONE" -a ! "$x_includes" = ""; then
-                X_CFLAGS="-I$x_includes"
-        fi
+  if test "$x_includes" = "/usr/include"; then
+          echo "Ignoring X include directory \"$x_includes\" requested by configure."
+          x_includes="NONE"
+  fi
+  if test ! "$x_includes" = "NONE" -a ! "$x_includes" = ""; then
+          X_CFLAGS="-I$x_includes"
+  fi
 
-        SAVELIBS="$LIBS"
-        SAVELDFLAGS="$LDFLAGS"
-        LDFLAGS="$LDFLAGS $X_LDFLAGS"
+  SAVELIBS="$LIBS"
+  SAVELDFLAGS="$LDFLAGS"
+  LDFLAGS="$LDFLAGS $X_LDFLAGS"
 
-        AC_CHECK_LIB(X11,XOpenDisplay)
-        AC_CHECK_LIB(Xext,XdbeQueryExtension)
-        AC_CHECK_LIB(Xt,XtAppCreateShell)
+  AC_CHECK_LIB(X11,XOpenDisplay,[],[no_x=yes])
+  AC_CHECK_LIB(Xext,XdbeQueryExtension,[],[no_x=yes])
+  AC_CHECK_LIB(Xt,XtAppCreateShell,[],[no_x=yes])
 
-        LDFLAGS="$SAVELDFLAGS"
-        LIBS="$SAVELIBS"
+  LDFLAGS="$SAVELDFLAGS"
+  LIBS="$SAVELIBS"
 
-        if test "$ac_cv_lib_Xt_XtAppCreateShell" = yes; then
-                X11DEVS="x11 x11alpha x11cmyk x11mono x11_ x11alt_ x11cmyk2 x11cmyk4 x11cmyk8 x11rg16x x11rg32x x11gray2 x11gray4"
-                X_DEVS=$X11DEVS
-                # the makefile wants a list of just the library names in X_LIBS
-                GS_SPLIT_LIBS([X_LIBS],
-                        [-lXt $X_PRE_LIBS -lXext -lX11 $X_EXTRA_LIBS])
-        fi
+  if test x"$no_x" = x"yes"; then
+    AC_MSG_ERROR([X11 libraries (libX11, libXt, libXext) not available, either install them, or rerun configure with "--without-x"])
+  else
+    X11DEVS="x11 x11alpha x11cmyk x11mono x11_ x11alt_ x11cmyk2 x11cmyk4 x11cmyk8 x11rg16x x11rg32x x11gray2 x11gray4"
+    X_DEVS=$X11DEVS
+    # the makefile wants a list of just the library names in X_LIBS
+    GS_SPLIT_LIBS([X_LIBS], [-lXt $X_PRE_LIBS -lXext -lX11 $X_EXTRA_LIBS])
+  fi
 fi
 
 AC_SUBST(X_LDFLAGS)
@@ -2770,7 +2842,7 @@ if test "x$driversfile" != x; then
         drivers="`tr '\n' ',' <$driversfile`"
 fi
 
-if echo $drivers | grep 'APPLE\|iwhi\|iwlo\|iwlq' >/dev/null; then
+if echo $drivers | grep 'APPLE\|appledmp\|iwhi\|iwhic\|iwlo\|iwlow\|iwlq\|iwlqc' >/dev/null; then
    APPLE_DEVICES_REQUESTED="yes"
 fi
 
@@ -2792,7 +2864,7 @@ EPSON_DEVS='eps9high eps9mid epson epsonc escp lp8000 lq850 photoex st800 stcolo
 CANON_DEVS='bj10e bj200 bjc600 bjc800 lbp8 lips3 bjcmono bjcgray bjccmyk bjccolor'
 LEXMARK_DEVS='lxm5700m lxm3200 lex2050 lex3200 lex5700 lex7000'
 BROTHER_DEVS='hl7x0 hl1240 hl1250'
-APPLE_DEVS='appledmp iwhi iwlo iwlq'
+APPLE_DEVS='appledmp iwhi iwhic iwlo iwlow iwlq iwlqc'
 IBM_DEVS='ibmpro jetp3852'
 OKI_DEVS='oki182 okiibm oki4w'
 JAPAN_DEVS='lips4 lips4v ljet4pjl lj4dithp dj505j picty180 lips2p bjc880j pr201 pr150 pr1000 pr1000_4 jj100 bj10v bj10vh mj700v2c mj500c mj6000c mj8000c fmpr fmlbp ml600 lbp310 lbp320 md50Mono md50Eco md1xMono escpage lp2000 npdl rpdl'
@@ -3031,9 +3103,9 @@ fi
 
 # if the user explicitly requested the Apple devices, then hard fail if they aren't available
 if test x"$APPLE_DEVICES_REQUESTED" = x"yes" ; then
-  APDEVS=`echo $P_DEVS | grep 'APPLE\|iwhi\|iwlo\|iwlq'`
+  APDEVS=`echo $P_DEVS | grep 'APPLE\|appledmp\|iwhi\|iwhic\|iwlo\|iwlow\|iwlq\|iwlqc'`
   if test -z "$APDEVS" ; then
-    AC_MSG_ERROR([Requested Apple device(s) not available (iwhi, iwlo, and/or iwlq)])
+    AC_MSG_ERROR([Requested Apple device(s) not available (appledmp, iwhi, iwhic, iwlo, iwlow, iwlq and/or iwlqc)])
   fi
 fi
 
@@ -3233,6 +3305,16 @@ case $host in
         PDF_DYNAMIC_LDFLAGS="-G -qmkshrobj -Wl,-brtl,-G"
       fi
       SO_LIB_EXT=".so"
+      ;;
+      *-hpux*)
+        DYNAMIC_CFLAGS="+z $DYNAMIC_CFLAGS"
+        GS_DYNAMIC_LDFLAGS="-b -Wl,+h,\$(LDFLAGS_SO_PREFIX)\$(GS_SONAME_MAJOR)"
+        PCL_DYNAMIC_LDFLAGS="-b -Wl,+h,\$(LDFLAGS_SO_PREFIX)\$(PCL_SONAME_MAJOR)"
+        XPS_DYNAMIC_LDFLAGS="-b -Wl,+h,\$(LDFLAGS_SO_PREFIX)\$(XPS_SONAME_MAJOR)"
+        PDL_DYNAMIC_LDFLAGS="-b -Wl,+h,\$(LDFLAGS_SO_PREFIX)\$(GPDL_SONAME_MAJOR)"
+        PDF_DYNAMIC_LDFLAGS="-b -Wl,+h,\$(LDFLAGS_SO_PREFIX)\$(PDF_SONAME_MAJOR)"
+        DYNAMIC_LIBS=""
+        SO_LIB_EXT=".so"
       ;;
 esac
 
@@ -3766,6 +3848,7 @@ if test x"$build" != x"$host"; then
   AC_CHECK_ALIGNOF([void *])
   AC_CHECK_ALIGNOF([float])
   AC_CHECK_ALIGNOF([double])
+  AC_CHECK_ALIGNOF([uint64_t])
 
   AC_SUBST(ARCH_ALIGN_SHORT_MOD, $ac_cv_alignof_short)
   AC_SUBST(ARCH_ALIGN_INT_MOD, $ac_cv_alignof_int)
@@ -3774,6 +3857,7 @@ if test x"$build" != x"$host"; then
   AC_SUBST(ARCH_ALIGN_PTR_MOD, $ac_cv_alignof_void_p)
   AC_SUBST(ARCH_ALIGN_FLOAT_MOD, $ac_cv_alignof_float)
   AC_SUBST(ARCH_ALIGN_DOUBLE_MOD, $ac_cv_alignof_double)
+  AC_SUBST(ARCH_ALIGN_UINT64_T_MOD, $ac_cv_alignof_uint64_t)
 
   AC_CHECK_SIZEOF([char])
   AC_CHECK_SIZEOF([short])
@@ -3880,6 +3964,8 @@ fi
 
 CFLAGSAUX=$(echo $CFLAGSAUX | sed -e 's/-DGS_NO_FILESYSTEM//g')
 
+GXXFLAGS=$(echo $GCFLAGS | sed -e 's/-Wstrict-prototypes//g' | sed -e 's/-Wmissing-prototypes//g' | sed -e 's/-Werror=declaration-after-statement//g')
+
 dnl --------------------------------------------------
 dnl Do substitutions
 dnl --------------------------------------------------
@@ -3888,6 +3974,7 @@ AC_SUBST(SRCDIR)
 AC_SUBST(OPT_CFLAGS)
 AC_SUBST(DBG_CFLAGS)
 AC_SUBST(GCFLAGS)
+AC_SUBST(GXXFLAGS)
 AC_SUBST(CFLAGS_SANITIZE)
 AC_SUBST(STRIP_XE)
 AC_SUBST(JPX_SSE_CFLAGS)

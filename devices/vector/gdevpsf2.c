@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1208,10 +1208,10 @@ psf_write_type2_font(stream *s, gs_font_type1 *pfont, int options,
     while ((code = psf_enumerate_glyphs_next(&genum, &glyph)) != 1)
         number_of_glyphs++;
     subset.glyphs.subset_data = (gs_glyph *)gs_alloc_bytes(pfont->memory,
-                    number_of_glyphs * sizeof(glyph), "psf_write_type2_font");
+                    (size_t)number_of_glyphs * sizeof(glyph), "psf_write_type2_font");
     number_of_strings = number_of_glyphs + MAX_CFF_MISC_STRINGS;
     std_string_items = (cff_string_item_t *)gs_alloc_bytes(pfont->memory,
-                    (MAX_CFF_STD_STRINGS + number_of_strings) * sizeof(cff_string_item_t),
+                    (MAX_CFF_STD_STRINGS + number_of_strings) * (size_t)sizeof(cff_string_item_t),
                     "psf_write_type2_font");
     if (std_string_items == NULL || subset.glyphs.subset_data == NULL) {
         code = gs_note_error(gs_error_VMerror);
@@ -1623,6 +1623,9 @@ psf_write_cid0_font(stream *s, gs_font_cid0 *pfont, int options,
     uint offset;
     int num_fonts = pfont->cidata.FDArray_size;
     int code;
+
+    if (num_fonts > 256)
+        return_error(gs_error_invalidfont);
 
     memset(&subrs_count, 0x00, 256 * sizeof(uint));
     memset(&subrs_size, 0x00, 256 * sizeof(uint));

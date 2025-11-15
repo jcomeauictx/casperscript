@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -181,7 +181,10 @@ psw_begin_file_header(gp_file *f, const gx_device *dev, const gs_rect *pbbox,
         fputs("%...............................................................\n", f);
     }
 #ifdef CLUSTER
-    fprintf(f, "%%%%Creator: GPL Ghostscript (%s)\n", dev->dname);
+    /* Slightly screwy - separating the G, P and L characters this way to avoid
+     * accidental replacement by the release script.
+     */
+    fprintf(f, "%%%%Creator: %s%s%s Ghostscript (%s)\n", "G", "P", "L", dev->dname);
 #else
     fprintf(f, "%%%%Creator: %s %ld (%s)\n", gs_product, (long)gs_revision,
             dev->dname);
@@ -297,7 +300,7 @@ psw_write_page_header(stream *s, const gx_device *dev,
     int width = (int)(dev->width * 72.0 / dev->HWResolution[0] + 0.5);
     int height = (int)(dev->height * 72.0 / dev->HWResolution[1] + 0.5);
 
-    pprintld2(s, "%%%%Page: %ld %ld\n", page, page_ord);
+    pprinti64d2(s, "%%%%Page: %"PRId64" %"PRId64"\n", (int64_t)page, page_ord);
     if (!pdpc->ProduceEPS)
         pprintld2(s, "%%%%PageBoundingBox: 0 0 %ld %ld\n", width, height);
 

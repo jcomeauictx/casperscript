@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2024 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -509,8 +509,8 @@ static int pdfi_annot_draw_Border(pdf_context *ctx, pdf_dict *annot, pdf_array *
     }
     if (!Border) {
         code = pdfi_array_alloc(ctx, 0, &dash);
-        pdfi_countup(dash);
         if (code < 0) goto exit;
+        pdfi_countup(dash);
         width = 1;
     } else {
         if (size > 3) {
@@ -747,7 +747,7 @@ static int pdfi_form_modDA(pdf_context *ctx, pdf_string *DA, pdf_string **mod_DA
     pdf_string *newDA = NULL;
 
     /* Make a copy of the string because we are going to destructively parse it */
-    parse_str = (char *)gs_alloc_bytes(ctx->memory, DA->length+1, "pdfi_annot_display_text(strbuf)");
+    parse_str = (char *)gs_alloc_bytes(ctx->memory, (size_t)DA->length+1, "pdfi_annot_display_text(strbuf)");
     if (parse_str == NULL) {
         code = gs_note_error(gs_error_VMerror);
         goto exit;
@@ -779,7 +779,7 @@ static int pdfi_form_modDA(pdf_context *ctx, pdf_string *DA, pdf_string **mod_DA
     snprintf(size_str, sizeof(size_str), "%g ", size);
 
     /* Create a new DA and reassemble the old DA into it */
-    code = pdfi_object_alloc(ctx, PDF_STRING, DA->length+strlen(size_str)+1, (pdf_obj **)&newDA);
+    code = pdfi_object_alloc(ctx, PDF_STRING, (size_t)DA->length+strlen(size_str)+1, (pdf_obj **)&newDA);
     if (code < 0)
         goto exit;
     pdfi_countup(newDA);
@@ -2860,7 +2860,6 @@ static int pdfi_annot_draw_Popup(pdf_context *ctx, pdf_dict *annot, pdf_obj *Nor
     bool has_color;
     gs_rect rect, rect2;
     bool need_grestore = false;
-    bool known = false;
 
     /* Render only if open */
     code = pdfi_dict_get_bool(ctx, annot, "Open", &Open);
@@ -3446,8 +3445,10 @@ typedef enum {
 static int pdfi_form_draw_Btn(pdf_context *ctx, pdf_dict *field, pdf_obj *AP)
 {
     int code;
+#ifdef DEBUG
     bool Radio = false;
     bool Pushbutton = false;
+#endif
     int64_t value;
 
     /* TODO: There can be Kids array. I think it should be handled in caller.
@@ -3462,12 +3463,15 @@ static int pdfi_form_draw_Btn(pdf_context *ctx, pdf_dict *field, pdf_obj *AP)
     code = pdfi_form_get_inheritable_int(ctx, field, "Ff", &value);
     if (code < 0) goto exit;
 
+#ifdef DEBUG
     Radio = value & PDFI_FORM_FF_RADIO;
     Pushbutton = value & PDFI_FORM_FF_PUSHBUTTON;
 
-    dmprintf(ctx->memory, "WARNING: AcroForm field 'Btn' with no AP not implemented.\n");
-    dmprintf2(ctx->memory, "       : Radio = %s, Pushbutton = %s.\n",
+    dbgprintf("WARNING: AcroForm field 'Btn' with no AP not implemented.\n");
+    dbgprintf2("       : Radio = %s, Pushbutton = %s.\n",
               Radio ? "TRUE" : "FALSE", Pushbutton ? "TRUE" : "FALSE");
+#endif
+
  exit:
     return 0;
 }
@@ -3690,7 +3694,7 @@ static int pdfi_form_draw_Sig(pdf_context *ctx, pdf_dict *field, pdf_obj *AP)
     if (!ctx->NeedAppearances && AP != NULL)
         return pdfi_annot_draw_AP(ctx, field, AP);
 
-    dmprintf(ctx->memory, "WARNING: AcroForm field 'Sig' with no AP not implemented.\n");
+    dbgprintf("WARNING: AcroForm field 'Sig' with no AP not implemented.\n");
 
     return code;
 }
@@ -3719,7 +3723,7 @@ static int pdfi_annot_render_field(pdf_context *ctx, pdf_dict *field, pdf_name *
     } else if (pdfi_name_is(FT, "Sig")) {
         code = pdfi_form_draw_Sig(ctx, field, AP);
     } else {
-        dmprintf(ctx->memory, "*** WARNING unknown field FT ignored\n");
+        errprintf(ctx->memory, "*** WARNING unknown field FT ignored\n");
         /* TODO: Handle warning better */
         code = 0;
     }
@@ -3849,9 +3853,9 @@ static int pdfi_annot_draw_Widget(pdf_context *ctx, pdf_dict *annot, pdf_obj *No
     code = 0;
     if (!found_T || !found_FT) {
         *render_done = true;
-        dmprintf(ctx->memory, "**** Warning: A Widget annotation dictionary lacks either the FT or T key.\n");
-        dmprintf(ctx->memory, "              Acrobat ignores such annoataions, annotation will not be rendered.\n");
-        dmprintf(ctx->memory, "              Output may not be as expected.\n");
+        outprintf(ctx->memory, "**** Warning: A Widget annotation dictionary lacks either the FT or T key.\n");
+        outprintf(ctx->memory, "              Acrobat ignores such annoataions, annotation will not be rendered.\n");
+        outprintf(ctx->memory, "              Output may not be as expected.\n");
         goto exit;
     }
 
@@ -4548,7 +4552,7 @@ annot_preserve_dispatch_t annot_preserve_dispatch[] = {
     {"Movie", pdfi_annot_preserve_default},
     {"PolyLine", pdfi_annot_preserve_default},
     {"Popup", pdfi_annot_preserve_default},
-    //    {"Screen", pdfi_annot_preserve_default},  /* TODO: fts_07_0709.pdf */
+    /*    {"Screen", pdfi_annot_preserve_default},  /* TODO: fts_07_0709.pdf */
     {"Sound", pdfi_annot_preserve_default},
     {"Square", pdfi_annot_preserve_default},
     {"Squiggly", pdfi_annot_preserve_default},
@@ -4723,10 +4727,7 @@ static int pdfi_form_draw_field(pdf_context *ctx, pdf_dict *Page, pdf_dict *fiel
 
     /* Handle Kids */
     if (pdfi_array_size(Kids) <= 0) {
-        dmprintf(ctx->memory, "*** Error: Ignoring empty /Kids array in Form field.\n");
-        dmprintf(ctx->memory, "    Output may be incorrect.\n");
-        /* TODO: Set warning flag */
-        code = 0;
+        code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefined), NULL, E_PDF_EMPTY_FORM_KIDS, "pdfi_form_draw_field", "");
         goto exit;
     }
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2024 Artifex Software, Inc.
+/* Copyright (C) 2018-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -100,8 +100,9 @@ static int do_ET(pdf_context *ctx)
             ctx->text.TextClip = false;
             /* Capture the current position */
             code = gs_currentpoint(ctx->pgs, &initial_point);
-            if (code >= 0) {
+            if (code >= 0 || code == gs_error_nocurrentpoint) {
                 gs_point adjust;
+                bool nocurrentpoint = code >= 0 ? false : true;
 
                 gs_currentfilladjust(ctx->pgs, &adjust);
                 code = gs_setfilladjust(ctx->pgs, (double)0.0, (double)0.0);
@@ -118,7 +119,9 @@ static int do_ET(pdf_context *ctx)
 
                 if (copy != NULL)
                     (void)gx_cpath_assign_free(ctx->pgs->clip_path, copy);
-                code = gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
+
+                if (nocurrentpoint == false)
+                    code = gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
             }
         }
     }
@@ -309,6 +312,7 @@ static int pdfi_show_set_params(pdf_context *ctx, pdf_string *s, gs_text_params_
         current_font->pdfi_font_type == e_pdf_font_type3 ||
         current_font->pdfi_font_type == e_pdf_font_cff ||
         current_font->pdfi_font_type == e_pdf_font_truetype ||
+        current_font->pdfi_font_type == e_pdf_font_microtype ||
         current_font->pdfi_font_type == e_pdf_font_type0)
     {
         /* For Type 0 fonts, we apply the DW/W/DW2/W2 values when we retrieve the metrics for
@@ -329,8 +333,8 @@ static int pdfi_show_set_params(pdf_context *ctx, pdf_string *s, gs_text_params_
         } else {
             gs_point pt;
 
-            x_widths = (float *)gs_alloc_bytes(ctx->memory, s->length * sizeof(float), "X widths array for text");
-            y_widths = (float *)gs_alloc_bytes(ctx->memory, s->length * sizeof(float), "Y widths array for text");
+            x_widths = (float *)gs_alloc_bytes(ctx->memory, (size_t)s->length * sizeof(float), "X widths array for text");
+            y_widths = (float *)gs_alloc_bytes(ctx->memory, (size_t)s->length * sizeof(float), "Y widths array for text");
             if (x_widths == NULL || y_widths == NULL) {
                 code = gs_note_error(gs_error_VMerror);
                 goto text_params_error;
@@ -381,7 +385,7 @@ static int pdfi_show_set_params(pdf_context *ctx, pdf_string *s, gs_text_params_
 
         if (current_font->pdfi_font_type == e_pdf_font_type3) {
             text->operation |= TEXT_FROM_CHARS;
-            text->data.chars = (const gs_char *)gs_alloc_bytes(ctx->memory, s->length * sizeof(gs_char), "string gs_chars");
+            text->data.chars = (const gs_char *)gs_alloc_bytes(ctx->memory, (size_t)s->length * sizeof(gs_char), "string gs_chars");
             if (!text->data.chars) {
                 code = gs_note_error(gs_error_VMerror);
                 goto text_params_error;
@@ -796,7 +800,7 @@ static int pdfi_show_Tr_preserve(pdf_context *ctx, gs_text_params_t *text)
         gx_device *dev = gs_currentdevice_inline(ctx->pgs);
 
         ctx->text.TextClip = true;
-        dev_proc(dev, dev_spec_op)(dev, gxdso_hilevel_text_clip, (void *)1, 1);
+        dev_proc(dev, dev_spec_op)(dev, gxdso_hilevel_text_clip, (void *)ctx->pgs, 1);
   }
 
     code = pdfi_show_simple(ctx, text);
@@ -1280,25 +1284,29 @@ int pdfi_TJ(pdf_context *ctx)
             goto TJ_error;
     }
 
-    /* Update the Text matrix with the current point, for the next operation
+    /* We don't want to update the Text matrix if we aren't in a text block, there
+     * is no point because the matrix isn't persistent between text blocks.
      */
-    (void)gs_currentpoint(ctx->pgs, &current_point); /* Always valid */
-    Trm.xx = ctx->pgs->PDFfontsize * (ctx->pgs->texthscaling / 100);
-    Trm.xy = 0;
-    Trm.yx = 0;
-    Trm.yy = ctx->pgs->PDFfontsize;
-    Trm.tx = 0;
-    Trm.ty = 0;
-    code = gs_matrix_multiply(&Trm, &ctx->pgs->textmatrix, &Trm);
-    if (code < 0)
-        goto TJ_error;
+    if (ctx->text.BlockDepth > 0) {
+        /* Update the Text matrix with the current point, for the next operation
+         */
+        (void)gs_currentpoint(ctx->pgs, &current_point); /* Always valid */
+        Trm.xx = ctx->pgs->PDFfontsize * (ctx->pgs->texthscaling / 100);
+        Trm.xy = 0;
+        Trm.yx = 0;
+        Trm.yy = ctx->pgs->PDFfontsize;
+        Trm.tx = 0;
+        Trm.ty = 0;
+        code = gs_matrix_multiply(&Trm, &ctx->pgs->textmatrix, &Trm);
+        if (code < 0)
+            goto TJ_error;
 
-    code = gs_distance_transform(current_point.x, current_point.y, &Trm, &pt);
-    if (code < 0)
-        goto TJ_error;
-    ctx->pgs->textmatrix.tx += pt.x;
-    ctx->pgs->textmatrix.ty += pt.y;
-
+        code = gs_distance_transform(current_point.x, current_point.y, &Trm, &pt);
+        if (code < 0)
+            goto TJ_error;
+        ctx->pgs->textmatrix.tx += pt.x;
+        ctx->pgs->textmatrix.ty += pt.y;
+    }
 TJ_error:
     pdfi_countdown(o);
     /* Restore the CTM to the saved value */
@@ -1399,7 +1407,9 @@ int pdfi_Tr(pdf_context *ctx)
              * already extant path in the graphics state)
              */
             gs_newpath(ctx->pgs);
-            gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
+            if (code >= 0)
+                gs_moveto(ctx->pgs, initial_point.x, initial_point.y);
+            code = 0;
         } else if (gs_currenttextrenderingmode(ctx->pgs) >= 4 && mode < 4 && ctx->text.BlockDepth != 0) {
             /* If we are switching from a clipping mode to a non-clipping
              * mode then behave as if we had an implicit ET to flush the

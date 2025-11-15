@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -123,8 +123,6 @@ pdf_simple_font_needs_ToUnicode(gx_device_pdf *pdev, const pdf_font_resource_t *
             In this circumstance, write the ToUnicode map to get a searchable PDF.
         */
         return true;
-    if (!pdfont->TwoByteToUnicode)
-        return false;
 
     if (!pdev->ToUnicodeForStdEnc) {
         for (ch = 0; ch < 256; ++ch) {
@@ -219,7 +217,7 @@ pdf_write_encoding_ref(gx_device_pdf *pdev,
     stream *s = pdev->strm;
 
     if (id != 0) {
-        pprintld1(s, "/Encoding %ld 0 R", id);
+        pprinti64d1(s, "/Encoding %"PRId64" 0 R", id);
         pdf_record_usage_by_parent(pdev, id, pdfont->object->id);
     }
     else if (pdfont->u.simple.BaseEncoding > 0) {
@@ -439,7 +437,7 @@ pdf_write_contents_type0(gx_device_pdf *pdev, pdf_font_resource_t *pdfont)
      */
     if (pdfont->u.type0.Encoding_name[0])
         pprints1(s, "/Encoding %s", pdfont->u.type0.Encoding_name);
-    pprintld1(s, "/DescendantFonts[%ld 0 R]",
+    pprinti64d1(s, "/DescendantFonts[%"PRId64" 0 R]",
               pdf_font_id(pdfont->u.type0.DescendantFont));
     stream_puts(s, "/Subtype/Type0>>\n");
     pdf_end_separate(pdev, resourceFont);
@@ -504,7 +502,7 @@ write_contents_cid_common(gx_device_pdf *pdev, pdf_font_resource_t *pdfont,
             return code;
     }
     if (pdfont->u.cidfont.CIDSystemInfo_id)
-        pprintld1(s, "/CIDSystemInfo %ld 0 R",
+        pprinti64d1(s, "/CIDSystemInfo %"PRId64" 0 R",
                   pdfont->u.cidfont.CIDSystemInfo_id);
     pprintd1(s, "/Subtype/CIDFontType%d>>\n", subtype);
     pdf_end_separate(pdev, resourceFont);
@@ -533,7 +531,7 @@ pdf_write_contents_cid2(gx_device_pdf *pdev, pdf_font_resource_t *pdfont)
 
         if (gid != cid) {	/* non-identity map */
             map_id = pdf_obj_ref(pdev);
-            pprintld1(pdev->strm, "/CIDToGIDMap %ld 0 R\n", map_id);
+            pprinti64d1(pdev->strm, "/CIDToGIDMap %"PRId64" 0 R\n", map_id);
             break;
         }
     }
@@ -577,7 +575,7 @@ pdf_write_font_resource(gx_device_pdf *pdev, pdf_font_resource_t *pdfont)
     stream *s;
     cos_dict_t *pcd_Resources = NULL;
     char *base14_name = NULL;
-    int id;
+    int64_t id;
 
     if (pdfont->cmap_ToUnicode != NULL && pdfont->res_ToUnicode == NULL)
         if (pdfont->FontType == ft_composite ||
@@ -625,25 +623,25 @@ pdf_write_font_resource(gx_device_pdf *pdev, pdf_font_resource_t *pdfont)
     }
     if (pdfont->FontDescriptor) {
         id = pdf_font_descriptor_id(pdfont->FontDescriptor);
-        pprintld1(s, "/FontDescriptor %ld 0 R", id);
+        pprinti64d1(s, "/FontDescriptor %"PRId64" 0 R", id);
         if (pdev->Linearise) {
             pdf_set_font_descriptor_usage(pdev, pdfont->object->id, pdfont->FontDescriptor);
         }
     }
     if (pdfont->res_ToUnicode) {
         id = pdf_resource_id((const pdf_resource_t *)pdfont->res_ToUnicode);
-        pprintld1(s, "/ToUnicode %ld 0 R", id);
+        pprinti64d1(s, "/ToUnicode %"PRId64" 0 R", id);
         pdf_record_usage_by_parent(pdev, id, pdfont->object->id);
     }
     if (pdev->CompatibilityLevel > 1.0)
         stream_puts(s, "/Type/Font\n");
     else
-        pprintld1(s, "/Type/Font/Name/R%ld\n", pdf_font_id(pdfont));
+        pprinti64d1(s, "/Type/Font/Name/R%"PRId64"\n", pdf_font_id(pdfont));
     if (pdev->ForOPDFRead && pdfont->global)
         stream_puts(s, "/.Global true\n");
     if (pcd_Resources != NULL) {
         id = pcd_Resources->id;
-        pprintld1(s, "/Resources %ld 0 R\n", id);
+        pprinti64d1(s, "/Resources %"PRId64" 0 R\n", id);
         pdf_record_usage_by_parent(pdev, id, pdfont->object->id);
     }
     return pdfont->write_contents(pdev, pdfont);
@@ -705,7 +703,8 @@ static int
 pdf_write_cid_system_info_to_stream(gx_device_pdf *pdev, stream *s,
                           const gs_cid_system_info_t *pcidsi, gs_id object_id)
 {
-    byte *Registry, *Ordering;
+    byte *Registry = NULL, *Ordering = NULL;
+    int code = 0;
 
     Registry = gs_alloc_bytes(pdev->pdf_memory, pcidsi->Registry.size, "temporary buffer for Registry");
     if (!Registry)
@@ -736,14 +735,19 @@ pdf_write_cid_system_info_to_stream(gx_device_pdf *pdev, stream *s,
         }
         s_arcfour_process_buffer(&sarc4, Ordering, pcidsi->Ordering.size);
     }
-    stream_puts(s, "<<\n/Registry");
+    code = stream_puts(s, "<<\n/Registry");
+    if (code < 0)
+        goto error;
     s_write_ps_string(s, Registry, pcidsi->Registry.size, PRINT_HEX_NOT_OK);
-    stream_puts(s, "\n/Ordering");
+    code = stream_puts(s, "\n/Ordering");
+    if(code < 0)
+        goto error;
     s_write_ps_string(s, Ordering, pcidsi->Ordering.size, PRINT_HEX_NOT_OK);
     pprintd1(s, "\n/Supplement %d\n>>\n", pcidsi->Supplement);
+error:
     gs_free_object(pdev->pdf_memory, Registry, "free temporary Registry buffer");
     gs_free_object(pdev->pdf_memory, Ordering, "free temporary Ordering buffer");
-    return 0;
+    return code;
 }
 
 int
@@ -788,31 +792,55 @@ pdf_write_cmap(gx_device_pdf *pdev, const gs_cmap_t *pcmap,
     *ppres = writer.pres;
     writer.pres->where_used = 0; /* CMap isn't a PDF resource. */
     if (!pcmap->ToUnicode) {
-        byte buf[200];
+        byte *buf = NULL;
+        uint64_t buflen = 0;
         cos_dict_t *pcd = (cos_dict_t *)writer.pres->object;
         stream s;
 
+        /* We use 'buf' for the stream 's' below and that needs to have some extra
+         * space for the CIDSystemInfo. We also need an extra byte for the leading '/'
+         * 100 bytes is ample for the overhead.
+         */
+        buflen = pcmap->CIDSystemInfo->Registry.size + pcmap->CIDSystemInfo->Ordering.size + pcmap->CMapName.size + 100;
+        if (buflen > max_uint)
+            return_error(gs_error_limitcheck);
+
+        buf = gs_alloc_bytes(pdev->memory, buflen, "pdf_write_cmap");
+        if (buf == NULL)
+            return_error(gs_error_VMerror);
+
         code = cos_dict_put_c_key_int(pcd, "/WMode", pcmap->WMode);
-        if (code < 0)
+        if (code < 0) {
+            gs_free_object(pdev->memory, buf, "pdf_write_cmap");
             return code;
+        }
         buf[0] = '/';
         memcpy(buf + 1, pcmap->CMapName.data, pcmap->CMapName.size);
         code = cos_dict_put_c_key_string(pcd, "/CMapName",
                         buf, pcmap->CMapName.size + 1);
-        if (code < 0)
+        if (code < 0) {
+            gs_free_object(pdev->memory, buf, "pdf_write_cmap");
             return code;
+        }
         s_init(&s, pdev->memory);
-        swrite_string(&s, buf, sizeof(buf));
+        swrite_string(&s, buf, buflen);
         code = pdf_write_cid_system_info_to_stream(pdev, &s, pcmap->CIDSystemInfo, 0);
-        if (code < 0)
+        if (code < 0) {
+            gs_free_object(pdev->memory, buf, "pdf_write_cmap");
             return code;
+        }
         code = cos_dict_put_c_key_string(pcd, "/CIDSystemInfo",
                         buf, stell(&s));
-        if (code < 0)
+        if (code < 0) {
+            gs_free_object(pdev->memory, buf, "pdf_write_cmap");
             return code;
+        }
         code = cos_dict_put_string_copy(pcd, "/Type", "/CMap");
-        if (code < 0)
+        if (code < 0) {
+            gs_free_object(pdev->memory, buf, "pdf_write_cmap");
             return code;
+        }
+        gs_free_object(pdev->memory, buf, "pdf_write_cmap");
     }
     if (pcmap->CMapName.size == 0) {
         /* Create an arbitrary name (for ToUnicode CMap). */

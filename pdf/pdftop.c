@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2024 Artifex Software, Inc.
+/* Copyright (C) 2018-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -137,7 +137,7 @@ pdf_impl_allocate_interp_instance(pl_interp_implementation_t *impl,
 
     impl->interp_client_data = instance;
     if (COMPILE_INITS == 1) {
-        newpathsstr = (char *)gs_alloc_bytes(ctx->memory, strlen(rompathstr) + strlen(GS_LIB_DEFAULT_STRING) + 2, "temp paths string");
+        newpathsstr = (char *)gs_alloc_bytes(ctx->memory, (size_t)strlen(rompathstr) + strlen(GS_LIB_DEFAULT_STRING) + 2, "temp paths string");
         if (newpathsstr == NULL) {
             newpathsstr = (char *)rompathstr;
         }
@@ -198,11 +198,12 @@ pdf_impl_set_device(pl_interp_implementation_t *impl, gx_device *pdevice)
     code = gs_setsmoothness(ctx->pgs, 0.02); /* Match gs code */
 
     /* NOTE: Not sure what this is or when it matters, but it should match gs, which sets it to true */
-    /* TODO: Commented out because it caused a seemingly random incorrect pdfwrite output.
+    /* TODO: Compiled out because it caused a seemingly random incorrect pdfwrite output.
      * Will try putting it back in when pdfwrite is more stable.
      */
-    //gs_setlimitclamp(ctx->pgs, true); /* Match gs code */
-
+#if 0
+    gs_setlimitclamp(ctx->pgs, true); /* Match gs code */
+#endif
     /* We need to setup strokeadjust the same way gs does, which is currently based on
      * the device resolution and the DITHERPPI arg.
      *
@@ -412,7 +413,7 @@ static int plist_value_get_string_or_name(pdf_context *ctx, gs_param_typed_value
     if (*pstr)
         gs_free_object(ctx->memory, *pstr, "plist_value_get_string_or_name()");
 
-    *pstr = (char *)gs_alloc_bytes(ctx->memory, size + 1, "plist_value_get_string_or_name()");
+    *pstr = (char *)gs_alloc_bytes(ctx->memory, (size_t)size + 1, "plist_value_get_string_or_name()");
     if (*pstr == NULL)
         return_error(gs_error_VMerror);
 
@@ -526,6 +527,11 @@ pdf_impl_set_param(pl_interp_implementation_t *impl,
         }
         if (argis(param, "VerboseWarnings")) {
             code = plist_value_get_bool(&pvalue, &ctx->args.verbose_warnings);
+            if (code < 0)
+                return code;
+        }
+        if (argis(param, "PDFCACHE")) {
+            code = plist_value_get_int(&pvalue, &ctx->args.PDFCacheSize);
             if (code < 0)
                 return code;
         }

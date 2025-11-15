@@ -1,4 +1,4 @@
-@echo off 
+@echo off
 @rem Convert PDF to DSC
 
 if %1/==/ goto usage
@@ -13,5 +13,3 @@ goto end
 echo "Usage: pdf2dsc input.pdf output.dsc"
 
 :end
-
-

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2024 Artifex Software, Inc.
+/* Copyright (C) 2020-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -41,7 +41,7 @@ static int pdfi_repair_add_object(pdf_context *ctx, int64_t obj, int64_t gen, gs
             return_error(gs_error_VMerror);
         }
         memset(ctx->xref_table, 0x00, sizeof(xref_table_t));
-        ctx->xref_table->xref = (xref_entry *)gs_alloc_bytes(ctx->memory, (obj + 1) * sizeof(xref_entry), "repair xref table");
+        ctx->xref_table->xref = (xref_entry *)gs_alloc_bytes(ctx->memory, (size_t)(obj + 1) * sizeof(xref_entry), "repair xref table");
         if (ctx->xref_table->xref == NULL){
             gs_free_object(ctx->memory, ctx->xref_table, "failed to allocate xref table entries for repair");
             ctx->xref_table = NULL;
@@ -53,14 +53,14 @@ static int pdfi_repair_add_object(pdf_context *ctx, int64_t obj, int64_t gen, gs
         ctx->xref_table->xref_size = obj + 1;
 #if REFCNT_DEBUG
         ctx->xref_table->UID = ctx->ref_UID++;
-        dmprintf1(ctx->memory, "Allocated xref table with UID %"PRIi64"\n", ctx->xref_table->UID);
+        outprintf(ctx->memory, "Allocated xref table with UID %"PRIi64"\n", ctx->xref_table->UID);
 #endif
         pdfi_countup(ctx->xref_table);
     } else {
         if (ctx->xref_table->xref_size < (obj + 1)) {
             xref_entry *new_xrefs;
 
-            new_xrefs = (xref_entry *)gs_alloc_bytes(ctx->memory, (obj + 1) * sizeof(xref_entry), "read_xref_stream allocate xref table entries");
+            new_xrefs = (xref_entry *)gs_alloc_bytes(ctx->memory, (size_t)(obj + 1) * sizeof(xref_entry), "read_xref_stream allocate xref table entries");
             if (new_xrefs == NULL){
                 pdfi_countdown(ctx->xref_table);
                 ctx->xref_table = NULL;
@@ -105,7 +105,7 @@ int pdfi_repair_file(pdf_context *ctx)
     pdfi_clearstack(ctx);
 
     if(ctx->args.pdfdebug)
-        dmprintf(ctx->memory, "%% Error encountered in opening PDF file, attempting repair\n");
+        outprintf(ctx->memory, "%% Error encountered in opening PDF file, attempting repair\n");
 
     /* First try to locate a %PDF header. If we can't find one, abort this, the file is too broken
      * and may not even be a PDF file.

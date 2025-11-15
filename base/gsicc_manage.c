@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -590,23 +590,23 @@ gsicc_fill_srcgtag_item(gsicc_rendering_param_t *r_params, char **pstrlast, bool
 
     /* Get the intent */
     curr_ptr = gs_strtok(NULL, "\t, \n\r", pstrlast);
-    if (sscanf(curr_ptr, "%d", &ri) != 1)
+    if (curr_ptr == NULL || sscanf(curr_ptr, "%d", &ri) != 1)
         return_error(gs_error_unknownerror);
     r_params->rendering_intent = ri | gsRI_OVERRIDE;
     /* Get the black point compensation setting */
     curr_ptr = gs_strtok(NULL, "\t, \n\r", pstrlast);
-    if (sscanf(curr_ptr, "%d", &blackptcomp) != 1)
+    if (curr_ptr == NULL || sscanf(curr_ptr, "%d", &blackptcomp) != 1)
         return_error(gs_error_unknownerror);
     r_params->black_point_comp = blackptcomp | gsBP_OVERRIDE;
     /* Get the over-ride embedded ICC boolean */
     curr_ptr = gs_strtok(NULL, "\t, \n\r", pstrlast);
-    if (sscanf(curr_ptr, "%d", &or_icc) != 1)
+    if (curr_ptr == NULL || sscanf(curr_ptr, "%d", &or_icc) != 1)
         return_error(gs_error_unknownerror);
     r_params->override_icc = or_icc;
     if (cmyk) {
         /* Get the preserve K control */
         curr_ptr = gs_strtok(NULL, "\t, \n\r", pstrlast);
-        if (sscanf(curr_ptr, "%d", &preserve_k) < 1)
+        if (curr_ptr == NULL || sscanf(curr_ptr, "%d", &preserve_k) < 1)
             return_error(gs_error_unknownerror);
         r_params->preserve_black = preserve_k | gsKP_OVERRIDE;
     } else {
@@ -684,8 +684,10 @@ gsicc_set_srcgtag_struct(gsicc_manager_t *icc_manager, const char* pname,
         }
         num_bytes = sfread(buffer_ptr,sizeof(unsigned char), info_size, str);
         code = sfclose(str);
-        if (code < 0)
-            return code;
+        if (code < 0) {
+            gs_free_object(mem, buffer_ptr, "gsicc_set_srcgtag_struct");
+             return code;
+        }
         buffer_ptr[info_size] = 0;
         if (num_bytes != info_size) {
             gs_free_object(mem, buffer_ptr, "gsicc_set_srcgtag_struct");
@@ -694,6 +696,11 @@ gsicc_set_srcgtag_struct(gsicc_manager_t *icc_manager, const char* pname,
         }
         /* Create the structure in which we will store this data */
         srcgtag = gsicc_new_srcgtag_profile(mem);
+        if (srcgtag == NULL) {
+            gs_free_object(mem, buffer_ptr, "gsicc_set_srcgtag_struct");
+            return gs_throw1(gs_error_VMerror, "creation of profile for %s failed",
+                               pname);
+        }
         /* Now parse through the data opening the profiles that are needed */
         curr_ptr = buffer_ptr;
         /* Initialize that we want color management.  Then if profile is not
@@ -705,7 +712,7 @@ gsicc_set_srcgtag_struct(gsicc_manager_t *icc_manager, const char* pname,
             srcgtag->cmyk_rend_cond[k].cmm = gsCMM_DEFAULT;
             srcgtag->gray_rend_cond[k].cmm = gsCMM_DEFAULT;
         }
-        while (start || strlen(curr_ptr) > 0) {
+        while (start || (curr_ptr != NULL && strlen(curr_ptr) > 0)) {
             if (start) {
                 curr_ptr = gs_strtok(buffer_ptr, "\t, \n\r", &last);
                 start = false;
@@ -721,6 +728,7 @@ gsicc_set_srcgtag_struct(gsicc_manager_t *icc_manager, const char* pname,
                        curr_ptr is Replace which indicates we will be doing
                        direct replacement of the colors.  */
                     curr_ptr = gs_strtok(NULL, "\t, \n\r", &last);
+                    if (curr_ptr == NULL) break;
                     if (strncmp(curr_ptr, GSICC_SRCTAG_NOCM, strlen(GSICC_SRCTAG_NOCM)) == 0 &&
                         strlen(curr_ptr) == strlen(GSICC_SRCTAG_NOCM)) {
                         cmm = gsCMM_NONE;
@@ -1657,6 +1665,9 @@ gsicc_set_device_profile_colorants(gx_device *dev, char *name_str)
         }
         /* Allocate structure for managing names */
         spot_names = gsicc_new_namelist(mem);
+        if (spot_names == 0)
+            return gs_throw(gs_error_VMerror, "Insufficient memory for spot name");
+
         profile_struct->spotnames = spot_names;
         spot_names->name_str = (char*) gs_alloc_bytes(mem, str_len+1,
                                                "gsicc_set_device_profile_colorants");

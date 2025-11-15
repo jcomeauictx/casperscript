@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -297,7 +297,7 @@ gs_create_overprint(
  * This is used by the gs_pdf1.4_device (and eventually the PDFWrite
  * device), which implements overprint and overprint mode directly.
  */
-int
+bool
 gs_is_overprint_compositor(const gs_composite_t * pct)
 {
     return pct->type == &gs_composite_overprint_type;
@@ -914,9 +914,9 @@ overprint_copy_alpha_hl_color(gx_device * dev, const byte * data, int data_x,
 }
 
 /* Currently we really should only be here if the target device is planar
-   AND it supports devn colors AND is 8 bit.  This could use a rewrite to
-   make if more efficient but I had to get something in place that would
-   work */
+   AND it supports devn colors AND is 8 (or 16) bit.  This could use a
+   rewrite to make if more efficient but I had to get something in place
+   that would work */
 static int
 overprint_copy_planes(gx_device * dev, const byte * data, int data_x, int raster_in,
                   gx_bitmap_id id, int x, int y, int w, int h, int plane_height)
@@ -927,7 +927,7 @@ overprint_copy_planes(gx_device * dev, const byte * data, int data_x, int raster
     gs_get_bits_params_t    gb_params;
     gs_int_rect             gb_rect;
     int                     code = 0;
-    unsigned int            raster;
+    int64_t                raster;
     int                     byte_depth;
     int                     depth;
     uchar                   num_comps;
@@ -940,18 +940,22 @@ overprint_copy_planes(gx_device * dev, const byte * data, int data_x, int raster
     if (tdev == 0)
         return 0;
 
-    if  (opdev->copy_alpha_hl) {
-       /* We are coming here via copy_alpha_hl_color due to the use of AA.
-          We will want to handle the overprinting here */
+    if (opdev->copy_alpha_hl) {
+        /* We are coming here via copy_alpha_hl_color due to the use of AA.
+           We will want to handle the overprinting here */
+        int bytespercomp;
 
         depth = tdev->color_info.depth;
         num_comps = tdev->color_info.num_components;
 
         fit_fill(tdev, x, y, w, h);
         byte_depth = depth / num_comps;
+        bytespercomp = byte_depth>>3;
 
         /* allocate a buffer for the returned data */
-        raster = bitmap_raster(w * byte_depth);
+        if (check_64bit_multiply(w, byte_depth, &raster) != 0)
+            return gs_note_error(gs_error_undefinedresult);
+
         gb_buff = gs_alloc_bytes(mem, raster * num_comps , "overprint_copy_planes");
         if (gb_buff == 0)
             return gs_note_error(gs_error_VMerror);
@@ -978,7 +982,7 @@ overprint_copy_planes(gx_device * dev, const byte * data, int data_x, int raster
             gx_color_index comps = comps_orig;
             gb_rect.p.y = y++;
             gb_rect.q.y = y;
-            offset = row * raster_in + data_x;
+            offset = row * raster_in + data_x * bytespercomp;
             row++;
             curr_data = (byte *) data + offset; /* start us at the start of row */
             /* And now through each plane */
@@ -997,7 +1001,7 @@ overprint_copy_planes(gx_device * dev, const byte * data, int data_x, int raster
                    its the one that we want to draw, replace it with our
                    buffer data */
                 if ((comps & 0x01) == 1) {
-                    memcpy(gb_params.data[k], curr_data, w);
+                    memcpy(gb_params.data[k], curr_data, w * bytespercomp);
                 }
                 /* Next plane */
                 curr_data += plane_height * raster_in;
@@ -1040,7 +1044,7 @@ overprint_fill_rectangle_hl_color(gx_device *dev,
     gs_get_bits_params_t    gb_params;
     gs_int_rect             gb_rect;
     int                     code = 0;
-    unsigned int            raster;
+    int64_t                raster;
     int                     byte_depth;
     int                     depth;
     uchar                   num_comps;
@@ -1051,6 +1055,7 @@ overprint_fill_rectangle_hl_color(gx_device *dev,
     gx_color_index          mask;
     int                     shift;
     int                     deep;
+    int                     tag_plane = -1;
 
     if (tdev == 0)
         return 0;
@@ -1066,6 +1071,8 @@ overprint_fill_rectangle_hl_color(gx_device *dev,
 
     depth = tdev->color_info.depth;
     num_comps = tdev->color_info.num_components;
+    if (device_encodes_tags(dev))
+        tag_plane = tdev->num_planar_planes - 1;
 
     x = fixed2int(rect->p.x);
     y = fixed2int(rect->p.y);
@@ -1079,7 +1086,8 @@ overprint_fill_rectangle_hl_color(gx_device *dev,
     deep = byte_depth == 16;
 
     /* allocate a buffer for the returned data */
-    raster = bitmap_raster(w * byte_depth);
+    if (check_64bit_multiply(w, byte_depth, &raster) != 0)
+        return gs_note_error(gs_error_undefinedresult);
     gb_buff = gs_alloc_bytes(mem, raster * num_comps , "overprint_fill_rectangle_hl_color");
     if (gb_buff == 0)
         return gs_note_error(gs_error_VMerror);
@@ -1134,9 +1142,12 @@ overprint_fill_rectangle_hl_color(gx_device *dev,
                 if (deep)
                     my_memset16_be((uint16_t *)(gb_params.data[k]),
                                    pdcolor->colors.devn.values[k], w);
-                else
-                    memset(gb_params.data[k],
-                           ((pdcolor->colors.devn.values[k]) >> shift & mask), w);
+                else {
+                    int v = pdcolor->colors.devn.values[k];
+                    if (k != tag_plane)
+                        v = (v>>shift) & mask;
+                    memset(gb_params.data[k], v, w);
+                }
             }
             comps >>= 1;
         }

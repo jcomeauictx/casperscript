@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2024 Artifex Software, Inc.
+/* Copyright (C) 2020-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -55,7 +55,7 @@ static int pdfi_add_to_cache(pdf_context *ctx, pdf_obj *o)
 
     if (ctx->xref_table->xref[o->object_num].cache != NULL) {
 #if DEBUG_CACHE
-        dmprintf1(ctx->memory, "Attempting to add object %d to cache when the object is already cached!\n", o->object_num);
+        outprintf(ctx->memory, "Attempting to add object %d to cache when the object is already cached!\n", o->object_num);
 #endif
         return_error(gs_error_unknownerror);
     }
@@ -63,13 +63,19 @@ static int pdfi_add_to_cache(pdf_context *ctx, pdf_obj *o)
     if (o->object_num > ctx->xref_table->xref_size)
         return_error(gs_error_rangecheck);
 
-    if (ctx->cache_entries == MAX_OBJECT_CACHE_SIZE)
+#if DEBUG_CACHE
+        dbgmprintf1(ctx->memory, "Adding object %d\n", o->object_num);
+#endif
+    if (ctx->cache_entries == ctx->args.PDFCacheSize)
     {
 #if DEBUG_CACHE
         dbgmprintf(ctx->memory, "Cache full, evicting LRU\n");
 #endif
         if (ctx->cache_LRU) {
             entry = ctx->cache_LRU;
+#if DEBUG_CACHE
+            dbgmprintf1(ctx->memory, "Evicting %d\n", entry->o->object_num);
+#endif
             ctx->cache_LRU = entry->next;
             if (entry->next)
                 ((pdf_obj_cache_entry *)entry->next)->previous = NULL;
@@ -126,6 +132,17 @@ static void pdfi_promote_cache_entry(pdf_context *ctx, pdf_obj_cache_entry *cach
     }
 #endif
     return;
+}
+
+int pdfi_cache_object(pdf_context *ctx, pdf_obj *o)
+{
+    if (o->object_num == 0)
+        return 0;
+    if (ctx->xref_table->xref[o->object_num].cache == NULL)
+        return pdfi_add_to_cache(ctx, o);
+    else
+        pdfi_promote_cache_entry(ctx, ctx->xref_table->xref[o->object_num].cache);
+    return 0;
 }
 
 /* This one's a bit of an oddity, its used for fonts. When we build a PDF font object
@@ -632,8 +649,8 @@ static int pdfi_deref_compressed(pdf_context *ctx, uint64_t obj, uint64_t gen, p
     compressed_entry = &ctx->xref_table->xref[entry->u.compressed.compressed_stream_num];
 
     if (ctx->args.pdfdebug) {
-        dmprintf1(ctx->memory, "%% Reading compressed object (%"PRIi64" 0 obj)", obj);
-        dmprintf1(ctx->memory, " from ObjStm with object number %"PRIi64"\n", compressed_entry->object_num);
+        outprintf(ctx->memory, "%% Reading compressed object (%"PRIi64" 0 obj)", obj);
+        outprintf(ctx->memory, " from ObjStm with object number %"PRIi64"\n", compressed_entry->object_num);
     }
 
     if (compressed_entry->cache == NULL) {
@@ -1018,8 +1035,13 @@ static int pdfi_dereference_main(pdf_context *ctx, uint64_t obj, uint64_t gen, p
             if (code < 0) {
                 int code1 = 0;
                 if (entry->free) {
-                    dmprintf2(ctx->memory, "Dereference of free object %"PRIu64", next object number as offset failed (code = %d), returning NULL object.\n", entry->object_num, code);
+                    char extra_info[gp_file_name_sizeof];
+
+                    gs_snprintf(extra_info, sizeof(extra_info), "Attempt to dereference free object %"PRIu64", treating as NULL object.\n", entry->object_num);
+                    code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefined), NULL, E_PDF_DEREF_FREE_OBJ, "pdfi_dereference", extra_info);
                     *object = PDF_NULL_OBJ;
+                    if (code < 0)
+                        goto error;
                     goto free_obj;
                 }
                 ctx->encryption.decrypt_strings = saved_decrypt_strings;
@@ -1088,9 +1110,14 @@ static int pdfi_dereference_main(pdf_context *ctx, uint64_t obj, uint64_t gen, p
                     pdfi_pop(ctx, 1);
 
                 if (entry->free) {
-                    dmprintf1(ctx->memory, "Dereference of free object %"PRIu64", next object number as offset failed, returning NULL object.\n", entry->object_num);
+                    char extra_info[gp_file_name_sizeof];
+
+                    gs_snprintf(extra_info, sizeof(extra_info), "Attempt to dereference free object %"PRIu64", treating as NULL object.\n", entry->object_num);
+                    code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefined), NULL, E_PDF_DEREF_FREE_OBJ, "pdfi_dereference", extra_info);
                     *object = PDF_NULL_OBJ;
-                    return 0;
+                    if (code < 0)
+                        goto error;
+                    return code;
                 }
                 code1 = pdfi_repair_file(ctx);
                 if (code1 == 0)

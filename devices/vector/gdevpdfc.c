@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -374,6 +374,8 @@ int pdf_make_sampled_base_space_function(gx_device_pdf *pdev, gs_function_t **pf
 
     str.size = nDstComp * (uint)pow(2, nSrcComp);
     str.data = gs_alloc_string(pdev->memory, str.size, "pdf_DeviceN");
+    if (str.data == NULL)
+        return_error(gs_error_VMerror);
     memcpy((void *)str.data, data, str.size);
 
     params.m = nSrcComp;
@@ -382,6 +384,9 @@ int pdf_make_sampled_base_space_function(gx_device_pdf *pdev, gs_function_t **pf
     params.BitsPerSample = 8;
 
     ptr1 = gs_alloc_byte_array(pdev->memory, nSrcComp, sizeof(int), "pdf_make_function(Domain)");
+    if (ptr1 == NULL)
+        return gs_note_error(gs_error_VMerror);
+
     for (i=0;i<nSrcComp;i++) {
         ((int *)ptr1)[i] = 2;
     }
@@ -506,7 +511,7 @@ pdf_separation_color_space(gx_device_pdf *pdev, const gs_gstate * pgs,
     if (csi == gs_color_space_index_ICC) {
         csi = gsicc_get_default_type(alt_space->cmm_icc_profile_data);
     }
-    if (csi == gs_color_space_index_DeviceRGB && (pdev->PDFX ||
+    if (csi == gs_color_space_index_DeviceRGB && ((pdev->PDFX > 0 && pdev->PDFX < 4) ||
         (pdev->PDFA != 0 && (pdev->pcm_color_info_index == gs_color_space_index_DeviceCMYK)))) {
 
         /*

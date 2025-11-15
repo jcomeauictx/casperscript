@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -271,7 +271,7 @@ static int
 xps_setlogop(gx_device_vector *vdev, gs_logical_operation_t lop,
              gs_logical_operation_t diff);
 
-static int
+static bool
 xps_can_handle_hl_color(gx_device_vector *vdev, const gs_gstate *pgs,
                         const gx_drawing_color * pdc);
 static int
@@ -1480,12 +1480,12 @@ xps_setlogop(gx_device_vector *vdev, gs_logical_operation_t lop,
 
         /* Other state */
 
-static int
+static bool
 xps_can_handle_hl_color(gx_device_vector *vdev, const gs_gstate *pgs,
                           const gx_drawing_color *pdc)
 {
     if_debug0m('_', vdev->memory, "xps_can_handle_hl_color\n");
-    return 0;
+    return false;
 }
 
 /* Paths */
@@ -2083,7 +2083,7 @@ xps_begin_typed_image(gx_device               *dev,
     gs_fixed_rect bbox;
     int bits_per_pixel;
     int num_components;
-    int bsize;
+    size_t bsize;
     cmm_profile_t *icc_profile = NULL;
     gs_color_space_index csindex;
     float index_decode[2];
@@ -2363,7 +2363,7 @@ xps_begin_typed_image(gx_device               *dev,
     if (csindex == gs_color_space_index_Indexed ||
         csindex == gs_color_space_index_Separation ||
         csindex == gs_color_space_index_DeviceN) {
-        bsize = (pim->Width + 15) * icc_profile->num_comps;
+        bsize = ((unsigned int)pim->Width + 15) * icc_profile->num_comps;
         pie->devc_buffer = gs_alloc_bytes(mem, bsize, "xps_begin_typed_image(devc_buffer)");
         if (pie->devc_buffer == 0) {
             gs_free_object(mem, pie, "xps_begin_typed_image");

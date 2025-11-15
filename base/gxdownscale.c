@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1948,7 +1948,7 @@ static int init_ht(gx_downscaler_t *ds, int num_planes, gx_downscale_core *downs
 
     /* Allocate us a row (with padding for alignment) so we can hold the
      * expanded threshold array. */
-    ds->htrow_alloc = gs_alloc_bytes(ds->dev->memory, ds->width * nc + 64,
+    ds->htrow_alloc = gs_alloc_bytes(ds->dev->memory, (size_t)ds->width * nc + 64,
                                      "gx_downscaler(htrow)");
     if (ds->htrow_alloc == NULL)
         return gs_error_VMerror;
@@ -1956,7 +1956,7 @@ static int init_ht(gx_downscaler_t *ds, int num_planes, gx_downscale_core *downs
     ds->htrow = ds->htrow_alloc + ((32-(intptr_t)ds->htrow_alloc) & 31);
 
     /* Allocate us a row (with padding for alignment) for the downscaled data. */
-    ds->inbuf_alloc = gs_alloc_bytes(ds->dev->memory, ds->width * nc + 64,
+    ds->inbuf_alloc = gs_alloc_bytes(ds->dev->memory, (size_t)ds->width * nc + 64,
                                      "gx_downscaler(inbuf)");
     if (ds->inbuf_alloc == NULL)
     {
@@ -2687,7 +2687,7 @@ gx_downscaler_init_cm_halftone(gx_downscaler_t      *ds,
         int h = ds->dev->height;
         int n = ds->dev->color_info.num_components;
         cal_skew *skew;
-        byte *buffer = gs_alloc_bytes(ds->dev->memory, w*n, "skew_row");
+        byte *buffer = gs_alloc_bytes(ds->dev->memory, (size_t)w*n, "skew_row");
         if (buffer == NULL)
             return_error(gs_error_VMerror);
         skew = cal_skew_init(ds->dev->memory->gs_lib_ctx->core->cal_ctx,
@@ -3031,8 +3031,6 @@ int gx_downscaler_get_bits_rectangle(gx_downscaler_t      *ds,
     int                   num_planes_to_downscale;
 
     n = ds->dev->width;
-    if (ds->dev->color_info.depth > ds->dev->color_info.num_components*8+8)
-       n *= 2;
 
     n = (n*ds->src_bpc+7)/8;
 
@@ -3376,7 +3374,8 @@ int gx_downscaler_read_params(gs_param_list        *plist,
                               int                   features)
 {
     int code;
-    int downscale, mfs, ets, deskew;
+    int downscale, mfs, ets;
+    bool deskew;
     int trap_w, trap_h;
     const char *param_name;
     gs_param_int_array trap_order;

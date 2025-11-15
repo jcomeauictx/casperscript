@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2024 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -25,6 +25,7 @@
 #include "pdf_doc.h"
 #include "pdf_mark.h"
 #include "pdf_optcontent.h"
+#include "pdf_loop_detect.h"
 
 
 /* Find the default value for an ocdict, based on contents of OCProperties */
@@ -109,21 +110,21 @@ pdfi_oc_check_OCG_usage(pdf_context *ctx, pdf_dict *ocdict)
     }
 
     if (ctx->args.printed) {
-        code = pdfi_dict_knownget_type(ctx, ocdict, "Print", PDF_DICT, (pdf_obj **)&dict);
+        code = pdfi_dict_knownget_type(ctx, Usage, "Print", PDF_DICT, (pdf_obj **)&dict);
         if (code <= 0)
             goto cleanup;
         code = pdfi_dict_knownget_type(ctx, dict, "PrintState", PDF_NAME, &name);
         if (code <= 0)
             goto cleanup;
     } else {
-        code = pdfi_dict_knownget_type(ctx, ocdict, "View", PDF_DICT, (pdf_obj **)&dict);
+        code = pdfi_dict_knownget_type(ctx, Usage, "View", PDF_DICT, (pdf_obj **)&dict);
         if (code <= 0)
             goto cleanup;
         code = pdfi_dict_knownget_type(ctx, dict, "ViewState", PDF_NAME, &name);
         if (code <= 0)
             goto cleanup;
     }
-    if (pdfi_name_strcmp((pdf_name *)name, "OFF")) {
+    if (pdfi_name_strcmp((pdf_name *)name, "OFF") == 0) {
         is_visible = false;
     }
 
@@ -193,7 +194,7 @@ pdfi_oc_check_OCMD_array(pdf_context *ctx, pdf_array *array, ocmd_p_type type)
         code = pdfi_array_get(ctx, array, i, &val);
         if (code < 0) continue;
         if (pdfi_type_of(val) != PDF_DICT) {
-            dmprintf1(ctx->memory, "WARNING: OCMD array contains item type %d, expected PDF_DICT or PDF_NULL\n", pdfi_type_of(val));
+            dbgprintf1("WARNING: OCMD array contains item type %d, expected PDF_DICT or PDF_NULL\n", pdfi_type_of(val));
             pdfi_countdown(val);
             val = NULL;
             continue;
@@ -267,7 +268,7 @@ pdfi_oc_check_OCMD(pdf_context *ctx, pdf_dict *ocdict)
     /* TODO: We don't support this, so log a warning and ignore */
     code = pdfi_dict_knownget_type(ctx, ocdict, "VE", PDF_ARRAY, &VE);
     if (code > 0) {
-        dmprintf(ctx->memory, "WARNING: OCMD contains VE, which is not supported (ignoring)\n");
+        dbgprintf("WARNING: OCMD contains VE, which is not supported (ignoring)\n");
     }
 
     code = pdfi_dict_knownget(ctx, ocdict, "OCGs", &obj);
@@ -360,6 +361,85 @@ pdfi_oc_check_OCMD(pdf_context *ctx, pdf_dict *ocdict)
     return is_visible;
 }
 
+static bool pdfi_must_check_usage(pdf_context *ctx, int64_t object)
+{
+    pdf_dict *D = NULL, *EventDict = NULL;
+    pdf_array *AS = NULL, *OCGs = NULL;
+    pdf_name *Event = NULL;
+    bool check = false;
+    int i, code = 0;
+
+    if (ctx->OCProperties != NULL) {
+        if (pdfi_dict_knownget_type(ctx, ctx->OCProperties, "D", PDF_DICT, (pdf_obj **)&D) > 0) {
+            if (pdfi_dict_knownget_type(ctx, D, "AS", PDF_ARRAY, (pdf_obj **)&AS) > 0) {
+                for (i = 0; i < pdfi_array_size(AS); i++) {
+                    code = pdfi_array_get(ctx, AS, i, (pdf_obj **)&EventDict);
+                    if (code < 0)
+                        goto exit;
+                    if (pdfi_type_of(EventDict) == PDF_DICT) {
+                        if (pdfi_dict_knownget_type(ctx, EventDict, "Event", PDF_NAME, (pdf_obj **)&Event) > 0) {
+                            if (ctx->args.printed) {
+                                if (Event->length == 5 && strncmp((const char *)Event->data, "Print", 5) == 0) {
+                                    if (pdfi_dict_knownget_type(ctx, EventDict, "OCGs", PDF_ARRAY, (pdf_obj **)&OCGs) > 0) {
+                                        pdfi_countdown(Event);
+                                        Event = NULL;
+                                        pdfi_countdown(EventDict);
+                                        EventDict = NULL;
+                                        break;
+                                    }
+                                }
+                            } else {
+                                if (Event->length == 4 && strncmp((const char *)Event->data, "View", 4) == 0) {
+                                    if (pdfi_dict_knownget_type(ctx, EventDict, "OCGs", PDF_ARRAY, (pdf_obj **)&OCGs) > 0) {
+                                        pdfi_countdown(Event);
+                                        Event = NULL;
+                                        pdfi_countdown(EventDict);
+                                        EventDict = NULL;
+                                        break;
+                                    }
+                                }
+                            }
+                            pdfi_countdown(Event);
+                            Event = NULL;
+                        }
+                    }
+                    pdfi_countdown(EventDict);
+                    EventDict = NULL;
+                }
+                pdfi_countdown(AS);
+                AS = NULL;
+                if (OCGs) {
+                    pdf_obj *Group = NULL;
+
+                    for (i = 0; i < pdfi_array_size(OCGs); i++) {
+                        code = pdfi_array_get(ctx, OCGs, i, (pdf_obj **)&Group);
+                        if (code < 0)
+                            goto exit;
+                        if (Group->object_num == object) {
+                            pdfi_countdown(Group);
+                            check = true;
+                            goto exit;
+                        }
+                        pdfi_countdown(Group);
+                        Group = NULL;
+                    }
+                    pdfi_countdown(OCGs);
+                    OCGs = NULL;
+                }
+            }
+            pdfi_countdown(D);
+            D = NULL;
+        }
+    }
+exit:
+    pdfi_countdown(OCGs);
+    pdfi_countdown(Event);
+    pdfi_countdown(EventDict);
+    pdfi_countdown(AS);
+    pdfi_countdown(D);
+    return check;
+}
+
 /* Check if an OCG or OCMD is visible, passing in OC dict */
 bool
 pdfi_oc_is_ocg_visible(pdf_context *ctx, pdf_dict *ocdict)
@@ -378,20 +458,20 @@ pdfi_oc_is_ocg_visible(pdf_context *ctx, pdf_dict *ocdict)
         is_visible = pdfi_oc_check_OCMD(ctx, ocdict);
     } else if (pdfi_name_is(type, "OCG")) {
         is_visible = pdfi_get_default_OCG_val(ctx, ocdict);
-        if (is_visible)
+        if (pdfi_must_check_usage(ctx, ocdict->object_num))
             is_visible = pdfi_oc_check_OCG_usage(ctx, ocdict);
     } else {
         char str[100];
         memcpy(str, (const char *)type->data, type->length < 100 ? type->length : 99);
         str[type->length < 100 ? type->length : 99] = '\0';
-        dmprintf1(ctx->memory, "WARNING: OC dict type is %s, expected OCG or OCMD\n", str);
+        dbgprintf1("WARNING: OC dict type is %s, expected OCG or OCMD\n", str);
     }
 
  cleanup:
     pdfi_countdown(type);
 
     if (ctx->args.pdfdebug) {
-        dmprintf2(ctx->memory, "OCG: OC Dict %d %s visible\n", ocdict->object_num,
+        outprintf(ctx->memory, "OCG: OC Dict %d %s visible\n", ocdict->object_num,
                   is_visible ? "IS" : "IS NOT");
     }
     return is_visible;
@@ -766,9 +846,11 @@ int pdfi_op_BDC(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict)
         if (pdfi_type_of(properties) != PDF_NAME)
             goto exit;
 
+        code = pdfi_loop_detector_mark(ctx);
         /* If it's a name, look it up in Properties */
         code = pdfi_find_resource(ctx, (unsigned char *)"Properties", properties,
                                   (pdf_dict *)stream_dict, page_dict, (pdf_obj **)&oc_dict);
+        (void)pdfi_loop_detector_cleartomark(ctx);
         if (code != 0)
             goto exit;
         if (pdfi_type_of(oc_dict) != PDF_DICT)

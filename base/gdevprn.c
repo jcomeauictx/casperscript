@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -953,6 +953,9 @@ gdev_prn_output_page_aux(gx_device * pdev, int num_copies, int flush, bool seeka
 
     prn_finish_bg_print(ppdev);		/* finish any previous background printing */
 
+    if (pdev->width < 1 || pdev->height < 1 || pdev->HWResolution[0] <= 0 || pdev->HWResolution[1] <= 0)
+        return_error(gs_error_configurationerror);
+
     if (num_copies > 0 && ppdev->saved_pages_list != NULL) {
         /* We are putting pages on a list */
         if ((code = gx_saved_pages_list_add(ppdev)) < 0)
@@ -1544,7 +1547,7 @@ gx_default_setup_buf_device(gx_device *bdev, byte *buffer, int raster,
         ptrs = (byte **)
             gs_alloc_byte_array(mdev->memory,
                                 (mdev->num_planar_planes ?
-                                 full_height * mdev->num_planar_planes :
+                                 (size_t)full_height * mdev->num_planar_planes :
                                  setup_height),
                                 sizeof(byte *), "setup_buf_device");
         if (ptrs == 0)
@@ -1553,7 +1556,7 @@ gx_default_setup_buf_device(gx_device *bdev, byte *buffer, int raster,
         mdev->foreign_line_pointers = false;
     }
     mdev->height = full_height;
-    code = gdev_mem_set_line_ptrs(mdev, buffer + raster * y, raster,
+    code = gdev_mem_set_line_ptrs(mdev, buffer + (intptr_t)raster * (intptr_t)y, raster,
                                   ptrs, setup_height);
     mdev->height = setup_height;
     bdev->height = setup_height; /* do here in case mdev == bdev */

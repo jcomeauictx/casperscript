@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -121,7 +121,11 @@ int ramfs_error(const ramfs* fs) { return fs->last_error; }
 
 static int resize(ramfile * file,int size)
 {
-    int newblocks = (size+RAMFS_BLOCKSIZE-1)/RAMFS_BLOCKSIZE;
+    /* A resize request larger than an int will fail at a higher level
+       so doing the following calculation as unsigned should be sufficient to
+       avoid overflow at this level.
+     */
+    int newblocks = (int)(((unsigned int)size)+RAMFS_BLOCKSIZE-1)/RAMFS_BLOCKSIZE;
     void *buf;
 
     if(newblocks > file->blocks) {
@@ -139,7 +143,7 @@ static int resize(ramfile * file,int size)
                 if(!newsize) newsize = 1;
                 while(newsize < newblocks) newsize *= 2;
             }
-            buf = gs_alloc_bytes(file->fs->memory, newsize * sizeof(char*), "ramfs resize");
+            buf = gs_alloc_bytes(file->fs->memory, (size_t)newsize * sizeof(char*), "ramfs resize");
             if (!buf)
                 return gs_note_error(gs_error_VMerror);
             memcpy(buf, file->data, file->blocklist_size * sizeof(char *));
@@ -217,9 +221,10 @@ ramhandle * ramfs_open(gs_memory_t *mem, ramfs* fs,const char * filename,int mod
         thisdirent->inode = file;
         thisdirent->next = fs->files;
         fs->files = thisdirent;
+    } else {
+        file = thisdirent->inode;
+        file->refcount++;
     }
-    file = thisdirent->inode;
-    file->refcount++;
 
     handle = gs_alloc_struct(fs->memory, ramhandle, &st_ramhandle, "new ram directory entry");
     if(!handle) {
@@ -231,7 +236,7 @@ ramhandle * ramfs_open(gs_memory_t *mem, ramfs* fs,const char * filename,int mod
     handle->filepos = 0;
     handle->mode = mode;
 
-    if(mode & RAMFS_TRUNC) {
+    if(mode & RAMFS_TRUNC && file->size != 0) {
         resize(file,0);
     }
     return handle;
@@ -244,9 +249,6 @@ int ramfile_error(ramhandle * handle) { return handle->last_error; }
 static void unlink_node(ramfile * inode)
 {
     int c;
-
-    --inode->refcount;
-    if(inode->refcount) return;
 
     /* remove the file and its data */
     for(c=0;c<inode->blocks;c++) {
@@ -271,6 +273,11 @@ int ramfs_unlink(ramfs * fs,const char *filename)
         }
         if(strcmp(thisdirent->filename,filename) == 0) break;
         last = &(thisdirent->next);
+    }
+
+    if (thisdirent->inode->refcount != 0) {
+        fs->last_error = RAMFS_DELETEOPENFILE;
+        return -1;
     }
 
     unlink_node(thisdirent->inode);
@@ -482,7 +489,7 @@ static int ramfile_truncate(ramhandle * handle,int size)
 void ramfile_close(ramhandle * handle)
 {
     ramfile * file = handle->file;
-    unlink_node(file);
+    file->refcount--;
     gs_free_object(handle->file->fs->memory, handle, "ramfs close");
 }
 

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -360,7 +360,11 @@ int new_main(int argc, char *argv[])
         sprintf(dformat, "-dDisplayFormat=%d", format);
     }
     nargc = argc + 2;
-    nargv = (char **)malloc(nargc * sizeof(char *));
+    nargv = (char **)malloc((size_t)nargc * sizeof(char *));
+
+    if (nargv == NULL)
+        return 1;
+
     nargv[0] = argv[0];
     nargv[1] = dformat;
     nargv[2] = ddpi;
@@ -492,7 +496,7 @@ WinMain(HINSTANCE hInstance, HINSTANCE hPrevInstance, LPSTR lpszCmdLine, int cmd
     }
 
     argc = 0;
-    args = (char *)malloc(lstrlen(p)+1);
+    args = (char *)malloc((size_t)lstrlen(p)+1);
     if (args == (char *)NULL) {
         fprintf(stdout, "Insufficient memory in WinMain()\n");
         return 1;

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -168,7 +168,7 @@ gx_default_copy_alpha_hl_color(gx_device * dev, const byte * data, int data_x,
     gs_memory_t *mem = dev->memory;
     int bpp = dev->color_info.depth;
     uchar ncomps = dev->color_info.num_components;
-    uint out_raster;
+    uint64_t out_raster, product = 0;
     int code = 0;
     gx_color_value src_cv[GS_CLIENT_COLOR_MAX_COMPONENTS];
     gx_color_value curr_cv[GS_CLIENT_COLOR_MAX_COMPONENTS];
@@ -190,8 +190,10 @@ gx_default_copy_alpha_hl_color(gx_device * dev, const byte * data, int data_x,
 
     fit_copy(dev, data, data_x, raster, id, x, y, width, height);
     row_alpha = data;
-    out_raster = bitmap_raster(width * byte_depth);
-    gb_buff = gs_alloc_bytes(mem, out_raster * ncomps, "copy_alpha_hl_color(gb_buff)");
+    out_raster = bitmap_raster(width * (size_t)byte_depth);
+    if (check_64bit_multiply(out_raster, ncomps, (int64_t *) &product) != 0)
+        return gs_note_error(gs_error_undefinedresult);
+    gb_buff = gs_alloc_bytes(mem, product, "copy_alpha_hl_color(gb_buff)");
     if (gb_buff == 0) {
         code = gs_note_error(gs_error_VMerror);
         return code;
@@ -385,7 +387,7 @@ gx_default_copy_alpha(gx_device * dev, const byte * data, int data_x,
                               GB_RASTER_STANDARD | GB_PACKING_CHUNKY |
                               GB_COLORS_NATIVE | GB_ALPHA_NONE);
             params.x_offset = 0;
-            params.raster = bitmap_raster(dev->width * dev->color_info.depth);
+            params.raster = bitmap_raster(dev->width * (size_t)dev->color_info.depth);
             params.data[0] = lin;
             rect.p.y = ry;
             rect.q.y = ry+1;
@@ -539,6 +541,7 @@ gx_default_fill_mask(gx_device * orig_dev,
 {
     gx_device *dev = orig_dev;
     gx_device_clip cdev;
+    int code = 0;
 
     if (w == 0 || h == 0)
         return 0;
@@ -577,12 +580,15 @@ gx_default_fill_mask(gx_device * orig_dev,
     }
     if (depth > 1) {
         /****** CAN'T DO ROP OR HALFTONE WITH ALPHA ******/
-        return (*dev_proc(dev, copy_alpha))
+        code = (*dev_proc(dev, copy_alpha))
             (dev, data, dx, raster, id, x, y, w, h,
              gx_dc_pure_color(pdcolor), depth);
     } else
-        return pdcolor->type->fill_masked(pdcolor, data, dx, raster, id,
+        code = pdcolor->type->fill_masked(pdcolor, data, dx, raster, id,
                                           x, y, w, h, dev, lop, false);
+    if (dev != orig_dev)
+        gx_destroy_clip_device_on_stack(&cdev);
+    return code;
 }
 
 /* Default implementation of strip_tile_rect_devn.  With the current design
@@ -594,7 +600,111 @@ gx_default_strip_tile_rect_devn(gx_device * dev, const gx_strip_bitmap * tiles,
    int x, int y, int w, int h, const gx_drawing_color * pdcolor0,
    const gx_drawing_color * pdcolor1, int px, int py)
 {
-    return_error(gs_error_unregistered);
+    int width = tiles->size.x;
+    int height = tiles->size.y;
+    int raster = tiles->raster;
+    int rwidth = tiles->rep_width;
+    int rheight = tiles->rep_height;
+    int shift = tiles->shift;
+    int code;
+
+    if (rwidth == 0 || rheight == 0)
+        return_error(gs_error_unregistered); /* Must not happen. */
+    fit_fill_xy(dev, x, y, w, h);
+    if (w == 0 || h == 0)
+        return 0;
+
+    /* Loop over as many tiles as we need vertically */
+    while (1) {
+        int xoff = (shift == 0 ? px :
+                                 px + (y + py) / rheight * tiles->rep_shift);
+        /* irx = x offset within the tile to start copying from */
+        int irx = ((rwidth & (rwidth - 1)) == 0 ?	/* power of 2 */
+                   (x + xoff) & (rwidth - 1) :
+                   (x + xoff) % rwidth);
+        /* ry = y offset within the tile to start copying from */
+        int ry = ((rheight & (rheight - 1)) == 0 ?	/* power of 2 */
+                  (y + py) & (rheight - 1) :
+                  (y + py) % rheight);
+        /* icw = how many bits we can copy before we run out of tile and need to loop */
+        int icw = width - irx;
+        /* ch = how many rows we can copy before we run out of tile and need to loop */
+        int ch = height - ry;
+        byte *row0 = tiles->data + ry * raster;
+
+        /* Loop per line */
+        do {
+            byte *row = row0;
+            int w2 = w;
+            int left_in_tile = icw;
+            int runlen = 0;
+            int bit = 1<<((7-irx) & 7);
+            int x2 = x;
+            if (left_in_tile > w2)
+                left_in_tile = w2;
+
+            /* Loop per row */
+            while (w2) {
+                while (left_in_tile && ((bit & *row) == 0)) {
+                    bit >>= 1;
+                    if (bit == 0)
+                        bit = 128, row++;
+                    left_in_tile--;
+                    runlen++;
+                }
+                if (runlen) {
+                    gs_fixed_rect rect;
+                    rect.p.x = int2fixed(x2);
+                    rect.p.y = int2fixed(y);
+                    rect.q.x = rect.p.x + int2fixed(runlen);
+                    rect.q.y = rect.p.y + int2fixed(1);
+                    /* Pure colours are only used to signal transparency */
+                    if (pdcolor0->type != gx_dc_type_pure) {
+                        code = dev_proc(dev, fill_rectangle_hl_color)(dev, &rect, NULL, pdcolor0, NULL);
+                        if (code < 0)
+                            return code;
+                    }
+                    x2 += runlen;
+                    w2 -= runlen;
+                    runlen = 0;
+                }
+                while (left_in_tile && ((bit & *row) != 0)) {
+                    bit >>= 1;
+                    if (bit == 0)
+                        bit = 128, row++;
+                    left_in_tile--;
+                    runlen++;
+                }
+                if (runlen) {
+                    gs_fixed_rect rect;
+                    rect.p.x = int2fixed(x2);
+                    rect.p.y = int2fixed(y);
+                    rect.q.x = rect.p.x + int2fixed(runlen);
+                    rect.q.y = rect.p.y + int2fixed(1);
+                    /* Pure colours are only used to signal transparency */
+                    if (pdcolor1->type != gx_dc_type_pure) {
+                        code = dev_proc(dev, fill_rectangle_hl_color)(dev, &rect, NULL, pdcolor1, NULL);
+                        if (code < 0)
+                            return code;
+                    }
+                    x2 += runlen;
+                    w2 -= runlen;
+                    runlen = 0;
+                }
+                if (left_in_tile == 0) {
+                    left_in_tile = rwidth;
+                    if (left_in_tile > w2)
+                        left_in_tile = w2;
+                }
+            }
+
+            /* That's a line complete. */
+            y++;
+            if (--h == 0)
+                return 0;
+            row0 += raster;
+        } while (--ch != 0); /* Until we finish a tile vertically */
+    }
 }
 
 /* Default implementation of strip_tile_rectangle */

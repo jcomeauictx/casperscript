@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -462,7 +462,10 @@ gs_opendevice(gx_device *dev)
 
         if (code < 0)
             return_error(code);
-        dev->is_open = true;
+        while (dev) {
+            dev->is_open = true;
+            dev = dev->child;
+        }
         return 1;
     }
 }
@@ -1069,7 +1072,8 @@ gx_device_copy_params(gx_device *dev, const gx_device *target)
 static int
 gx_parse_output_format(gs_parsed_file_name_t *pfn, const char **pfmt)
 {
-    bool have_format = false, field;
+    bool have_format = false;
+    int32_t field;
     uint width[2], int_width = sizeof(int) * 3, w = 0;
     uint i;
 

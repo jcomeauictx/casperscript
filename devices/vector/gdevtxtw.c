@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -729,6 +729,9 @@ static int decorated_text_output(gx_device_txtwrite_t *tdev)
                         } else {
                             block_line->next = (page_text_list_t *)gs_malloc(tdev->memory->stable_memory, 1,
                                 sizeof(page_text_list_t), "txtwrite alloc Y-list");
+                            if (block_line->next == NULL)
+                                return_error(gs_error_VMerror);
+
                             memset(block_line->next, 0x00, sizeof(page_text_list_t));
                             block_line = block_line->next;
                             block_line->x_ordered_list = x_entry;
@@ -771,6 +774,9 @@ static int decorated_text_output(gx_device_txtwrite_t *tdev)
                 } else {
                     block.y_ordered_list = block_line = (page_text_list_t *)gs_malloc(tdev->memory->stable_memory, 1,
                         sizeof(page_text_list_t), "txtwrite alloc Y-list");
+                    if (block.y_ordered_list == NULL)
+                        return_error(gs_error_VMerror);
+
                     memset(block_line, 0x00, sizeof(page_text_list_t));
                     block_line->x_ordered_list = y_list->x_ordered_list;
                     y_list->x_ordered_list = y_list->x_ordered_list->next;
@@ -1857,23 +1863,23 @@ textw_text_process(gs_text_enum_t *pte)
          * decoded, and this temporary buffer will be discarded.
          */
         penum->TextBuffer = (unsigned short *)gs_malloc(tdev->memory->stable_memory,
-            pte->text.size * 4, sizeof(unsigned short), "txtwrite temporary text buffer");
+            (size_t)pte->text.size * 4, sizeof(unsigned short), "txtwrite temporary text buffer");
         if (!penum->TextBuffer)
             return gs_note_error(gs_error_VMerror);
         penum->Widths = (float *)gs_malloc(tdev->memory->stable_memory,
-            pte->text.size * 4, sizeof(float), "txtwrite temporary widths array");
+            (size_t)pte->text.size * 4, sizeof(float), "txtwrite temporary widths array");
         if (!penum->Widths)
             return gs_note_error(gs_error_VMerror);
         penum->Advs = (float *)gs_malloc(tdev->memory->stable_memory,
-            pte->text.size * 4, sizeof(float), "txtwrite temporary advs array");
+            (size_t)pte->text.size * 4, sizeof(float), "txtwrite temporary advs array");
         if (!penum->Advs)
             return gs_note_error(gs_error_VMerror);
         penum->GlyphWidths = (float *)gs_malloc(tdev->memory->stable_memory,
-            pte->text.size * 4, sizeof(float), "txtwrite temporary glyphwidths array");
+            (size_t)pte->text.size * 4, sizeof(float), "txtwrite temporary glyphwidths array");
         if (!penum->GlyphWidths)
             return gs_note_error(gs_error_VMerror);
         penum->SpanDeltaX = (float *)gs_malloc(tdev->memory->stable_memory,
-            pte->text.size * 4, sizeof(float), "txtwrite temporary spandeltax array");
+            (size_t)pte->text.size * 4, sizeof(float), "txtwrite temporary spandeltax array");
         if (!penum->SpanDeltaX)
             return gs_note_error(gs_error_VMerror);
     }

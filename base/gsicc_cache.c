@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1459,7 +1459,7 @@ create_named_profile(gs_memory_t *mem, cmm_profile_t *named_profile)
     /* Parse buffer and load the structure we will be searching */
     buffptr = (char*)named_profile->buffer;
     buffer_count = named_profile->buffer_size;
-    count = sscanf(buffptr, "%d", &num_entries);
+    count = sscanf(buffptr, "%ud", &num_entries);
     if (num_entries < 1 || count <= 0) {
         gs_free(mem, namedcolor_table, 1, sizeof(gsicc_namedcolortable_t),
             "create_named_profile");
@@ -1490,6 +1490,8 @@ create_named_profile(gs_memory_t *mem, cmm_profile_t *named_profile)
         }
         /* Remove any /0d /0a stuff from start */
         temp_ptr = pch;
+        if (pch == NULL)
+            return_error(gs_error_unknownerror);
         done = 0;
         while (!done) {
             if (*temp_ptr == 0x0d || *temp_ptr == 0x0a) {
@@ -1521,6 +1523,8 @@ create_named_profile(gs_memory_t *mem, cmm_profile_t *named_profile)
             namedcolor_data[k].name_size + 1);
         for (j = 0; j < 3; j++) {
             pch = gs_strtok(NULL, ",;", &last);
+            if (pch == NULL)
+                return_error(gs_error_unknownerror);
             count = sscanf(pch, "%f", &(lab[j]));
         }
         lab[0] = lab[0] * 65535 / 100.0;

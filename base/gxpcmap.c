@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -314,12 +314,16 @@ new_pattern_trans_buff(gs_memory_t *mem)
 
     /* Allocate structure that we will use for the trans pattern */
     result = gs_alloc_struct(mem, gx_pattern_trans_t, &st_pattern_trans, "new_pattern_trans_buff");
-    result->transbytes = NULL;
-    result->pdev14 = NULL;
-    result->mem = NULL;
-    result->fill_trans_buffer = NULL;
-    result->buf = NULL;
-    result->n_chan = 0;
+
+    if (result != NULL) {
+        result->transbytes = NULL;
+        result->pdev14 = NULL;
+        result->mem = NULL;
+        result->fill_trans_buffer = NULL;
+        result->buf = NULL;
+        result->n_chan = 0;
+        result->rect.p.x = result->rect.p.y = result->rect.q.x = result->rect.q.y = 0;
+    }
 
     return(result);
 }
@@ -860,6 +864,9 @@ gx_pattern_alloc_cache(gs_memory_t * mem, uint num_tiles, ulong max_bits)
 #else
         tiles->tbits.data = 0;
         tiles->tmask.data = 0;
+        tiles->tmask.rep_width = 0;
+        tiles->tmask.rep_height = 0;
+        tiles->tmask.num_planes = 0;
 #endif
         tiles->index = i;
         tiles->cdev = NULL;
@@ -1564,7 +1571,7 @@ gx_pattern_load(gx_device_color * pdc, const gs_gstate * pgs,
     code = (*pinst->templat.PaintProc)(&pdc->ccolor, saved);
     if (code < 0) {
         if (dev_proc(adev, open_device) == pattern_accum_open) {
-            // free pattern cache data that never got added to the dictionary
+            /* free pattern cache data that never got added to the dictionary */
             gx_device_pattern_accum *padev = (gx_device_pattern_accum *) adev;
             if ((padev->bits != NULL) && (padev->bits->base != NULL)) {
                 gs_free_object(padev->bits->memory, padev->bits->base, "mem_open");
@@ -1650,7 +1657,7 @@ gx_pattern_load(gx_device_color * pdc, const gs_gstate * pgs,
 
 fail:
     if (dev_proc(adev, open_device) == pattern_accum_open) {
-        // free pattern cache data that never got added to the dictionary
+        /* free pattern cache data that never got added to the dictionary */
         gx_device_pattern_accum *padev = (gx_device_pattern_accum *) adev;
         if ((padev->bits != NULL) && (padev->bits->base != NULL)) {
             gs_free_object(padev->bits->memory, padev->bits->base, "mem_open");

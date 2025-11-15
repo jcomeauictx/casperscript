@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1192,10 +1192,20 @@ image_init_color_cache(gx_image_enum * penum, int bps, int spp)
     penum->color_cache = gs_alloc_struct(penum->memory, gx_image_color_cache_t,
                                          &st_color_cache,
                                          "image_init_color_cache");
+    if (penum->color_cache == NULL)
+        return_error(gs_error_VMerror);
+
     penum->color_cache->device_contone = (byte*) gs_alloc_bytes(penum->memory,
-                   num_des_comp * num_entries * sizeof(byte), "image_init_color_cache");
+                   (size_t)num_des_comp * num_entries * sizeof(byte), "image_init_color_cache");
     penum->color_cache->is_transparent = (bool*) gs_alloc_bytes(penum->memory,
-             num_entries * sizeof(bool), "image_init_color_cache");
+             (size_t)num_entries * sizeof(bool), "image_init_color_cache");
+    if (penum->color_cache->device_contone == NULL || penum->color_cache->is_transparent == NULL) {
+        gs_free_object(penum->memory, penum->color_cache->device_contone, "image_init_color_cache");
+        gs_free_object(penum->memory, penum->color_cache->is_transparent, "image_init_color_cache");
+        gs_free_object(penum->memory, penum->color_cache, "image_init_color_cache");
+        penum->color_cache = NULL;
+        return_error(gs_error_VMerror);
+    }
     /* Initialize */
     memset(penum->color_cache->is_transparent,0,num_entries * sizeof(bool));
     /* Depending upon if we need decode and ICC CM, fill the cache a couple
@@ -1257,6 +1267,9 @@ image_init_color_cache(gx_image_enum * penum, int bps, int spp)
         temp_buffer = (byte*) gs_alloc_bytes(penum->memory,
                                              (size_t)num_entries * num_src_comp,
                                              "image_init_color_cache");
+        if (temp_buffer == NULL)
+            return_error(gs_error_VMerror);
+
         if (need_decode) {
             if (is_indexed) {
                 /* Decode and lookup in index */

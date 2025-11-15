@@ -1,4 +1,4 @@
-/* Copyright (C) 2018-2024 Artifex Software, Inc.
+/* Copyright (C) 2018-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -561,7 +561,11 @@ static int get_shading_common(pdf_context *ctx, pdf_dict *shading_dict, gs_shadi
         pcc->pattern = 0;
         params->Background = pcc;
 
-        temp = (double *)gs_alloc_bytes(ctx->memory, num_comp * sizeof(double), "temporary array of doubles");
+        temp = (double *)gs_alloc_bytes(ctx->memory, (size_t)num_comp * sizeof(double), "temporary array of doubles");
+        if (temp == NULL) {
+            code = gs_error_VMerror;
+            goto get_shading_common_error;
+        }
         for(i=0;i<num_comp;i++) {
             code = pdfi_array_get_number(ctx, a, i, &temp[i]);
             if (code < 0) {
@@ -864,8 +868,8 @@ int pdfi_shading(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict)
     pdfi_pop(ctx, 1);
 
     if (pdfi_type_of(n) != PDF_NAME) {
-        code = gs_note_error(gs_error_typecheck);
-        goto exit1;
+        pdfi_countdown(n);
+        return gs_note_error(gs_error_typecheck);
     }
 
     code = pdfi_loop_detector_mark(ctx);

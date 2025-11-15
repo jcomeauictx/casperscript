@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -157,7 +157,7 @@ pdf_pattern(gx_device_pdf *pdev, const gx_drawing_color *pdc,
 
         if (pcd_XObject == 0)
             return_error(gs_error_VMerror);
-        gs_snprintf(key, sizeof(key), "/R%ld", pcs_image->id);
+        gs_snprintf(key, sizeof(key), "/R%"PRId64"", pcs_image->id);
         /* This is non-obvious code. Previously we would put the image object (pcs_image)
          * into the Resources dit. When we come to write out the Resources dict
          * that code writes a reference (index 0 R) using the ID from the object.
@@ -168,6 +168,9 @@ pdf_pattern(gx_device_pdf *pdev, const gx_drawing_color *pdc,
          * all that the writing code will use, we cna avoid the double pointers.
          */
         object = cos_reference_alloc(pdev, "pdf_pattern(reference copy of XObject)");
+        if (object == NULL)
+            return_error(gs_error_VMerror);
+
         object->id = pcs_image->id;
         COS_OBJECT_VALUE(&v, object);
         if ((code = cos_dict_put(pcd_XObject, (byte *)key, strlen(key), &v)) < 0 ||
@@ -203,7 +206,7 @@ pdf_pattern(gx_device_pdf *pdev, const gx_drawing_color *pdc,
     {
         char buf[MAX_REF_CHARS + 6 + 1]; /* +6 for /R# Do\n */
 
-        gs_snprintf(buf, sizeof(buf), "/R%ld Do\n", pcs_image->id);
+        gs_snprintf(buf, sizeof(buf), "/R%"PRId64" Do\n", pcs_image->id);
         cos_stream_add_bytes(pdev, pcos, (const byte *)buf, strlen(buf));
     }
 

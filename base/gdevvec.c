@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -477,7 +477,7 @@ gdev_vector_prepare_stroke(gx_device_vector * vdev,
             float *pattern;
             int i, code;
 
-            pattern = (float *)gs_alloc_bytes(vdev->memory->stable_memory, pattern_size * sizeof(float), "vector allocate dash pattern");
+            pattern = (float *)gs_alloc_bytes(vdev->memory->stable_memory, (size_t)pattern_size * sizeof(float), "vector allocate dash pattern");
             if (pattern == NULL)
                 return_error(gs_error_VMerror);
             for (i = 0; i < pattern_size; ++i)
@@ -956,7 +956,7 @@ gdev_vector_end_image(gx_device_vector * vdev,
         }
         code = 1;
     }
-    if (vdev->bbox_device) {
+    if (vdev->bbox_device && pie->bbox_info) {
         int bcode = gx_image_end(pie->bbox_info, draw_last);
 
         if (bcode < 0)

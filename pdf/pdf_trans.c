@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2024 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -49,6 +49,15 @@ static void
 pdfi_set_GrayBackground(gs_transparency_mask_params_t *params)
 {
     float num;
+    int i;
+
+    for (i = 0; i < params->Background_components; i++)
+    {
+        if (params->Background[i] < 0)
+            params->Background[i] = 0;
+        else if (params->Background[i] > 1)
+            params->Background[i] = 1;
+    }
 
     /* This uses definition from PLRM2 6.2.1 and 6.2.2 */
     /* TODO: We are assuming 3 components is RGB and 4 components is CMYK,
@@ -67,8 +76,6 @@ pdfi_set_GrayBackground(gs_transparency_mask_params_t *params)
         */
         num = 0.3*params->Background[0] + 0.59*params->Background[1] +
             0.11*params->Background[2] + params->Background[3];
-        if (num > 1)
-            num = 1;
         params->GrayBackground = 1 - num;
         break;
     case 1:
@@ -78,6 +85,10 @@ pdfi_set_GrayBackground(gs_transparency_mask_params_t *params)
         /* No clue... */
         params->GrayBackground = 0;
     }
+    if (params->GrayBackground < 0)
+        params->GrayBackground = 0;
+    else if (params->GrayBackground > 1)
+        params->GrayBackground = 1;
 }
 
 /* (see pdf_draw.ps/execmaskgroup) */
@@ -105,6 +116,8 @@ static int pdfi_trans_set_mask(pdf_context *ctx, pdfi_int_gstate *igs, int color
     bool Processed, ProcessedKnown = 0;
     bool save_OverrideICC = gs_currentoverrideicc(ctx->pgs);
     gs_gstate *saved_gs = NULL;
+    gs_rect clip_bbox;
+    int empty = 0;
 
 #if DEBUG_TRANSPARENCY
     dbgmprintf(ctx->memory, "pdfi_trans_set_mask (.execmaskgroup) BEGIN\n");
@@ -192,9 +205,12 @@ static int pdfi_trans_set_mask(pdf_context *ctx, pdfi_int_gstate *igs, int color
         }
 
         /* BC is Background Color array (Optional) */
-        code = pdfi_dict_knownget_type(ctx, SMask, "BC", PDF_ARRAY, (pdf_obj **)&BC);
-        if (code < 0)
-            goto exit;
+        if (subtype == TRANSPARENCY_MASK_Luminosity)
+        {
+            code = pdfi_dict_knownget_type(ctx, SMask, "BC", PDF_ARRAY, (pdf_obj **)&BC);
+            if (code < 0)
+                goto exit;
+        }
 
         code = pdfi_dict_knownget_type(ctx, G_stream_dict, "BBox", PDF_ARRAY, (pdf_obj **)&BBox);
         if (code < 0)
@@ -227,6 +243,18 @@ static int pdfi_trans_set_mask(pdf_context *ctx, pdfi_int_gstate *igs, int color
 
         /* Transform the BBox by the Matrix */
         pdfi_bbox_transform(ctx, &bbox, &group_Matrix);
+
+        if (gs_clip_bounds_in_user_space(ctx->pgs, &clip_bbox) >= 0)
+        {
+            rect_intersect(bbox, clip_bbox);
+            if (bbox.p.x >= bbox.q.x || bbox.p.y >= bbox.q.y)
+            {
+                /* If the bbox is illegal, we still need to set up an empty mask.
+                 * We can't just skip forwards as everything will now be unmasked!
+                 * We can skip doing the actual work though. */
+                empty = 1;
+            }
+        }
 
         /* CS is in the dict "Group" inside the dict "G" */
         /* TODO: Not sure if this is a required thing or just one possibility */
@@ -268,31 +296,38 @@ static int pdfi_trans_set_mask(pdf_context *ctx, pdfi_int_gstate *igs, int color
             } else {
                 int i, components = pdfi_array_size(BC);
                 double num;
+                int cspace_cmps;
 
                 if (components > GS_CLIENT_COLOR_MAX_COMPONENTS) {
                     if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_limitcheck), NULL, E_PDF_GROUP_BAD_BC_TOO_BIG, "pdfi_trans_set_mask", NULL)) < 0)
                         goto exit;
                 } else {
-                    if (gs_color_space_num_components(params.ColorSpace) != components) {
-                        pdfi_set_warning(ctx, 0, NULL, W_PDF_GROUP_BAD_BC, "pdfi_trans_set_mask", NULL);
-                        components = min(components, gs_color_space_num_components(params.ColorSpace));
+                    if ((cspace_cmps = gs_color_space_num_components(params.ColorSpace)) < 0) {
+                        if ((code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefinedresult), NULL, E_PDF_GROUP_BAD_CS, "pdfi_trans_set_mask", NULL)) < 0)
+                            goto exit;
                     }
+                    else {
+                        if (gs_color_space_num_components(params.ColorSpace) != components) {
+                            pdfi_set_warning(ctx, 0, NULL, W_PDF_GROUP_BAD_BC, "pdfi_trans_set_mask", NULL);
+                            components = min(components, gs_color_space_num_components(params.ColorSpace));
+                        }
 
-                    for (i=0; i < components; i++) {
-                        code = pdfi_array_get_number(ctx, BC, i, &num);
-                        if (code < 0)
-                            break;
-                        params.Background[i] = (float)num;
+                        for (i=0; i < components; i++) {
+                            code = pdfi_array_get_number(ctx, BC, i, &num);
+                            if (code < 0)
+                                break;
+                            params.Background[i] = (float)num;
+                        }
+                        params.Background_components = components;
+
+                        /* TODO: Not sure how to handle this...  recheck PS code (pdf_draw.ps/gssmask) */
+                        /* This should be "currentgray" for the color that we put in params.ColorSpace,
+                         * It looks super-convoluted to actually get this value.  Really?
+                         * (see zcurrentgray())
+                         * For now, use simple definition from PLRM2 and assume it is RGB or CMYK
+                         */
+                        pdfi_set_GrayBackground(&params);
                     }
-                    params.Background_components = components;
-
-                    /* TODO: Not sure how to handle this...  recheck PS code (pdf_draw.ps/gssmask) */
-                    /* This should be "currentgray" for the color that we put in params.ColorSpace,
-                     * It looks super-convoluted to actually get this value.  Really?
-                     * (see zcurrentgray())
-                     * For now, use simple definition from PLRM2 and assume it is RGB or CMYK
-                     */
-                    pdfi_set_GrayBackground(&params);
                 }
             }
         }
@@ -336,8 +371,9 @@ static int pdfi_trans_set_mask(pdf_context *ctx, pdfi_int_gstate *igs, int color
             code = gs_begin_transparency_mask(ctx->pgs, &params, &bbox, false);
 
         if (code >= 0) {
-            code = pdfi_form_execgroup(ctx, ctx->page.CurrentPageDict, G_stream,
-                                       igs->GroupGState, NULL, NULL, &group_Matrix);
+            if (!empty)
+                code = pdfi_form_execgroup(ctx, ctx->page.CurrentPageDict, G_stream,
+                                           igs->GroupGState, NULL, NULL, &group_Matrix);
             code1 = gs_end_transparency_mask(ctx->pgs, colorindex);
             if (code == 0)
                 code = code1;
@@ -422,7 +458,7 @@ static int pdfi_transparency_group_common(pdf_context *ctx, pdf_dict *page_dict,
     int code;
 
     gs_trans_group_params_init(&params, 1.0);
-    //    gs_setopacityalpha(ctx->pgs, ctx->pgs->fillconstantalpha);
+    /*    gs_setopacityalpha(ctx->pgs, ctx->pgs->fillconstantalpha); */
 
     /* It seems the flag for Isolated is /I */
     code = pdfi_dict_get_bool(ctx, group_dict, "I", &b);
@@ -622,6 +658,7 @@ int pdfi_trans_begin_isolated_group(pdf_context *ctx, bool image_with_SMask, gs_
 {
     gs_transparency_group_params_t params;
     gs_rect bbox;
+    gs_rect clip_box;
 
     gs_trans_group_params_init(&params, 1.0);
 
@@ -633,6 +670,8 @@ int pdfi_trans_begin_isolated_group(pdf_context *ctx, bool image_with_SMask, gs_
     bbox.p.y = 0;
     bbox.q.x = 1;
     bbox.q.y = 1;
+    if (gs_clip_bounds_in_user_space(ctx->pgs, &clip_box) >= 0)
+        rect_intersect(bbox, clip_box);
 
     return pdfi_gs_begin_transparency_group(ctx->pgs, &params, &bbox, PDF14_BEGIN_TRANS_GROUP);
 }
@@ -677,7 +716,7 @@ void pdfi_trans_set_needs_OP(pdf_context *ctx)
     bool device_transparency = false;
 
     /* PS code checks for >= 4 components... */
-    is_cmyk = ctx->pgs->device->color_info.num_components >= 4;
+    is_cmyk = ctx->pgs->device->color_info.num_components >= 4 && ctx->pgs->device->color_info.polarity == GX_CINFO_POLARITY_SUBTRACTIVE;
 
     device_transparency = pdfi_device_check_param_bool(ctx->pgs->device, "HaveTransparency");
 

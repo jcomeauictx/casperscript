@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -223,7 +223,7 @@ pcl_cmap_map_raster(const pcl_cs_indexed_t * pindexed,
         nbytes = ((nbytes + 7) / 8);
         pout_pixinfo->raster = nbytes;
         pout_rast = gs_alloc_bytes(pmem,
-                                   nbytes * pin_pixinfo->size.y,
+                                   (size_t)nbytes * pin_pixinfo->size.y,
                                    "re-map colored pattern raster");
         if (pout_rast == 0)
             return e_Memory;
@@ -289,7 +289,8 @@ pcl_cmap_create_remap_ary(pcl_state_t * pcs, int *pfirst_white)
     pmap = gs_alloc_bytes(pcs->memory,
                           pcl_cs_indexed_palette_size,
                           "create PCL raster remapping array");
-    memcpy(pmap, tmp_remap, pcl_cs_indexed_palette_size);
+    if (pmap != NULL)
+        memcpy(pmap, tmp_remap, pcl_cs_indexed_palette_size);
 
     return (const void *)pmap;
 }

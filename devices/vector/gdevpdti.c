@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -178,11 +178,11 @@ pdf_write_contents_bitmap(gx_device_pdf *pdev, pdf_font_resource_t *pdfont)
          pcpo = pcpo->char_next
          ) {
         if (pdfont->u.simple.s.type3.bitmap_font)
-            pprintld2(s, "/a%ld %ld 0 R\n", (long)pcpo->char_code,
+            pprinti64d2(s, "/a%"PRId64" %"PRId64" 0 R\n", pcpo->char_code,
                       pdf_char_proc_id(pcpo->char_proc));
         else if (!pcpo-> duplicate_char_name) {
             pdf_put_name(pdev, pcpo->char_name.data, pcpo->char_name.size);
-            pprintld1(s, " %ld 0 R\n", pdf_char_proc_id(pcpo->char_proc));
+            pprinti64d1(s, " %"PRId64" 0 R\n", pdf_char_proc_id(pcpo->char_proc));
         }
         pdf_record_usage_by_parent(pdev, pdf_char_proc_id(pcpo->char_proc), pdfont->object->id);
     }
@@ -294,6 +294,8 @@ pdf_attach_charproc(gx_device_pdf * pdev, pdf_font_resource_t *pdfont, pdf_char_
     } else {
         if (gnstr->size > 0) {
             pcpo->char_name.data = gs_alloc_bytes(pdev->pdf_memory->non_gc_memory, gnstr->size, "storage for charproc name");
+            if (pcpo->char_name.data == NULL)
+                return_error(gs_error_VMerror);
             memcpy(pcpo->char_name.data, gnstr->data, gnstr->size);
         }
         pcpo->char_name.size = gnstr->size;
@@ -625,6 +627,8 @@ pdf_set_charproc_attrs(gx_device_pdf *pdev, gs_font *font, double *pw, int narg,
     pdf_char_proc_t *pcp;
     int code;
 
+    if (pres == NULL)
+        return_error(gs_error_undefined);
     code = pdf_attached_font_resource(pdev, font, &pdfont, NULL, NULL, NULL, NULL);
     if (code < 0)
         return code;
@@ -1122,6 +1126,8 @@ pdf_end_charproc_accum(gx_device_pdf *pdev, gs_font *font, const pdf_char_glyph_
         return_error(gs_error_unregistered); /* Must not happen. */
     if (ch >= 256)
         return_error(gs_error_unregistered); /* Must not happen. */
+    if (pres == NULL)
+        return_error(gs_error_unregistered); /* Must not happen. */
     code = pdf_attached_font_resource(pdev, font, &pdfont, NULL, NULL, NULL, NULL);
     if (code < 0)
         return code;
@@ -1214,7 +1220,7 @@ pdf_add_resource(gx_device_pdf *pdev, cos_dict_t *pcd, const char *key, pdf_reso
             if (code < 0)
                 return code;
         }
-        gs_snprintf(buf, sizeof(buf), "%ld 0 R\n", pres->object->id);
+        gs_snprintf(buf, sizeof(buf), "%"PRId64" 0 R\n", pres->object->id);
         if (v != NULL) {
             if (v->value_type != COS_VALUE_OBJECT &&
                 v->value_type != COS_VALUE_RESOURCE)

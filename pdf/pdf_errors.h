@@ -1,4 +1,4 @@
-/* Copyright (C) 2022-2024 Artifex Software, Inc.
+/* Copyright (C) 2022-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -49,6 +49,8 @@ PARAM(E_PDF_PAGEDICTERROR,             "error reading page dictionary"),
 PARAM(E_PDF_STACKUNDERFLOWERROR,       "stack underflow"),
 PARAM(E_PDF_BADSTREAMDICT,             "error in stream dictionary"),
 PARAM(E_PDF_INHERITED_STREAM_RESOURCE, "stream inherited a resource"),
+PARAM(E_PDF_BAD_PAGE_RESOURCES,        "problem reading the Resources for a page"),
+PARAM(E_PDF_BAD_RESOURCE,              "Failed to read a type of Resource"),
 PARAM(E_PDF_DEREF_FREE_OBJ,            "Attempt to dereference a free object"),
 PARAM(E_PDF_INVALID_TRANS_XOBJECT,     "error in transparency XObject"),
 PARAM(E_PDF_NO_SUBTYPE,                "object lacks a required Subtype"),
@@ -58,6 +60,7 @@ PARAM(E_DICT_SELF_REFERENCE,           "dictionary contains a key which (indirec
 PARAM(E_IMAGE_MASKWITHCOLOR,           "Image has both ImageMask and ColorSpace keys."),
 PARAM(E_PDF_INVALID_DECRYPT_LEN,       "Invalid /Length in Encryption dictionary (not in range 40-128 or not a multiple of 8)."),
 PARAM(E_PDF_GROUP_NO_CS,               "Group attributes dictionary is missing /CS"),
+PARAM(E_PDF_GROUP_BAD_CS,              "Group attributes dictionary has an invalid /CS"),
 PARAM(E_BAD_GROUP_DICT,                "Error retrieving Group dictionary for a page or XObject"),
 PARAM(E_BAD_HALFTONE,                  "Error setting a halftone"),
 PARAM(E_PDF_BADENCRYPT,                "Encrypt diciotnary not a dictionary"),
@@ -75,6 +78,7 @@ PARAM(E_PDF_BAD_VALUE,                 "An object has an unexpected value"),
 PARAM(E_PDF_BAD_ANNOTATION,            "There was an error in an annotation"),
 PARAM(E_PDF_BAD_XREFSTMOFFSET,         "An XRefStm value did not point to a cross reference stream"),
 PARAM(E_PDF_SMASK_MISSING_G,           "An SMask is missing the required Group (/G) key, SMask was ignored"),
+PARAM(E_PDF_SMASK_IN_SMASK,            "SMaskInData when there is already an SMask"),
 PARAM(E_PDF_PS_XOBJECT_IGNORED,        "An XObject had the Subtype /PS which is deprecated, the XObject was ignored"),
 PARAM(E_PDF_TRANS_CHK_BADTYPE,         "An object (eg XObject, Pattern) being checked for transparency had the wrong type and was not checked"),
 PARAM(E_PDF_SPOT_CHK_BADTYPE,          "An object (eg Shading) being checked for spot colours had the wrong type and was not checked"),
@@ -88,4 +92,10 @@ PARAM(E_PDF_GROUP_BAD_BC_NO_CS,        "An Smask has a /BC key, but the Group at
 PARAM(E_PDF_BAD_TYPE0_CMAP,            "CMap unrecoverably broken"),
 PARAM(E_PDF_BAD_EMBEDDED_FONT,         "An embedded font is invalid"),
 PARAM(E_PDF_BAD_INDEXED_STRING,        "The string data prameter for a /Indexed colour space lookup is too short"),
+PARAM(E_PDF_EMPTY_FORM_KIDS,           "Empty /Kids array in Form field."),
+PARAM(E_PDF_BAD_JPX_CS,                "JPX ColorSpace value is an unhandled type."),
+PARAM(E_PDF_INVALID_JPX_HDR,           "invalid JPX header"),
+PARAM(E_PDF_JPX_CS_ERROR,              ""),
+PARAM(E_PDF_BAD_TTC_VERSION,           "Unknown TTC header version"),
+PARAM(E_PDF_INVALID_MATTE,             "Matte for an image is invalid"),
 #undef PARAM

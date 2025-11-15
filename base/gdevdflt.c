@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -1298,7 +1298,7 @@ int gx_device_subclass(gx_device *dev_to_subclass, gx_device *new_prototype, uns
 {
     gx_device *child_dev;
     void *psubclass_data;
-    gs_memory_struct_type_t *a_std, *b_std = NULL;
+    gs_memory_struct_type_t *a_std = NULL, *b_std = NULL;
     int dynamic = dev_to_subclass->stype_is_dynamic;
     char *ptr, *ptr1;
 
@@ -1326,8 +1326,10 @@ int gx_device_subclass(gx_device *dev_to_subclass, gx_device *new_prototype, uns
         b_std = (gs_memory_struct_type_t *)
             gs_alloc_bytes_immovable(dev_to_subclass->memory->non_gc_memory, sizeof(*b_std),
                                      "gs_device_subclass(stype)");
-        if (!b_std)
+        if (!b_std) {
+            gs_free_const_object(dev_to_subclass->memory->non_gc_memory, a_std, "gs_device_subclass(stype)");
             return_error(gs_error_VMerror);
+        }
     }
 
     /* Allocate a device structure for the new child device */
@@ -1757,7 +1759,7 @@ transform_pixel_region_render_portrait(gx_device *dev, gx_default_transform_pixe
     const byte *data = buffer[0] + data_x * spp;
     const byte *bufend = NULL;
     int code = 0;
-    const byte *run;
+    const byte *run = NULL;
     int k;
     gx_color_value *conc = &cmapper->conc[0];
     int to_rects;

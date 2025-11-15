@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -267,6 +267,34 @@ gx_cpath_init_local_shared(gx_clip_path * pcpath, const gx_clip_path * shared,
                            gs_memory_t * mem)
 {
     return gx_cpath_init_local_shared_nested(pcpath, shared, mem, 0);
+}
+
+void gx_cpath_preinit_local_rectangle(gx_clip_path *pcpath, gs_memory_t *mem)
+{
+    gx_clip_list *clp = &pcpath->local_list.list;
+    gx_path_preinit_local_rectangle(&pcpath->path, mem);
+    rc_init_free(&pcpath->local_list, mem, 1, NULL);
+    pcpath->rect_list = &pcpath->local_list;
+    gx_clip_list_init(clp);
+    clp->count = 1;
+    pcpath->path_valid = false;
+    pcpath->path_fill_adjust.x = 0;
+    pcpath->path_fill_adjust.y = 0;
+    pcpath->cached = NULL;
+    pcpath->path_list = NULL;
+}
+
+void gx_cpath_init_local_rectangle(gx_clip_path *pcpath, gs_fixed_rect *r, gs_id id)
+{
+    gx_clip_list *clp = &pcpath->local_list.list;
+    clp->single.xmin = clp->xmin = fixed2int_var(r->p.x);
+    clp->single.ymin = fixed2int_var(r->p.y);
+    clp->single.xmax = clp->xmax = fixed2int_var_ceiling(r->q.x);
+    clp->single.ymax = fixed2int_var_ceiling(r->q.y);
+    pcpath->inner_box = *r;
+    pcpath->path.bbox = *r;
+    gx_cpath_set_outer_box(pcpath);
+    pcpath->id = id;
 }
 
 /* Unshare a clipping path. */
@@ -663,7 +691,7 @@ gx_cpath_intersect_with_params(gx_clip_path *pcpath, /*const*/ gx_path *ppath_or
         ((code = gx_path_is_rectangle(ppath, &new_box)) ||
          gx_path_is_void(ppath))
         ) {
-        int changed = 0;
+        int changed = 0, same = 0;
 
         if (!code) {
             /* The new path is void. */
@@ -693,19 +721,31 @@ gx_cpath_intersect_with_params(gx_clip_path *pcpath, /*const*/ gx_path *ppath_or
                 new_box.q.y = int2fixed(fixed2int_pixround(new_box.q.y + adjust_yu));
             }
             /* Intersect the two rectangles if necessary. */
-            if (old_box.p.x >= new_box.p.x)
-                new_box.p.x = old_box.p.x, ++changed;
-            if (old_box.p.y >= new_box.p.y)
-                new_box.p.y = old_box.p.y, ++changed;
-            if (old_box.q.x <= new_box.q.x)
-                new_box.q.x = old_box.q.x, ++changed;
-            if (old_box.q.y <= new_box.q.y)
-                new_box.q.y = old_box.q.y, ++changed;
+            if (old_box.p.x == new_box.p.x)
+                ++same;
+            else
+                if (old_box.p.x > new_box.p.x)
+                    new_box.p.x = old_box.p.x, ++changed, ++same;
+            if (old_box.p.y == new_box.p.y)
+                ++same;
+            else
+                if (old_box.p.y > new_box.p.y)
+                    new_box.p.y = old_box.p.y, ++changed, ++same;
+            if (old_box.q.x == new_box.q.x)
+                ++same;
+            else
+                if (old_box.q.x < new_box.q.x)
+                    new_box.q.x = old_box.q.x, ++changed, ++same;
+            if (old_box.q.y == new_box.q.y)
+                ++same;
+            else
+                if (old_box.q.y <= new_box.q.y)
+                    new_box.q.y = old_box.q.y, ++changed, ++same;
             /* Check for a degenerate rectangle. */
             if (new_box.q.x < new_box.p.x || new_box.q.y < new_box.p.y)
                 new_box.p = new_box.q, changed = 1;
         }
-        if (changed == 4) {
+        if (same == 4) {
             /* The new box/path is the same as the old. */
             return 0;
         }

@@ -1,4 +1,4 @@
-# Copyright (C) 2001-2023 Artifex Software, Inc.
+# Copyright (C) 2001-2025 Artifex Software, Inc.
 # All Rights Reserved.
 #
 # This software is provided AS-IS with no warranty, either express or
@@ -50,6 +50,7 @@ GLCCSHARED=$(CC_SHARED) $(GLCCFLAGS)
 
 GLJCC=$(CC) $(I_)$(GLI_) $(II)$(JI_)$(_I) $(JCF_) $(GLF_) $(CCFLAGS)
 GLZCC=$(CC) $(I_)$(GLI_) $(II)$(ZI_)$(_I) $(ZCF_) $(GLF_) $(CCFLAGS)
+GLBROTLICC=$(CC) $(I_)$(GLI_) $(II)$(BROTLII_)$(_I) $(ZCF_) $(GLF_) $(CCFLAGS)
 GLJBIG2CC=$(CC) $(I_)$(GLI_) $(II)$(JB2I_)$(_I) $(JB2CF_) $(GLF_) $(CCFLAGS)
 GLJASCC=$(CC) $(I_)$(JPXI_) $(II)$(GLI_)$(_I) $(JPXCF_) $(GLF_) $(CCFLAGS)
 GLJPXOPJCC=$(CC) $(I_)$(JPX_OPENJPEG_I_)$(D).. $(I_)$(JPX_OPENJPEG_I_) $(II)$(GLI_)$(_I) $(JPXCF_) $(GLF_) $(CCFLAGS)
@@ -586,7 +587,6 @@ gdevepo_h=$(GLSRC)gdevepo.h
 
 sa85d_h=$(GLSRC)sa85d.h
 sa85x_h=$(GLSRC)sa85x.h
-sbcp_h=$(GLSRC)sbcp.h
 sbtx_h=$(GLSRC)sbtx.h
 scanchar_h=$(GLSRC)scanchar.h
 sfilter_h=$(GLSRC)sfilter.h
@@ -615,6 +615,15 @@ zlib_h=$(ZSRCDIR)$(D)zlib.h
 # and 'local' zlib (_0)
 szlibxx_h_1=$(GLSRC)szlibxx.h $(szlibx_h)
 szlibxx_h_0=$(GLSRC)szlibxx.h $(szlibx_h) $(zlib_h)
+sbrotlix_h=$(GLSRC)sbrotlix.h
+brotli_h=\
+	$(BROTLISRCDIR)$(D)c$(D)include$(D)brotli$(D)types.h \
+	$(BROTLISRCDIR)$(D)c$(D)include$(D)brotli$(D)encode.h \
+	$(BROTLISRCDIR)$(D)c$(D)include$(D)brotli$(D)decode.h
+# We have two of the following, for shared zlib (_1)
+# and 'local' zlib (_0)
+sbrotli_h_1=$(sbrotlix_h)
+sbrotli_h_0=$(sbrotlix_h) $(brotli_h)
 # Out of order
 scf_h=$(GLSRC)scf.h
 scfx_h=$(GLSRC)scfx.h
@@ -1577,12 +1586,6 @@ $(GLOBJ)strmio.$(OBJ) : $(GLSRC)strmio.c $(AK) $(malloc__h)\
  $(gserrors_h) $(LIB_MAK) $(MAKEDIRS)
 	$(GLCC) $(GLO_)strmio.$(OBJ) $(C_) $(GLSRC)strmio.c
 
-# ---------------- BCP filters ---------------- #
-
-$(GLOBJ)sbcp.$(OBJ) : $(GLSRC)sbcp.c $(AK) $(stdio__h)\
- $(sbcp_h) $(strimpl_h) $(LIB_MAK) $(MAKEDIRS)
-	$(GLCC) $(GLO_)sbcp.$(OBJ) $(C_) $(GLSRC)sbcp.c
-
 # ---------------- CCITTFax filters ---------------- #
 # These are used by clists, some drivers, and Level 2 in general.
 
@@ -2051,6 +2054,101 @@ $(GLOBJ)szlibd_0.$(OBJ) : $(GLSRC)szlibd.c $(AK) $(std_h) $(memory__h)\
 
 $(GLOBJ)szlibd.$(OBJ) : $(GLOBJ)szlibd_$(SHARE_ZLIB).$(OBJ) $(LIB_MAK) $(MAKEDIRS)
 	$(CP_) $(GLOBJ)szlibd_$(SHARE_ZLIB).$(OBJ) $(GLOBJ)szlibd.$(OBJ)
+
+# ---------------- brotli filters ---------------- #
+# These are used by pdfi and are also available as filters.
+
+sbrotlic_=$(GLOBJ)sbrotlic.$(OBJ)
+
+$(GLOBJ)sbrotlic_.$(OBJ) : $(GLSRC)sbrotlic.c $(AK) $(std_h)\
+ $(gserrors_h) $(gsmemory_h) \
+ $(gsstruct_h) $(gstypes_h)\
+ $(strimpl_h) $(sbrotlix_h_1) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=0$(_D) $(GLO_)sbrotlic_.$(OBJ) $(C_) $(GLSRC)sbrotlic.c
+
+$(GLOBJ)sbrotlic_1.$(OBJ) : $(GLSRC)sbrotlic.c $(AK) $(std_h)\
+ $(gserrors_h) $(gsmemory_h) \
+ $(gsstruct_h) $(gstypes_h)\
+ $(strimpl_h) $(sbrotlix_h_1) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=1$(_D) $(GLO_)sbrotlic_1.$(OBJ) $(C_) $(GLSRC)sbrotlic.c
+
+$(GLOBJ)sbrotlic_0.$(OBJ) : $(GLSRC)sbrotlic.c $(AK) $(std_h)\
+ $(gserrors_h) $(gsmemory_h) \
+ $(gsstruct_h) $(gstypes_h) $(brotli_h)\
+ $(strimpl_h) $(sbrotlix_h_0) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=1$(_D) $(GLO_)sbrotlic_0.$(OBJ) $(C_) $(GLSRC)sbrotlic.c
+
+$(GLOBJ)sbrotlic.$(OBJ) : $(GLOBJ)sbrotlic_$(SHARE_BROTLI).$(OBJ) $(LIB_MAK) $(MAKEDIRS)
+	$(CP_) $(GLOBJ)sbrotlic_$(SHARE_BROTLI).$(OBJ) $(GLOBJ)sbrotlic.$(OBJ)
+
+sbrotlie_=$(sbrotlic_) $(GLOBJ)sbrotlie.$(OBJ)
+
+$(GLD)sbrotlie_.dev : $(LIB_MAK) $(ECHOGS_XE) $(sbrotlie_) \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(SETMOD) $(GLD)sbrotlie_ $(sbrotlie_)
+
+$(GLD)sbrotlie_0.dev : $(LIB_MAK) $(ECHOGS_XE) $(ZGENDIR)$(D)brotlie.dev $(sbrotlie_) \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(SETMOD) $(GLD)sbrotlie_0 $(sbrotlie_)
+	$(ADDMOD) $(GLD)sbrotlie_0 -include $(ZGENDIR)$(D)brotlie.dev
+
+$(GLD)sbrotlie_1.dev : $(LIB_MAK) $(ECHOGS_XE) $(ZGENDIR)$(D)brotlie.dev $(sbrotlie_) \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(SETMOD) $(GLD)sbrotlie_1 $(sbrotlie_)
+	$(ADDMOD) $(GLD)sbrotlie_1 -include $(ZGENDIR)$(D)brotlie.dev
+
+$(GLD)sbrotlie.dev : $(LIB_MAK) $(ECHOGS_XE) $(GLD)sbrotlie_$(SHARE_BROTLI).dev $(sbrotlie_) \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(CP_) $(GLD)sbrotlie_$(SHARE_BROTLI).dev $(GLD)sbrotlie.dev
+
+$(GLOBJ)sbrotlie_.$(OBJ) : $(GLSRC)sbrotlie.c $(AK) $(std_h)\
+ $(strimpl_h) $(sbrotlix_h_1) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=0$(_D) $(GLO_)sbrotlie_.$(OBJ) $(C_) $(GLSRC)sbrotlie.c
+
+$(GLOBJ)sbrotlie_1.$(OBJ) : $(GLSRC)sbrotlie.c $(AK) $(std_h)\
+ $(strimpl_h) $(sbrotlix_h_1) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=1$(_D) $(GLO_)sbrotlie_1.$(OBJ) $(C_) $(GLSRC)sbrotlie.c
+
+$(GLOBJ)sbrotlie_0.$(OBJ) : $(GLSRC)sbrotlie.c $(AK) $(std_h)\
+ $(strimpl_h) $(sbrotlix_h_0) $(brotli_h) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=1$(_D) $(GLO_)sbrotlie_0.$(OBJ) $(C_) $(GLSRC)sbrotlie.c
+
+$(GLOBJ)sbrotlie.$(OBJ) : $(GLOBJ)sbrotlie_$(SHARE_BROTLI).$(OBJ)  $(LIB_MAK) $(MAKEDIRS)
+	$(CP_) $(GLOBJ)sbrotlie_$(SHARE_BROTLI).$(OBJ) $(GLOBJ)sbrotlie.$(OBJ)
+
+sbrotlid_=$(sbrotlic_) $(GLOBJ)sbrotlid.$(OBJ)
+$(GLD)sbrotlid_.dev : $(LIB_MAK) $(ECHOGS_XE) $(sbrotlid_) \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(SETMOD) $(GLD)sbrotlid_ $(sbrotlid_)
+
+$(GLD)sbrotlid_0.dev : $(LIB_MAK) $(ECHOGS_XE) $(ZGENDIR)$(D)brotlid.dev $(sbrotlid_) \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(SETMOD) $(GLD)sbrotlid_0 $(sbrotlid_)
+	$(ADDMOD) $(GLD)sbrotlid_0 -include $(ZGENDIR)$(D)brotlid.dev
+
+$(GLD)sbrotlid_1.dev : $(LIB_MAK) $(ECHOGS_XE) $(ZGENDIR)$(D)brotlid.dev $(sbrotlid_) \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(SETMOD) $(GLD)sbrotlid_1 $(sbrotlid_)
+	$(ADDMOD) $(GLD)sbrotlid_1 -include $(ZGENDIR)$(D)brotlid.dev
+
+$(GLD)sbrotlid.dev : $(LIB_MAK) $(ECHOGS_XE) $(GLD)sbrotlid_$(SHARE_BROTLI).dev \
+ $(LIB_MAK) $(MAKEDIRS)
+	$(CP_) $(GLD)sbrotlid_$(SHARE_BROTLI).dev $(GLD)sbrotlid.dev
+
+$(GLOBJ)sbrotlid_.$(OBJ) : $(GLSRC)sbrotlid.c $(AK) $(std_h) $(memory__h)\
+ $(strimpl_h) $(sbrotlix_h_1) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=0$(_D) $(GLO_)sbrotlid_.$(OBJ) $(C_) $(GLSRC)sbrotlid.c
+
+$(GLOBJ)sbrotlid_1.$(OBJ) : $(GLSRC)sbrotlid.c $(AK) $(std_h) $(memory__h)\
+ $(strimpl_h) $(sbrotlix_h_1) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=1$(_D) $(GLO_)sbrotlid_1.$(OBJ) $(C_) $(GLSRC)sbrotlid.c
+
+$(GLOBJ)sbrotlid_0.$(OBJ) : $(GLSRC)sbrotlid.c $(AK) $(std_h) $(memory__h)\
+ $(strimpl_h) $(sbrotlix_h_0) $(brotli_h) $(LIB_MAK) $(MAKEDIRS)
+	$(GLBROTLICC) $(D_)ENABLE_BROTLI=1$(_D) $(GLO_)sbrotlid_0.$(OBJ) $(C_) $(GLSRC)sbrotlid.c
+
+$(GLOBJ)sbrotlid.$(OBJ) : $(GLOBJ)sbrotlid_$(SHARE_BROTLI).$(OBJ) $(LIB_MAK) $(MAKEDIRS)
+	$(CP_) $(GLOBJ)sbrotlid_$(SHARE_BROTLI).$(OBJ) $(GLOBJ)sbrotlid.$(OBJ)
 
 # ---------------- Page devices ---------------- #
 # We include this here, rather than in devs.mak, because it is more like
@@ -2682,7 +2780,7 @@ $(GLOBJ)gxtype1.$(OBJ) : $(GLSRC)gxtype1.c $(AK) $(gx_h) $(gserrors_h)\
 	$(GLCC) $(GLO_)gxtype1.$(OBJ) $(C_) $(GLSRC)gxtype1.c
 
 $(GLOBJ)gxhintn.$(OBJ) : $(GLSRC)gxhintn.c $(AK) $(gx_h) $(gserrors_h)\
- $(memory__h) $(math__h)\
+ $(memory__h) $(math__h) $(assert__h) \
  $(gxfixed_h) $(gxarith_h) $(gstypes_h) $(gxmatrix_h)\
  $(gxpath_h) $(gzpath_h) $(gxhintn_h) $(gxfont_h) $(gxfont1_h) $(gxtype1_h)\
  $(LIB_MAK) $(MAKEDIRS)
@@ -3624,11 +3722,40 @@ $(GLOBJ)pdlromfs1c2.$(OBJ) : $(GLOBJ)pdlromfs1c2.c $(time__h) $(LIB_MAK) $(MAKED
 $(GLOBJ)pdlromfs1c3.$(OBJ) : $(GLOBJ)pdlromfs1c3.c $(time__h) $(LIB_MAK) $(MAKEDIRS)
 	$(GLCC) $(GLO_)pdlromfs1c3.$(OBJ) $(C_) $(GLOBJ)pdlromfs1c3.c
 
-# Define the ZLIB modules needed by mnkromfs here to factor it out of top makefiles
+# Define the ZLIB modules needed by mkromfs here to factor it out of top makefiles
 # Also put the .h dependencies here for the same reason
 MKROMFS_ZLIB_OBJS=$(AUX)compress.$(OBJ) $(AUX)deflate.$(OBJ) \
 	$(AUX)zutil.$(OBJ) $(AUX)adler32.$(OBJ) $(AUX)crc32.$(OBJ) \
 	$(AUX)trees.$(OBJ)
+
+MKROMFS_BROTLI_OBJS=\
+	$(AUX)constants.$(OBJ) \
+	$(AUX)context.$(OBJ) \
+	$(AUX)dictionary.$(OBJ) \
+	$(AUX)platform.$(OBJ) \
+	$(AUX)shared_dictionary.$(OBJ) \
+	$(AUX)transform.$(OBJ) \
+	$(AUX)backward_references.$(OBJ) \
+	$(AUX)backward_references_hq.$(OBJ) \
+	$(AUX)bit_cost.$(OBJ) \
+	$(AUX)block_splitter.$(OBJ) \
+	$(AUX)brotli_bit_stream.$(OBJ) \
+	$(AUX)cluster.$(OBJ) \
+	$(AUX)command.$(OBJ) \
+	$(AUX)compound_dictionary.$(OBJ) \
+	$(AUX)compress_fragment.$(OBJ) \
+	$(AUX)compress_fragment_two_pass.$(OBJ) \
+	$(AUX)dictionary_hash.$(OBJ) \
+	$(AUX)br_encode.$(OBJ) \
+	$(AUX)encoder_dict.$(OBJ) \
+	$(AUX)entropy_encode.$(OBJ) \
+	$(AUX)fast_log.$(OBJ) \
+	$(AUX)histogram.$(OBJ) \
+	$(AUX)literal_cost.$(OBJ) \
+	$(AUX)memory.$(OBJ) \
+	$(AUX)metablock.$(OBJ) \
+	$(AUX)static_dict.$(OBJ) \
+	$(AUX)utf8_util.$(OBJ)
 
 MKROMFS_COMMON_DEPS=$(stdpre_h) $(stdint__h) $(gsiorom_h) $(arch_h)\
 	$(gsmemret_h) $(gsmalloc_h) $(gsstype_h) $(gp_h) $(time__h)
@@ -9081,18 +9208,6 @@ $(GLSRC)sa85x.h:$(GLSRC)std.h
 $(GLSRC)sa85x.h:$(GLSRC)stdpre.h
 $(GLSRC)sa85x.h:$(GLGEN)arch.h
 $(GLSRC)sa85x.h:$(GLSRC)gs_dll_call.h
-$(GLSRC)sbcp.h:$(GLSRC)scommon.h
-$(GLSRC)sbcp.h:$(GLSRC)gsstype.h
-$(GLSRC)sbcp.h:$(GLSRC)gsmemory.h
-$(GLSRC)sbcp.h:$(GLSRC)gslibctx.h
-$(GLSRC)sbcp.h:$(GLSRC)stdio_.h
-$(GLSRC)sbcp.h:$(GLSRC)stdint_.h
-$(GLSRC)sbcp.h:$(GLSRC)gssprintf.h
-$(GLSRC)sbcp.h:$(GLSRC)gstypes.h
-$(GLSRC)sbcp.h:$(GLSRC)std.h
-$(GLSRC)sbcp.h:$(GLSRC)stdpre.h
-$(GLSRC)sbcp.h:$(GLGEN)arch.h
-$(GLSRC)sbcp.h:$(GLSRC)gs_dll_call.h
 $(GLSRC)sbtx.h:$(GLSRC)scommon.h
 $(GLSRC)sbtx.h:$(GLSRC)gsstype.h
 $(GLSRC)sbtx.h:$(GLSRC)gsmemory.h

@@ -1,4 +1,4 @@
-/* Copyright (C) 2020-2024 Artifex Software, Inc.
+/* Copyright (C) 2020-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -209,7 +209,7 @@ pdfi_pscript_interpret(pdf_ps_ctx_t *cs, byte *pdfpsbuf, int64_t buflen)
                     int i, size = pdf_ps_stack_count_to_mark(cs, PDF_PS_OBJ_ARR_MARK);
 
                     if (size > 0 && arraydepth > 0) {
-                        arr = (pdf_ps_stack_object_t *) gs_alloc_bytes(cs->pdfi_ctx->memory, size * sizeof(pdf_ps_stack_object_t), "pdfi_pscript_interpret(pdf_ps_stack_object_t");
+                        arr = (pdf_ps_stack_object_t *) gs_alloc_bytes(cs->pdfi_ctx->memory, (size_t)size * sizeof(pdf_ps_stack_object_t), "pdfi_pscript_interpret(pdf_ps_stack_object_t");
                         if (arr == NULL) {
                             code = gs_note_error(gs_error_VMerror);
                             /* clean up the stack, including the mark object */
@@ -266,7 +266,7 @@ pdfi_pscript_interpret(pdf_ps_ctx_t *cs, byte *pdfpsbuf, int64_t buflen)
                         pdfpsbuf = n + 1;
                         goto retry_as_oper;
                     }
-                    numbuf = gs_alloc_bytes(cs->pdfi_ctx->memory, len + 1, "ps pdf number buffer");
+                    numbuf = gs_alloc_bytes(cs->pdfi_ctx->memory, (size_t)len + 1, "ps pdf number buffer");
                     if (numbuf == NULL) {
                         code = gs_note_error(gs_error_VMerror);
                     }
@@ -368,9 +368,9 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
 
           case 4:
               if (pdf_ps_name_cmp(&s->cur[-1], "XUID")) {
-                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_ARRAY)) {
+                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_ARRAY) && uid_is_valid(&priv->gsu.gst1.UID) == false) {
                       int i, size = s->cur[0].size;
-                      long *xvals = (long *)gs_alloc_bytes(mem, size *sizeof(long), "ps_font_def_func(xuid vals)");
+                      long *xvals = (long *)gs_alloc_bytes(mem, (size_t)size *sizeof(long), "ps_font_def_func(xuid vals)");
 
                       if (xvals != NULL) {
                           for (i = 0; i < size; i++) {
@@ -437,7 +437,7 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
               break;
 
           case 6:
-              if (pdf_ps_name_cmp(&s->cur[-1], "Notice")) {
+              if (pdf_ps_name_cmp(&s->cur[-1], "Notice") && priv->u.t1.notice == NULL) {
                   if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_STRING)) {
                       pdf_string *subr_str;
 
@@ -466,7 +466,7 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                       fnlen = s->cur[0].size > gs_font_name_max ? gs_font_name_max : s->cur[0].size;
                       pname = (char *)s->cur[0].val.string;
                   }
-                  if (pname) {
+                  if (pname && priv->gsu.gst1.key_name.chars[0] == '\0') {
                       memcpy(priv->gsu.gst1.key_name.chars, pname, fnlen);
                       priv->gsu.gst1.key_name.chars[fnlen] = '\0';
                       priv->gsu.gst1.key_name.size = fnlen;
@@ -599,7 +599,7 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                       }
                   }
               }
-              else if (pdf_ps_name_cmp(&s->cur[-1], "UniqueID")) {
+              else if (pdf_ps_name_cmp(&s->cur[-1], "UniqueID") && uid_is_valid(&priv->gsu.gst1.UID) == false) {
                   /* Ignore UniqueID if we already have a XUID */
                   if (priv->gsu.gst1.UID.id >= 0) {
                       if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_INTEGER)) {
@@ -608,7 +608,7 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                   }
               }
               else if (pdf_ps_name_cmp(&s->cur[-1], "FullName")) {
-                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_STRING)) {
+                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_STRING) && priv->u.t1.fullname == NULL) {
                       pdf_string *subr_str;
 
                       code = pdfi_object_alloc(s->pdfi_ctx, PDF_STRING, (unsigned int)s->cur[0].size, (pdf_obj **)&subr_str);
@@ -657,7 +657,7 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                               priv->gsu.gst1.data.StemSnapV.values[i] = s->cur[0].val.arr[i].val.f;
                           }
                       }
-                      priv->gsu.gst1.data.StemSnapH.count = size;
+                      priv->gsu.gst1.data.StemSnapV.count = size;
                   }
               }
               else if (pdf_ps_name_cmp(&s->cur[-1], "BlueScale")) {
@@ -687,7 +687,8 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
 
           case 10:
               if (pdf_ps_name_cmp(&s->cur[-1], "FontMatrix")) {
-                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_ARRAY) && s->cur[0].size >= 6) {
+                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_ARRAY) && s->cur[0].size >= 6
+                    && (priv->gsu.gst1.FontMatrix.xx * priv->gsu.gst1.FontMatrix.yy - priv->gsu.gst1.FontMatrix.yx * priv->gsu.gst1.FontMatrix.xy == 0)) {
                       int i;
                       double fmat[6] = { 0.001, 0, 0, 0.001, 0, 0 };
                       for (i = 0; i < 6; i++) {
@@ -730,7 +731,7 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                   }
               }
               else if (pdf_ps_name_cmp(&s->cur[-1], "FamilyName")) {
-                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_STRING)) {
+                  if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_STRING) && priv->u.t1.familyname == NULL) {
                       pdf_string *subr_str;
 
                       code = pdfi_object_alloc(s->pdfi_ctx, PDF_STRING, (unsigned int)s->cur[0].size, (pdf_obj **)&subr_str);
@@ -759,8 +760,9 @@ ps_font_def_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
           case 12:
               if (pdf_ps_name_cmp(&s->cur[-1], "WeightVector")) {
                   if (pdf_ps_obj_has_type(&s->cur[0], PDF_PS_OBJ_ARRAY)) {
-                      int i;
-                      for (i = 0; i < s->cur[0].size; i++) {
+                      int i, size = s->cur[0].size > 16 ? 16 : s->cur[0].size;
+
+                      for (i = 0; i < size; i++) {
                           if (pdf_ps_obj_has_type(&s->cur[0].val.arr[i], PDF_PS_OBJ_INTEGER)) {
                               priv->gsu.gst1.data.WeightVector.values[i] = (float)s->cur[0].val.arr[i].val.i;
                           }
@@ -1085,7 +1087,7 @@ ps_font_array_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
         int size = s->cur[0].val.i;
 
         if (size > 0) {
-            arr = (pdf_ps_stack_object_t *) gs_alloc_bytes(mem, size *sizeof(pdf_ps_stack_object_t), "ps_font_array_func(encoding array)");
+            arr = (pdf_ps_stack_object_t *) gs_alloc_bytes(mem, (size_t)size *sizeof(pdf_ps_stack_object_t), "ps_font_array_func(encoding array)");
             if (arr != NULL) {
                 code = pdf_ps_stack_pop(s, 1);
                 if (code < 0) {
@@ -1175,6 +1177,9 @@ pdf_ps_RD_oper_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                 int inx = s->cur[-1].val.i;
 
                 size = s->cur[0].val.i;
+                if (size < 0)
+                    return_error(gs_error_invalidfont);
+
                 buf++;
                 if (buf + size < bufend) {
                     pdf_string *subr_str;
@@ -1199,6 +1204,9 @@ pdf_ps_RD_oper_func(gs_memory_t *mem, pdf_ps_ctx_t *s, byte *buf, byte *bufend)
                 pdf_obj *key = NULL;
 
                 size = s->cur[0].val.i;
+                if (size < 0)
+                    return_error(gs_error_invalidfont);
+
                 buf++;
                 code = pdfi_name_alloc(s->pdfi_ctx, (byte *) s->cur[-1].val.name, s->cur[-1].size, &key);
                 if (code < 0) {

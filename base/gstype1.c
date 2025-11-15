@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -438,6 +438,8 @@ gs_type1_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,
 
                             /* We must remember to pop both the othersubr # */
                             /* and the argument count off the stack. */
+                            if (!CS_CHECK_CSTACK_BOUNDS(csp, cstack))
+                                return_error(gs_error_invalidfont);
                             switch (*pindex = fixed2int_var(*csp)) {
                                 case 0:
                                     if (!CS_CHECK_CSTACK_BOUNDS(&csp[-4], cstack))
@@ -460,7 +462,8 @@ gs_type1_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,
                                     pcis->flex_count = flex_max;	/* not inside flex */
                                     continue;
                                 case 1:
-                                    CS_CHECK_POP(csp, cstack);
+                                    if (!CS_CHECK_CSTACK_BOUNDS(&csp[-1], cstack))
+                                        return_error(gs_error_invalidfont);
                                     code = t1_hinter__flex_beg(h);
                                     if (code < 0)
                                         return code;
@@ -468,7 +471,8 @@ gs_type1_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,
                                     csp -= 2;
                                     continue;
                                 case 2:
-                                    CS_CHECK_POP(csp, cstack);
+                                    if (!CS_CHECK_CSTACK_BOUNDS(&csp[-1], cstack))
+                                        return_error(gs_error_invalidfont);
                                     if (pcis->flex_count >= flex_max)
                                         return_error(gs_error_invalidfont);
                                     code = t1_hinter__flex_point(h);
@@ -477,7 +481,8 @@ gs_type1_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,
                                     csp -= 2;
                                     continue;
                                 case 3:
-                                    CS_CHECK_POP(csp, cstack);
+                                    if (!CS_CHECK_CSTACK_BOUNDS(&csp[-1], cstack))
+                                        return_error(gs_error_invalidfont);
                                     /* Assume the next opcode is a `pop'. */
                                     /* See above as to why we don't just */
                                     /* look ahead in the opcode stream. */
@@ -507,6 +512,12 @@ gs_type1_interpret(gs_type1_state * pcis, const gs_glyph_data_t *pgd,
                                 case 18:
                                     num_results = 6;
   blend:
+                                    /* We need to check for the number of operands value on the stack */
+                                    CS_CHECK_POP(csp, cstack);
+                                    /* Then check that all those operands are available on the stack */
+                                    if (!CS_CHECK_CSTACK_BOUNDS(&csp[-fixed2int_var(csp[-1])], cstack))
+                                        return_error(gs_error_invalidfont);
+
                                     code = gs_type1_blend(pcis, csp,
                                                           num_results);
                                     if (code < 0)

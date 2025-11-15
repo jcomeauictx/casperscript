@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -61,33 +61,6 @@ gs_image3_t_init(gs_image3_t * pim, gs_color_space * color_space,
     gs_data_image_t_init(&pim->MaskDict, -1);
 }
 
-/*
- * We implement ImageType 3 images by interposing a mask clipper in
- * front of an ordinary ImageType 1 image.  Note that we build up the
- * mask row-by-row as we are processing the image.
- *
- * We export a generalized form of the begin_image procedure for use by
- * the PDF and PostScript writers.
- */
-typedef struct gx_image3_enum_s {
-    gx_image_enum_common;
-    gx_device *mdev;		/* gx_device_memory in default impl. */
-    gx_device *pcdev;		/* gx_device_mask_clip in default impl. */
-    gx_image_enum_common_t *mask_info;
-    gx_image_enum_common_t *pixel_info;
-    gs_image3_interleave_type_t InterleaveType;
-    int num_components;		/* (not counting mask) */
-    int bpc;			/* BitsPerComponent */
-    int mask_width, mask_height, mask_full_height;
-    int pixel_width, pixel_height, pixel_full_height;
-    byte *mask_data;		/* (if chunky) */
-    byte *pixel_data;		/* (if chunky) */
-    /* The following are the only members that change dynamically. */
-    int mask_y;
-    int pixel_y;
-    int mask_skip;		/* # of mask rows to skip, see below */
-} gx_image3_enum_t;
-
 extern_st(st_gx_image_enum_common);
 gs_private_st_suffix_add6(st_image3_enum, gx_image3_enum_t, "gx_image3_enum_t",
   image3_enum_enum_ptrs, image3_enum_reloc_ptrs, st_gx_image_enum_common,
@@ -136,16 +109,26 @@ make_mcde_default(gx_device *dev, const gs_gstate *pgs,
                   const gs_int_point *origin)
 {
     gx_device_memory *const mdev = (gx_device_memory *)midev;
-    gx_device_mask_clip *mcdev =
-        gs_alloc_struct(mem, gx_device_mask_clip, &st_device_mask_clip,
-                        "make_mcde_default");
+    gx_device_mask_clip *mcdev = NULL;
     gx_strip_bitmap bits;	/* only gx_bitmap */
     int code;
+
+    /* The gx_strip_bitmap structure defines (via gs_tile_bitmap_common)
+     * rep_width and rep_height as being of type 'ushort', device width and
+     * height are of type 'int'. Make sure we don't overflow because that
+     * will lead to memory corruption.
+     */
+    if (mdev->width > ARCH_MAX_USHORT || mdev->height > ARCH_MAX_USHORT)
+        return_error(gs_error_rangecheck);
+
+    mcdev = gs_alloc_struct(mem, gx_device_mask_clip, &st_device_mask_clip,
+                        "make_mcde_default");
 
     if (mcdev == 0)
         return_error(gs_error_VMerror);
     bits.data = mdev->base;
     bits.raster = mdev->raster;
+
     bits.size.x = bits.rep_width = mdev->width;
     bits.size.y = bits.rep_height = mdev->height;
     bits.id = gx_no_bitmap_id;
@@ -335,7 +318,7 @@ gx_begin_image3_generic(gx_device * dev,
         /* Allocate row buffers for the mask and pixel data. */
         penum->pixel_data =
             gs_alloc_bytes(mem,
-                           (penum->pixel_width * pim->BitsPerComponent *
+                           ((size_t)penum->pixel_width * pim->BitsPerComponent *
                             penum->num_components + 7) >> 3,
                            "gx_begin_image3(pixel_data)");
         penum->mask_data =

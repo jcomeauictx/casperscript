@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -140,7 +140,7 @@ static int OCRText(gx_device_pdf *pdev, gs_glyph glyph, gs_char ch, gs_char *len
          */
         rows = ury - lly;
         stride = (((urx - llx) + 7) / 8) + 1;
-        bitmap = gs_alloc_bytes(pdev->memory, rows * stride, "working OCR memory");
+        bitmap = gs_alloc_bytes(pdev->memory, (size_t)rows * stride, "working OCR memory");
         if(bitmap == NULL)
             return_error(gs_error_VMerror);
         memset(bitmap, 0x00, rows * stride);
@@ -150,7 +150,7 @@ static int OCRText(gx_device_pdf *pdev, gs_glyph glyph, gs_char ch, gs_char *len
          * need to think about the possibility that the OCR engine finds more character than we
          * expected (eg fi ligatures returned as 'f' and 'i'.
          */
-        returned = (int *)gs_alloc_bytes(pdev->memory, char_count * sizeof(int), "returned unicodes");
+        returned = (int *)gs_alloc_bytes(pdev->memory, (size_t)char_count * sizeof(int), "returned unicodes");
         if(returned == NULL) {
             gs_free_object(pdev->memory, bitmap, "working OCR memory");
             return_error(gs_error_VMerror);
@@ -341,6 +341,9 @@ pdf_add_ToUnicode(gx_device_pdf *pdev, gs_font *font, pdf_font_resource_t *pdfon
                     char *d3 = strchr(hexdigits, gnstr->data[6]);
 
                     unicode = (ushort *)gs_alloc_bytes(pdev->memory, sizeof(ushort), "temporary Unicode array");
+                    if (unicode == NULL)
+                        return_error(gs_error_VMerror);
+
                     if(d0 != NULL && d1 != NULL && d2 != NULL && d3 != NULL) {
                         char *u = (char *)unicode;
                         u[0] = ((d0 - hexdigits) << 4) + ((d1 - hexdigits));
@@ -396,21 +399,45 @@ pdf_add_ToUnicode(gx_device_pdf *pdev, gs_font *font, pdf_font_resource_t *pdfon
             }
         } else {
             if (((gs_cmap_ToUnicode_t *)pdfont->cmap_ToUnicode)->value_size < length){
-                gs_cmap_ToUnicode_realloc(pdev->pdf_memory, length, &pdfont->cmap_ToUnicode);
+                code = gs_cmap_ToUnicode_realloc(pdev->pdf_memory, length, &pdfont->cmap_ToUnicode);
+                if (code < 0)
+                    return code;
             }
         }
 
         if (!unicode) {
-            unicode = (ushort *)gs_alloc_bytes(pdev->memory, length * sizeof(short), "temporary Unicode array");
+            unicode = (ushort *)gs_alloc_bytes(pdev->memory, (size_t)length * sizeof(short), "temporary Unicode array");
             if (unicode == NULL)
                 return_error(gs_error_VMerror);
             length = font->procs.decode_glyph((gs_font *)font, glyph, ch, unicode, length);
         }
 
-        if (pdfont->cmap_ToUnicode != NULL)
-            gs_cmap_ToUnicode_add_pair(pdfont->cmap_ToUnicode, ch, unicode, length);
-        if (length > 2 && pdfont->u.simple.Encoding != NULL)
-            pdfont->TwoByteToUnicode = 0;
+        /* We use this when determining whether we should use an existing ToUnicode
+         * CMap entry, for s aimple font. The basic problem appears to be that the front end ToUnicode
+         * processing is somewhat limited, due to its origins in the PostScript GlyphNames2Unicode
+         * handling. We cannot support more than 4 bytes on input, the bug for 702201 has a ToUnicode
+         * entry which maps the single /ffi glyph to 'f' 'f' and 'i' code points for a total of 6
+         * (3 x UTF-16BE code points) bytes. If we just leave the Encoding alone then Acrobat will use the
+         * /ffi glyph to get the 'correct' answer. This was originally done using a 'TwoByteToUnicode'
+         * flag in the font and if the flag was not true, then we dropped the entire ToUnicode CMap.
+         *
+         * Additionally; bug #708284, the ToUnicode CMap is actually broken, it contains invalid UTF-16BE
+         * entries which actually are 4 bytes long. Acrobat silently ignores the broekn entires (!) but the fact
+         * that we dropped the entire CMap meant that none of the content pasted correctly.
+         *
+         * So... Until we get to the point of preserving input codes in excess of 4 bytes we do some hideous
+         * hackery here and simply drop ToUnicode entries in simple fonts, with a standard encoding, when the
+         * ToUnicode entry is not a single UTF-16BE code point. Acrobat will use the Encoding for the missing entries
+         * or the character code in extremis, which is as good as this is going to get right now.
+         *
+         */
+        if (pdfont->cmap_ToUnicode != NULL) {
+            if (pdfont->u.simple.Encoding != NULL) {
+                if (length <= 2)
+                    gs_cmap_ToUnicode_add_pair(pdfont->cmap_ToUnicode, ch, unicode, length);
+            } else
+                gs_cmap_ToUnicode_add_pair(pdfont->cmap_ToUnicode, ch, unicode, length);
+        }
     }
 
     if (unicode)
@@ -519,6 +546,40 @@ pdf_encode_string_element(gx_device_pdf *pdev, gs_font *font, pdf_font_resource_
     code = font->procs.glyph_name(font, glyph, &gnstr);
     if (code < 0)
         return code;	/* can't get name of glyph */
+    if (pdev->PDFA > 1 && (font->FontType == ft_encrypted || font->FontType == ft_encrypted2) && bytes_compare(gnstr.data, gnstr.size, (const byte *)".notdef", 7) == 0) {
+        switch (pdev->PDFACompatibilityPolicy) {
+            case 0:
+                emprintf(pdev->memory,
+                     "\nAttempt to use the /.notdef glyph directly, not permitted in PDF/A-2+, reverting to normal PDF output\n");
+                pdev->AbortPDFAX = true;
+                pdev->PDFA = 0;
+                break;
+            case 1:
+                emprintf(pdev->memory,
+                     "\nAttempt to use the /.notdef glyph directly, not permitted in PDF/A-2+, glyph will not be present in output file\n\n");
+                /* Returning an error causees text processing to try and
+                 * handle the glyph by rendering to a bitmap instead of
+                 * as a glyph in a font. This will eliminate the problem
+                 * and the fiel should appear the same as the original.
+                 */
+                return_error(gs_error_unknownerror);
+                break;
+            case 2:
+                emprintf(pdev->memory,
+                     "\nAttempt to use the /.notdef glyph directly, not permitted in PDF/A-2+, aborting conversion\n");
+                /* Careful here, only certain errors will bubble up
+                 * through the text processing.
+                 */
+                return_error(gs_error_invalidfont);
+                break;
+            default:
+                emprintf(pdev->memory,
+                     "\nAttempt to use the /.notdef glyph directly, not permitted in PDF/A-2+, unrecognised PDFACompatibilityLevel,\nreverting to normal PDF output\n");
+                pdev->AbortPDFAX = true;
+                pdev->PDFA = 0;
+                break;
+        }
+    }
     if (font->FontType != ft_user_defined &&
         font->FontType != ft_PDF_user_defined &&
         font->FontType != ft_PCL_user_defined &&
@@ -532,17 +593,17 @@ pdf_encode_string_element(gx_device_pdf *pdev, gs_font *font, pdf_font_resource_
         if (code < 0 && code != gs_error_undefined)
             return code;
         if (code == gs_error_undefined) {
-            if (pdev->PDFA != 0 || pdev->PDFX) {
+            if (pdev->PDFA != 0 || pdev->PDFX != 0) {
                 switch (pdev->PDFACompatibilityPolicy) {
                     case 0:
                         emprintf(pdev->memory,
-                             "Requested glyph not present in source font,\n not permitted in PDF/A, reverting to normal PDF output\n");
+                             "Requested glyph not present in source font,\n not permitted in PDF/A or PDF/X, reverting to normal PDF output\n");
                         pdev->AbortPDFAX = true;
                         pdev->PDFA = 0;
                         break;
                     case 1:
                         emprintf(pdev->memory,
-                             "Requested glyph not present in source font,\n not permitted in PDF/A, glyph will not be present in output file\n\n");
+                             "Requested glyph not present in source font,\n not permitted in PDF/A or PDF/X, glyph will not be present in output file\n\n");
                         /* Returning an error causees text processing to try and
                          * handle the glyph by rendering to a bitmap instead of
                          * as a glyph in a font. This will eliminate the problem
@@ -552,7 +613,7 @@ pdf_encode_string_element(gx_device_pdf *pdev, gs_font *font, pdf_font_resource_
                         break;
                     case 2:
                         emprintf(pdev->memory,
-                             "Requested glyph not present in source font,\n not permitted in PDF/A, aborting conversion\n");
+                             "Requested glyph not present in source font,\n not permitted in PDF/A or PDF/X, aborting conversion\n");
                         /* Careful here, only certain errors will bubble up
                          * through the text processing.
                          */
@@ -560,7 +621,7 @@ pdf_encode_string_element(gx_device_pdf *pdev, gs_font *font, pdf_font_resource_
                         break;
                     default:
                         emprintf(pdev->memory,
-                             "Requested glyph not present in source font,\n not permitted in PDF/A, unrecognised PDFACompatibilityLevel,\nreverting to normal PDF output\n");
+                             "Requested glyph not present in source font,\n not permitted in PDF/A or PDF/X, unrecognised PDFACompatibilityLevel,\nreverting to normal PDF output\n");
                         pdev->AbortPDFAX = true;
                         pdev->PDFA = 0;
                         break;
@@ -888,7 +949,7 @@ pdf_process_string(pdf_text_enum_t *penum, gs_string *pstr,
                 rect.q.x = fixed2float(clip_bbox.q.x);
                 rect.q.y = fixed2float(clip_bbox.q.y);
                 rect_intersect(rect, text_bbox);
-                if (rect.p.x > rect.q.x || rect.p.y > rect.q.y) {
+                if ((rect.p.x > rect.q.x || rect.p.y > rect.q.y) && penum->pgs->text_rendering_mode < 3) {
                     penum->index += pstr->size;
                     text->operation &= ~TEXT_DO_DRAW;
                     penum->text_clipped = true;
@@ -1090,6 +1151,7 @@ pdf_process_string(pdf_text_enum_t *penum, gs_string *pstr,
                                  float2fixed(text_bbox.q.x) - x0,
                                  float2fixed(text_bbox.p.y) - y0,
                                  bx2, by2, &devc, lop_default);
+        gx_destroy_clip_device_on_stack(&cdev);
         pdev->AccumulatingBBox--;
     }
     if (!(operation & TEXT_RETURN_WIDTH)) {

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -132,7 +132,7 @@ gx_begin_image3x_generic(gx_device * dev,
                         const gx_clip_path *pcpath, gs_memory_t *mem,
                         image3x_make_mid_proc_t make_mid,
                         image3x_make_mcde_proc_t make_mcde,
-                        gx_image_enum_common_t **pinfo, int64_t OC)
+                        gx_image_enum_common_t **pinfo, char *OC)
 {
     const gs_image3x_t *pim = (const gs_image3x_t *)pic;
     gx_image3x_enum_t *penum;
@@ -189,7 +189,7 @@ gx_begin_image3x_generic(gx_device * dev,
         /* Also allocate a row buffer for the pixel data. */
         penum->pixel.data =
             gs_alloc_bytes(mem,
-                           (penum->pixel.width * pim->BitsPerComponent *
+                           ((size_t)penum->pixel.width * pim->BitsPerComponent *
                             penum->num_components + 7) >> 3,
                            "gx_begin_image3x(pixel.data)");
         if (penum->pixel.data == 0) {
@@ -391,7 +391,7 @@ check_image3x_extent(double mask_coeff, double data_coeff)
  * pmcs->{InterleaveType,width,height,full_height,depth,data,y,skip}.
  * If the mask is omitted, sets pmcs->depth = 0 and returns normally.
  */
-static bool
+static int
 check_image3x_mask(const gs_image3x_t *pim, const gs_image3x_mask_t *pimm,
                    const image3x_channel_values_t *ppcv,
                    image3x_channel_values_t *pmcv,
@@ -464,7 +464,7 @@ check_image3x_mask(const gs_image3x_t *pim, const gs_image3x_mask_t *pimm,
         /* Allocate a buffer for the data. */
         pmcs->data =
             gs_alloc_bytes(mem,
-                           (pmcs->width * pimm->MaskDict.BitsPerComponent + 7) >> 3,
+                           ((size_t)pmcs->width * pimm->MaskDict.BitsPerComponent + 7) >> 3,
                            "gx_begin_image3x(mask data)");
         if (pmcs->data == 0)
             return_error(gs_error_VMerror);

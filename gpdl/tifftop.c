@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2023 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -729,7 +729,7 @@ do_tiff_decode(tiff_interp_instance_t *tiff)
     } else if (tiff->tiled) {
         tiff->samples = gs_alloc_bytes(tiff->memory, TIFFTileSize(tiff->handle), "tiff_tile");
     } else if (planar == PLANARCONFIG_SEPARATE) {
-        tiff->samples = gs_alloc_bytes(tiff->memory, tiff->byte_width * tiff->num_comps, "tiff_scan");
+        tiff->samples = gs_alloc_bytes(tiff->memory, (size_t)tiff->byte_width * tiff->num_comps, "tiff_scan");
     } else {
         tiff->samples = gs_alloc_bytes(tiff->memory, tiff->byte_width, "tiff_scan");
     }
@@ -821,9 +821,17 @@ do_tiff_decode(tiff_interp_instance_t *tiff)
                 goto fail_decode;
             }
             tiff->proc_samples = gs_alloc_bytes(tiff->memory, z, "tiff_tile");
+            if (tiff->proc_samples == NULL) {
+                emprintf(tiff->memory, "Memory allocation failure\n");
+                goto fail_decode;
+            }
         } else {
             size_t z = size_mla(tiff->memory, &code, tiff->tile_width, 1, 3, 0);
             tiff->proc_samples = gs_alloc_bytes(tiff->memory, z, "tiff_scan");
+            if (tiff->proc_samples == NULL) {
+                emprintf(tiff->memory, "Memory allocation failure\n");
+                goto fail_decode;
+            }
         }
         break;
     }

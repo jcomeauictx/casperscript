@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -166,7 +166,7 @@ eps_print_page(gx_device_printer *pdev, gp_file *prn_stream, int y_9pin_high,
         int in_y_mult = ((y_24pin | y_9pin_high) ? 3 : 1);
         int line_size = gdev_mem_bytes_per_scan_line((gx_device *)pdev);
         /* Note that in_size is a multiple of 8. */
-        int in_size = line_size * (8 * in_y_mult);
+        size_t in_size = line_size * (8 * in_y_mult);
         byte *buf1 = NULL;
         byte *buf2 = NULL;
         byte *in;
@@ -183,6 +183,9 @@ eps_print_page(gx_device_printer *pdev, gp_file *prn_stream, int y_9pin_high,
         char start_graphics;
         int first_pass;
         int last_pass;
+
+        if (line_size > max_int / (8 * in_y_mult))
+            return_error(gs_error_rangecheck);
 
         if (y_24pin) {
             if (x_dpi / 60 >= sizeof(graphics_modes_24) / sizeof(graphics_modes_24[0])) {

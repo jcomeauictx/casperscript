@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -601,7 +601,7 @@ gx_no_concretize_color(const gs_client_color * pcc, const gs_color_space * pcs,
 /* If someone has specified a table for handling named spot colors then we will
    be attempting to do the special handling to go directly to the device colors
    here */
-bool
+int
 gx_remap_named_color(const gs_client_color * pcc, const gs_color_space * pcs,
 gx_device_color * pdc, const gs_gstate * pgs, gx_device * dev,
 gs_color_select_t select)
@@ -1044,7 +1044,7 @@ cmap_rgb_halftoned(frac r, frac g, frac b, gx_device_color * pdc,
         for (i = 0; i < n; i++)
             cm_comps[i] = gx_map_color_frac(pgs,
                                 cm_comps[i], effective_transfer[i]);
-        for (; i < n; i++)
+        for (; i < nc; i++)
             cm_comps[i] = frac_1 - gx_map_color_frac(pgs,
                         (frac)(frac_1 - cm_comps[i]), effective_transfer[i]);
     }
@@ -1089,7 +1089,9 @@ cmap_rgb_direct(frac r, frac g, frac b, gx_device_color * pdc,
         for (i = 0; i < nc; i++)
             pdc->colors.devn.values[i] = frac2cv(cm_comps[i]);
         if (i < ncomps)
-            pdc->colors.devn.values[i] = cm_comps[i];
+            pdc->colors.devn.values[i] = cm_comps[i], i++;
+        for (; i < GX_DEVICE_COLOR_MAX_COMPONENTS; i++)
+            pdc->colors.devn.values[i] = 0;
         pdc->type = gx_dc_type_devn;
     } else {
         for (i = 0; i < nc; i++)
@@ -1153,7 +1155,8 @@ cmap_cmyk_direct(frac c, frac m, frac y, frac k, gx_device_color * pdc,
             /* Find the black channel location */
             black_index = dev_proc(dev, get_color_comp_index)(dev, "Black",
                                     strlen("Black"), SEPARATION_NAME);
-            cm_comps[black_index] = frac_1 - gx_map_color_frac(pgs,
+            if (black_index < GX_DEVICE_COLOR_MAX_COMPONENTS)
+                cm_comps[black_index] = frac_1 - gx_map_color_frac(pgs,
                                     (frac)(frac_1 - cm_comps[black_index]),
                                     effective_transfer[black_index]);
         } else if (pgs->effective_transfer_non_identity_count != 0)
@@ -1178,7 +1181,9 @@ cmap_cmyk_direct(frac c, frac m, frac y, frac k, gx_device_color * pdc,
         for (i = 0; i < nc; i++)
             pdc->colors.devn.values[i] = frac2cv(cm_comps[i]);
         if (i < ncomps)
-            pdc->colors.devn.values[i] = cm_comps[i];
+            pdc->colors.devn.values[i] = cm_comps[i], i++;
+        for (; i < GX_DEVICE_COLOR_MAX_COMPONENTS; i++)
+            pdc->colors.devn.values[i] = 0;
         pdc->type = gx_dc_type_devn;
     } else {
         for (i = 0; i < nc; i++)
@@ -1551,6 +1556,8 @@ cmap_separation_direct(frac all, gx_device_color * pdc, const gs_gstate * pgs,
     if (dev_proc(dev, dev_spec_op)(dev, gxdso_supports_devn, NULL, 0)) {
         for (i = 0; i < ncomps; i++)
             pdc->colors.devn.values[i] = cv[i];
+        for (; i < GX_DEVICE_COLOR_MAX_COMPONENTS; i++)
+            pdc->colors.devn.values[i] = 0;
         pdc->type = gx_dc_type_devn;
 
         /* Let device set the tags if present */
@@ -1723,7 +1730,9 @@ cmap_devicen_direct(const frac * pcc,
                             (frac)(frac_1 - cm_comps[i]), effective_transfer[i]));
         }
         if (i < ncomps)
-            pdc->colors.devn.values[i] = cm_comps[i];
+            pdc->colors.devn.values[i] = cm_comps[i], i++;
+        for (; i < GX_DEVICE_COLOR_MAX_COMPONENTS; i++)
+            pdc->colors.devn.values[i] = 0;
         pdc->type = gx_dc_type_devn;
         /* For additive devices, we should invert the process colors
          * here! But how do we know how many process colors we have?
@@ -1806,7 +1815,10 @@ gs_identity_transfer(double value, const gx_transfer_map * pmap)
 float
 gs_mapped_transfer(double value, const gx_transfer_map * pmap)
 {
-    return gx_map_color_float(pmap, value);
+    int index = (int)((value) * (transfer_map_size) + 0.5);
+    if (index > transfer_map_size - 1)
+        index = transfer_map_size - 1;
+    return frac2float(pmap->values[index]);
 }
 
 /* Set a transfer map to the identity map. */

@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -521,9 +521,12 @@ ocr_line32(gx_device_pdf_image *dev, void *row)
 static int
 ocr_begin_page(gx_device_pdf_image *dev, int w, int h, int bpp)
 {
-    int raster = (w+3)&~3;
+    size_t raster = (w + 3) & ~3;
 
-    dev->ocr.data = gs_alloc_bytes(dev->memory, raster * h, "ocr_begin_page");
+    raster = raster * (size_t)h;
+    if (raster < 0 || raster > max_size_t)
+        return gs_note_error(gs_error_VMerror);
+    dev->ocr.data = gs_alloc_bytes(dev->memory, raster, "ocr_begin_page");
     if (dev->ocr.data == NULL)
         return_error(gs_error_VMerror);
     dev->ocr.w = w;
@@ -605,11 +608,12 @@ ocr_callback(void *arg, const char *rune_,
     }
 
 #if 0
-    // First attempt; match char bboxes exactly. This is bad, as the
-    // bboxes given back from tesseract are 'untrustworthy' to say the
-    // least (they overlap one another in strange ways). Trying to
-    // match those causes the font height to change repeatedly, and
-    // gives output that's hard to identify words in.
+    /* First attempt; match char bboxes exactly. This is bad, as the
+     * bboxes given back from tesseract are 'untrustworthy' to say the
+     * least (they overlap one another in strange ways). Trying to
+     * match those causes the font height to change repeatedly, and
+     * gives output that's hard to identify words in.
+     */
     bbox[0] = char_bbox[0] * 72.0 / ppdev->ocr.xres;
     bbox[1] = (ppdev->ocr.h-1 - char_bbox[3]) * 72.0 / ppdev->ocr.yres;
     bbox[2] = char_bbox[2] * 72.0 / ppdev->ocr.xres;
@@ -652,7 +656,7 @@ ocr_callback(void *arg, const char *rune_,
     /* Add the char to the current word. */
     if (ppdev->ocr.word_len == ppdev->ocr.word_max) {
         int *newblock;
-        int newmax = ppdev->ocr.word_max * 2;
+        size_t newmax = ppdev->ocr.word_max * 2;
         if (newmax == 0)
             newmax = 16;
         newblock = (int *)gs_alloc_bytes(ppdev->memory, sizeof(int)*newmax,

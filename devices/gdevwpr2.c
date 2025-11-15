@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -439,7 +439,7 @@ win_pr2_open(gx_device * dev)
         windev = (gx_device_win_pr2 *)dev;
 
         windev->original_device = (gx_device_win_pr2 *)dev;
-        wdev = dev;
+        wdev = (gx_device_win_pr2 *)dev;
     }
 
     if ((code < 0) && wdev->fname[0])
@@ -1079,7 +1079,7 @@ win_pr2_getdc(gx_device_win_pr2 * wdev)
     HANDLE hprinter = NULL;
 
     /* fall back to prompting user */
-    int result = FALSE;
+    int result = FALSE, size;
 
     WCHAR* unidev = NULL;
     WCHAR* unidriver = NULL;
@@ -1103,7 +1103,10 @@ win_pr2_getdc(gx_device_win_pr2 * wdev)
         wchar_t *devices;
         wchar_t *p;
         int devices_size = 128, returned_length = 0;
-        unidev = malloc(gp_utf8_to_uint16(NULL, device)*sizeof(wchar_t));
+
+        size = gp_utf8_to_uint16(NULL, device);
+        if (size >= 0)
+            unidev = malloc((size_t)size*sizeof(wchar_t));
         if (unidev == NULL)
             goto cleanup;
         gp_utf8_to_uint16(unidev, device);
@@ -1142,14 +1145,22 @@ win_pr2_getdc(gx_device_win_pr2 * wdev)
         gp_uint16_to_utf8(driverbuf, unidrvbuf);
     }
     driver = gs_strtok(driverbuf, ",", &dbuflast);
+    if (driver == NULL)
+        goto cleanup;
     output = gs_strtok(NULL, ",", &dbuflast);
+    if (output == NULL)
+        goto cleanup;
 
-    unidriver = malloc(gp_utf8_to_uint16(NULL, driver) * sizeof(wchar_t));
+    size = gp_utf8_to_uint16(NULL, driver);
+    if (size >= 0)
+        unidriver = malloc((size_t)size * sizeof(wchar_t));
     if (unidriver == NULL)
         goto cleanup;
     gp_utf8_to_uint16(unidriver, driver);
 
-    unioutput = malloc(gp_utf8_to_uint16(NULL, output) * sizeof(wchar_t));
+    size = gp_utf8_to_uint16(NULL, output);
+    if (size >= 0)
+        unioutput = malloc((size_t)size * sizeof(wchar_t));
     if (unioutput == NULL)
         goto cleanup;
     gp_utf8_to_uint16(unioutput, output);

@@ -1,4 +1,4 @@
-/* Copyright (C) 2019-2024 Artifex Software, Inc.
+/* Copyright (C) 2019-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -17,6 +17,7 @@
 
 #include "pdf_int.h"
 #include "pdf_stack.h"
+#include "pdf_deref.h"
 #include "pdf_page.h"
 #include "pdf_file.h"
 #include "pdf_dict.h"
@@ -286,14 +287,16 @@ static int pdfi_check_Shading_dict(pdf_context *ctx, pdf_dict *shading_dict,
             return code;
 
         code = pdfi_dict_first(ctx, shading_dict, &Key, &Value, &index);
-        if (code < 0 || !(pdfi_type_of(Value) == PDF_DICT || pdfi_type_of(Value) == PDF_STREAM))
+        if (code < 0)
             goto error2;
 
         i = 1;
         do {
-            code = pdfi_check_Shading(ctx, Value, page_dict, tracker);
-            if (code < 0)
-                goto error2;
+            if ((pdfi_type_of(Value) == PDF_DICT || pdfi_type_of(Value) == PDF_STREAM)) {
+                code = pdfi_check_Shading(ctx, Value, page_dict, tracker);
+                if (code < 0)
+                    goto error2;
+            }
 
             pdfi_countdown(Key);
             Key = NULL;
@@ -469,18 +472,18 @@ static int pdfi_check_XObject_dict(pdf_context *ctx, pdf_dict *xobject_dict, pdf
         code = pdfi_dict_first(ctx, xobject_dict, &Key, &Value, &index);
         if (code < 0)
             goto error_exit;
-        if (pdfi_type_of(Value) != PDF_STREAM)
-            goto error_exit;
 
         i = 1;
         do {
-            code = pdfi_dict_from_obj(ctx, Value, &Value_dict);
-            if (code < 0)
-                goto error_exit;
+            if (pdfi_type_of(Value) == PDF_STREAM) {
+                code = pdfi_dict_from_obj(ctx, Value, &Value_dict);
+                if (code < 0)
+                    goto error_exit;
 
-            code = pdfi_check_XObject(ctx, Value_dict, page_dict, tracker);
-            if (code < 0)
-                goto error_exit;
+                code = pdfi_check_XObject(ctx, Value_dict, page_dict, tracker);
+                if (code < 0)
+                    goto error_exit;
+            }
 
             (void)pdfi_loop_detector_cleartomark(ctx); /* Clear to the mark for the XObject dictionary loop */
 
@@ -787,18 +790,17 @@ static int pdfi_check_Pattern_dict(pdf_context *ctx, pdf_dict *pattern_dict, pdf
         if (code < 0)
             goto error1;
 
-        if (pdfi_type_of(Value) != PDF_DICT && pdfi_type_of(Value) != PDF_STREAM)
-            goto transparency_exit;
-
         i = 1;
         do {
-            code = pdfi_dict_from_obj(ctx, Value, &instance_dict);
-            if (code < 0)
-                goto transparency_exit;
+            if (pdfi_type_of(Value) == PDF_DICT || pdfi_type_of(Value) == PDF_STREAM) {
+                code = pdfi_dict_from_obj(ctx, Value, &instance_dict);
+                if (code < 0)
+                    goto transparency_exit;
 
-            code = pdfi_check_Pattern(ctx, instance_dict, page_dict, tracker);
-            if (code < 0)
-                goto transparency_exit;
+                code = pdfi_check_Pattern(ctx, instance_dict, page_dict, tracker);
+                if (code < 0)
+                    goto transparency_exit;
+            }
 
             pdfi_countdown(Key);
             Key = NULL;
@@ -967,10 +969,10 @@ static int pdfi_check_Font(pdf_context *ctx, pdf_dict *font, pdf_dict *page_dict
                         pdf_array *desc_array = NULL;
 
                         code = pdfi_array_alloc(ctx, 0, &desc_array);
-                        pdfi_countup(desc_array);
                         if (code >= 0) {
                             pdf_array *saved = tracker->font_array;
 
+                            pdfi_countup(desc_array);
                             tracker->font_array = desc_array;
                             (void)pdfi_check_Font(ctx, desc_font, page_dict, tracker);
                             (void)pdfi_dict_put(ctx, font_info_dict, "Descendants", (pdf_obj *)tracker->font_array);
@@ -1058,7 +1060,11 @@ static int pdfi_check_Font_dict(pdf_context *ctx, pdf_dict *font_dict, pdf_dict 
         if (code < 0)
             return code;
 
-        code = pdfi_dict_first(ctx, font_dict, &Key, &Value, &index);
+        /* We don't want to store the dereferenced Font objects in the Resources dictionary
+         * Because we later create a substitute object, if we use the object here we will not
+         * find the correct font if we reference it through the Resources dictionary.
+         */
+        code = pdfi_dict_first_no_store_R(ctx, font_dict, &Key, &Value, &index);
         if (code < 0) {
             (void)pdfi_loop_detector_cleartomark(ctx); /* Clear to the mark for the current resource loop */
             goto error1;
@@ -1094,7 +1100,7 @@ static int pdfi_check_Font_dict(pdf_context *ctx, pdf_dict *font_dict, pdf_dict 
                 break;
             }
 
-            code = pdfi_dict_next(ctx, font_dict, &Key, &Value, &index);
+            code = pdfi_dict_next_no_store_R(ctx, font_dict, &Key, &Value, &index);
             if (code < 0)
                 break;
         }while (1);
@@ -1127,8 +1133,8 @@ static int pdfi_check_Resources(pdf_context *ctx, pdf_dict *Resources_dict,
      */
     if (tracker->spot_dict != NULL) {
         code = pdfi_dict_knownget_type(ctx, Resources_dict, "ColorSpace", PDF_DICT, &d);
-        if (code < 0) {
-            if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_SPOT_CHK_BADTYPE, "pdfi_check_Resources", "")) < 0)
+        if (code < 0 && code != gs_error_undefined) {
+            if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BAD_RESOURCE, "pdfi_check_Resources", "ColorSpace")) < 0)
                 return code;
         }
         (void)pdfi_check_ColorSpace_dict(ctx, (pdf_dict *)d, page_dict, tracker);
@@ -1136,28 +1142,55 @@ static int pdfi_check_Resources(pdf_context *ctx, pdf_dict *Resources_dict,
         pdfi_countdown(d);
         d = NULL;
 
-        code = pdfi_dict_knownget_type(ctx, Resources_dict, "Shading", PDF_DICT, &d);
+        /* Put the Resources dictionary back in cache (or promote it) in case checking ColorSpace dict
+         * created so many cache entires it flushed Resources from cache
+         */
+        code = pdfi_cache_object(ctx, (pdf_obj *)Resources_dict);
         if (code < 0) {
-            if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_SPOT_CHK_BADTYPE, "pdfi_check_Resources", "")) < 0)
+            if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_CACHE_FAIL, "pdfi_check_Resources", "")) < 0)
+                return code;
+        }
+
+        code = pdfi_dict_knownget_type(ctx, Resources_dict, "Shading", PDF_DICT, &d);
+        if (code < 0 && code != gs_error_undefined) {
+            if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BAD_RESOURCE, "pdfi_check_Resources", "Shading")) < 0)
                 return code;
         }
         (void)pdfi_check_Shading_dict(ctx, (pdf_dict *)d, page_dict, tracker);
         pdfi_countdown(d);
         d = NULL;
+
+        /* Put the Resources dictionary back in cache (or promote it) in case checking Shading dict
+         * created so many cache entires it flushed Resources from cache
+         */
+        code = pdfi_cache_object(ctx, (pdf_obj *)Resources_dict);
+        if (code < 0) {
+            if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_CACHE_FAIL, "pdfi_check_Resources", "")) < 0)
+                return code;
+        }
     }
 
     code = pdfi_dict_knownget_type(ctx, Resources_dict, "XObject", PDF_DICT, &d);
-    if (code < 0) {
-        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_TRANS_CHK_BADTYPE, "pdfi_check_Resources", "")) < 0)
+    if (code < 0 && code != gs_error_undefined) {
+        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BAD_RESOURCE, "pdfi_check_Resources", "XObject")) < 0)
             return code;
     }
     (void)pdfi_check_XObject_dict(ctx, (pdf_dict *)d, page_dict, tracker);
     pdfi_countdown(d);
     d = NULL;
 
-    code = pdfi_dict_knownget_type(ctx, Resources_dict, "Pattern", PDF_DICT, &d);
+    /* Put the Resources dictionary back in cache (or promote it) in case checking XObject dict
+     * created so many cache entires it flushed Resources from cache
+     */
+    code = pdfi_cache_object(ctx, (pdf_obj *)Resources_dict);
     if (code < 0) {
-        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_TRANS_CHK_BADTYPE, "pdfi_check_Resources", "")) < 0) {
+        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_CACHE_FAIL, "pdfi_check_Resources", "")) < 0)
+            return code;
+    }
+
+    code = pdfi_dict_knownget_type(ctx, Resources_dict, "Pattern", PDF_DICT, &d);
+    if (code < 0 && code != gs_error_undefined) {
+        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BAD_RESOURCE, "pdfi_check_Resources", "Pattern")) < 0) {
             return code;
         }
     }
@@ -1165,9 +1198,18 @@ static int pdfi_check_Resources(pdf_context *ctx, pdf_dict *Resources_dict,
     pdfi_countdown(d);
     d = NULL;
 
+    /* Put the Resources dictionary back in cache (or promote it) in case checking Pattern dict
+     * created so many cache entires it flushed Resources from cache
+     */
+    code = pdfi_cache_object(ctx, (pdf_obj *)Resources_dict);
+    if (code < 0) {
+        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_CACHE_FAIL, "pdfi_check_Resources", "")) < 0)
+            return code;
+    }
+
     code = pdfi_dict_knownget_type(ctx, Resources_dict, "Font", PDF_DICT, &d);
     if (code < 0) {
-        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_TRANS_CHK_BADTYPE, "pdfi_check_Resources", "")) < 0)
+        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BAD_RESOURCE, "pdfi_check_Resources", "Font")) < 0)
             return code;
     }
     (void)pdfi_check_Font_dict(ctx, (pdf_dict *)d, page_dict, tracker);
@@ -1177,14 +1219,32 @@ static int pdfi_check_Resources(pdf_context *ctx, pdf_dict *Resources_dict,
     pdfi_countdown(d);
     d = NULL;
 
-    code = pdfi_dict_knownget_type(ctx, Resources_dict, "ExtGState", PDF_DICT, &d);
+    /* Put the Resources dictionary back in cache (or promote it) in case checking Font dict
+     * created so many cache entires it flushed Resources from cache
+     */
+    code = pdfi_cache_object(ctx, (pdf_obj *)Resources_dict);
     if (code < 0) {
-        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_TRANS_CHK_BADTYPE, "pdfi_check_Resources", "")) < 0)
+        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_CACHE_FAIL, "pdfi_check_Resources", "")) < 0)
+            return code;
+    }
+
+    code = pdfi_dict_knownget_type(ctx, Resources_dict, "ExtGState", PDF_DICT, &d);
+    if (code < 0 && code != gs_error_undefined) {
+        if ((code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BAD_RESOURCE, "pdfi_check_Resources", "ExtGState")) < 0)
             return code;
     }
     (void)pdfi_check_ExtGState_dict(ctx, (pdf_dict *)d, page_dict, tracker);
     pdfi_countdown(d);
     d = NULL;
+
+    /* Put the Resources dictionary back in cache (or promote it) in case checking ExtGState dict
+     * created so many cache entires it flushed Resources from cache
+     */
+    code = pdfi_cache_object(ctx, (pdf_obj *)Resources_dict);
+    if (code < 0) {
+        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_CACHE_FAIL, "pdfi_check_Resources", "")) < 0)
+            return code;
+    }
 
     return 0;
 }
@@ -1422,6 +1482,7 @@ int pdfi_check_page(pdf_context *ctx, pdf_dict *page_dict, pdf_array **fonts_arr
     int code;
     int spots = 0;
     pdfi_check_tracker_t tracker;
+    pdf_dict *Resources = NULL;
 
     ctx->page.num_spots = 0;
     ctx->page.has_transparency = false;
@@ -1581,9 +1642,28 @@ int pdfi_check_page(pdf_context *ctx, pdf_dict *page_dict, pdf_array **fonts_arr
             Value = NULL;
             code = pdfi_dict_next(ctx, tracker.spot_dict, (pdf_obj **)&Key, &Value, &index);
         }
-        code = 0;
         *spots_array = new_array;
     }
+
+    /* Put the Resources dictionary back in cache (or promote it) in case checking the page
+     * created so many cache entires it flushed Resources from cache
+     */
+    code = pdfi_dict_knownget_type(ctx, page_dict, "Resources", PDF_DICT, (pdf_obj **)&Resources);
+    if (code > 0) {
+        code = pdfi_cache_object(ctx, (pdf_obj *)Resources);
+        if (code < 0)
+            code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_CACHE_FAIL, "pdfi_check_Resources", "");
+        pdfi_countdown(Resources);
+    }
+    else {
+        if (code < 0) {
+            if (code == gs_error_undefined)
+                code = 0;
+            else
+                code = pdfi_set_error_stop(ctx, code, NULL, E_PDF_BAD_PAGE_RESOURCES, "pdfi_check_page", NULL);
+        }
+    }
+
 error:
     (void)pdfi_check_free_tracker(ctx, &tracker);
     return code;
