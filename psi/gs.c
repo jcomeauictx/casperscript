@@ -71,8 +71,8 @@ main(int argc, char *argv[])
 {
     int exit_status, code;
     void *minst = NULL;
-    syslog(LOG_USER | LOG_DEBUG, "gs.c main() starting");
     char *curlocale;
+    syslog(LOG_USER | LOG_DEBUG, "gs.c main() starting");
 
 #ifdef NEED_COMMIT_STACK   /* hack for bug in gcc 2.96 */
     commit_stack_pages();
