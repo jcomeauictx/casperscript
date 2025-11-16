@@ -60,7 +60,7 @@ extern const char gp_file_name_list_separator;
 extern single_glyph_list_t SingleGlyphList[];
 
 
-static void pdfi_get_server_param(gs_fapi_server * I, const char *subtype, char **server_param, int *server_param_size);
+static int pdfi_get_server_param(gs_fapi_server * I, const char *subtype, char **server_param, int *server_param_size);
 
 
 /* forward declarations for the pdfi_ff_stub definition */
@@ -1023,6 +1023,8 @@ pdfi_fapi_get_glyphname_or_cid(gs_text_enum_t *penum, gs_font_base * pbfont, gs_
                 code = pdfi_name_alloc(ctx, (byte *) gname.data, gname.size, (pdf_obj **) &GlyphName);
                 if (code >= 0)
                     pdfi_countup(GlyphName);
+                else
+                    return_error(gs_error_VMerror);
             }
 
             cr->char_codes[0] = cr->client_char_code;
@@ -1515,7 +1517,7 @@ pdfi_fapi_passfont(pdf_font *font, int subfont, char *fapi_request,
     char *xlatmap = NULL;
     char *decodingID = NULL;
 
-    if (!gs_fapi_available(pbfont->memory, NULL)) {
+    if (!gs_fapi_available(pbfont->memory, fapi_request)) {
         return (code);
     }
 
@@ -1561,9 +1563,7 @@ pdfi_fapi_passfont(pdf_font *font, int subfont, char *fapi_request,
     code =
         gs_fapi_passfont((gs_font *)pbfont, subfont, (char *)file_name, fdatap,
                          (char *)fapi_request, xlatmap, (char **)&fapi_id,
-                         &decodingID,
-                         (gs_fapi_get_server_param_callback)
-                         pdfi_get_server_param);
+                         &decodingID, pdfi_get_server_param);
 
     if (code < 0 || fapi_id == NULL) {
         return code;
@@ -1628,9 +1628,7 @@ bool
 pdfi_fapi_ufst_available(gs_memory_t * mem)
 {
     gs_fapi_server *serv = NULL;
-    int code = gs_fapi_find_server(mem, (char *)"UFST", &serv,
-                                   (gs_fapi_get_server_param_callback)
-                                   pdfi_get_server_param);
+    int code = gs_fapi_find_server(mem, (char *)"UFST", &serv, pdfi_get_server_param);
 
     if (code == 0 && serv != NULL) {
         return (true);
@@ -1694,7 +1692,7 @@ pdfi_fapi_get_mtype_font_scaleFactor(gs_font * pfont, uint * scaleFactor)
 #endif
 
 
-static void
+static int
 pdfi_get_server_param(gs_fapi_server * I, const char *subtype,
                     char **server_param, int *server_param_size)
 {
@@ -1721,14 +1719,15 @@ pdfi_get_server_param(gs_fapi_server * I, const char *subtype,
         *server_param = NULL;
         *server_param_size = length;
     }
+    return 1;
 }
 #else /* UFST_BRIDGE */
-static void
+static int
 pdfi_get_server_param(gs_fapi_server * I, const char *subtype,
                     char **server_param, int *server_param_size)
 {
     *server_param = NULL;
     *server_param_size = 0;
-    return;
+    return 1;
 }
 #endif /* UFST_BRIDGE */

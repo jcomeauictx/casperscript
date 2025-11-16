@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -226,10 +226,12 @@ int seticc(i_ctx_t * i_ctx_p, int ncomps, ref *ICCdict, float *range_buff)
         rc_decrement(picc_profile,"seticc");
         if (code >= 0) {
             /* Save this colorspace in the iccprofile_cache */
-            gsicc_add_cs(igs, pcs, picc_profile->hashcode);
-            /* should be an integer, but if for some reason it isn't, don't update */
-            if (phashval && r_has_type(phashval, t_integer))
-                phashval->value.intval = picc_profile->hashcode;
+            code = gsicc_add_cs(igs, pcs, picc_profile->hashcode);
+            if (code >= 0) {
+                /* should be an integer, but if for some reason it isn't, don't update */
+                if (phashval && r_has_type(phashval, t_integer))
+                    phashval->value.intval = picc_profile->hashcode;
+            }
         }
     }
     /* Remove the ICC dict from the stack */
@@ -343,6 +345,10 @@ zset_outputintent(i_ctx_t * i_ctx_p)
     picc_profile->name = (char *) gs_alloc_bytes(picc_profile->memory,
                                                  MAX_DEFAULT_ICC_LENGTH,
                                                  "zset_outputintent");
+    if (picc_profile->name == NULL) {
+        rc_decrement(picc_profile,"zset_outputintent");
+        return_error(gs_error_VMerror);
+    }
     strncpy(picc_profile->name, OI_PROFILE, strlen(OI_PROFILE));
     picc_profile->name[strlen(OI_PROFILE)] = 0;
     picc_profile->name_length = strlen(OI_PROFILE);
@@ -499,7 +505,9 @@ seticc_cal(i_ctx_t * i_ctx_p, float *white, float *black, float *gamma,
             pcs->cmm_icc_profile_data->Range.ranges[i].rmax = 1;
         }
         /* Add the color space to the profile cache */
-        gsicc_add_cs(igs, pcs,dictkey);
+        code = gsicc_add_cs(igs, pcs,dictkey);
+        if (code < 0)
+            return gs_rethrow(code, "adding the colour space");
     }
     /* Set the color space.  We are done.  */
     code = gs_setcolorspace(igs, pcs);

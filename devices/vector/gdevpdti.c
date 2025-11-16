@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -294,6 +294,8 @@ pdf_attach_charproc(gx_device_pdf * pdev, pdf_font_resource_t *pdfont, pdf_char_
     } else {
         if (gnstr->size > 0) {
             pcpo->char_name.data = gs_alloc_bytes(pdev->pdf_memory->non_gc_memory, gnstr->size, "storage for charproc name");
+            if (pcpo->char_name.data == NULL)
+                return_error(gs_error_VMerror);
             memcpy(pcpo->char_name.data, gnstr->data, gnstr->size);
         }
         pcpo->char_name.size = gnstr->size;
@@ -625,6 +627,8 @@ pdf_set_charproc_attrs(gx_device_pdf *pdev, gs_font *font, double *pw, int narg,
     pdf_char_proc_t *pcp;
     int code;
 
+    if (pres == NULL)
+        return_error(gs_error_undefined);
     code = pdf_attached_font_resource(pdev, font, &pdfont, NULL, NULL, NULL, NULL);
     if (code < 0)
         return code;
@@ -1121,6 +1125,8 @@ pdf_end_charproc_accum(gx_device_pdf *pdev, gs_font *font, const pdf_char_glyph_
     if (ch == GS_NO_CHAR)
         return_error(gs_error_unregistered); /* Must not happen. */
     if (ch >= 256)
+        return_error(gs_error_unregistered); /* Must not happen. */
+    if (pres == NULL)
         return_error(gs_error_unregistered); /* Must not happen. */
     code = pdf_attached_font_resource(pdev, font, &pdfont, NULL, NULL, NULL, NULL);
     if (code < 0)

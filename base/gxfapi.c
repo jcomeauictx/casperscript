@@ -1865,8 +1865,11 @@ gs_fapi_passfont(gs_font *pfont, int subfont, char *font_file_path,
         char *server_param = NULL;
         int server_param_size = 0;
 
-        (*get_server_param_cb) (I, (const char *)I->ig.d->subtype,
+        code = (*get_server_param_cb) (I, (const char *)I->ig.d->subtype,
                                 &server_param, &server_param_size);
+
+        if (code < 0)
+            return code;
 
         if (server_param == NULL && server_param_size > 0) {
             server_param =
@@ -1978,8 +1981,11 @@ gs_fapi_find_server(gs_memory_t *mem, const char *name, gs_fapi_server **server,
     }
 
     if (servs && *servs && get_server_param_cb) {
-        (*get_server_param_cb) ((*servs), (char *) (*servs)->ig.d->subtype,
+        code = (*get_server_param_cb) ((*servs), (char *) (*servs)->ig.d->subtype,
                                 &server_param, &server_param_size);
+
+        if (code < 0)
+            return code;
 
         if (server_param == NULL && server_param_size > 0) {
             server_param =
@@ -2032,7 +2038,7 @@ gs_fapi_init(gs_memory_t *mem)
 
     servs =
         (gs_fapi_server **) gs_alloc_bytes_immovable(mem->non_gc_memory,
-                                                     (num_servers +
+                                                     (size_t)(num_servers +
                                                       1) *
                                                      sizeof(gs_fapi_server *),
                                                      "gs_fapi_init");

@@ -880,7 +880,7 @@ struct gx_device_pdf_s {
                         Used only with uncached charprocs. */
     bool PS_accumulator; /* A flag to determine whether a given
                          accumulator is for a PostScript type 3 font or not. */
-    bool Scaled_accumulator; /* We scale teh CTM when accumulating type 3 fonts */
+    int32_t Scaled_accumulator; /* We scale teh CTM when accumulating type 3 fonts */
     bool accumulating_a_global_object; /* ps2write only.
                         Accumulating a global object (such as a named Form,
                         so that resources used in it must also be global.
@@ -989,7 +989,7 @@ struct gx_device_pdf_s {
     bool ModifiesPageOrder;         /* If true, the new PDF interpreter will not preserve Outlines or Dests, because they will refer to the wrong page number */
     bool WriteXRefStm;              /* If true, (the default) use an XRef stream rather than an xref table */
     bool WriteObjStms;              /* If true, (the default) store candidate objects in ObjStms rather than plain text in the PDF file. */
-    int64_t PendingOC;              /* An OptionalContent object is pending */
+    char *PendingOC;                /* An OptionalContent object is pending, the string is the name of the (already defined) object  */
     bool ToUnicodeForStdEnc;        /* Should we emit ToUnicode CMaps when a simple font has only standard glyph names. Defaults to true */
     bool EmbedSubstituteFonts;      /* When we use a substitute font to replace a missing font, should we embed it in the output */
     bool UseBrotli;                 /* Use Brotli compression in place of Flate */
@@ -1335,6 +1335,7 @@ typedef struct pdf_lcvd_s {
     bool filled_trap;
     bool write_matrix;
     bool has_background;
+    int pass;
     gs_matrix m;
     gs_point path_offset;
 } pdf_lcvd_t;

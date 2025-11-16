@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -318,6 +318,17 @@ ycc_to_rgb_8(unsigned char *row, unsigned long row_size)
     unsigned char y;
     signed char u, v;
     int r,g,b;
+
+    /* extra code for OSS-fuzz 414383025, the test file should not get here now
+     * but as a belt and braces approach, check the width of the row is a
+     * multiple of 3. If it isn't, reduce it until it is. This prevents
+     * row_size being decreased *below* 0, failing to exit the loop and
+     * reading from illegal memory locations
+     */
+    if (row_size < 3)
+        return;
+    row_size = row_size - row_size % 3;
+
     do
     {
         y = row[0];
@@ -353,6 +364,14 @@ ycc_to_rgb_16(unsigned char *row, unsigned long row_size)
     unsigned short y;
     signed short u, v;
     int r,g,b;
+
+    /* As per the 8-bit case above, make sure that row-size is a mutiple of 6
+     * so that we don't decrement it below 0 in the loop.
+     */
+    if (row_size < 6)
+        return;
+    row_size = row_size - row_size % 6;
+
     do
     {
         y = (row[0]<<8) | row[1];
@@ -387,7 +406,7 @@ ycc_to_rgb_16(unsigned char *row, unsigned long row_size)
 
 static int decode_image(stream_jpxd_state * const state)
 {
-    int numprimcomp = 0, alpha_comp = -1, compno, rowbytes;
+    int numprimcomp = 0, alpha_comp = -1, compno, rowbytes, bps;
 
     /* read header */
     if (!opj_read_header(state->stream, state->codec, &(state->image)))
@@ -491,15 +510,30 @@ static int decode_image(stream_jpxd_state * const state)
         state->bpp = 16;
 
     /* calculate  total data */
-    rowbytes =  (state->width*state->bpp*state->out_numcomps+7)/8;
-    state->totalbytes = (ulong)rowbytes*state->height;
+    bps = state->bpp * state->out_numcomps;
 
-    state->pdata = (int **)gs_alloc_byte_array(state->memory->non_gc_memory, sizeof(int*)*state->image->numcomps, 1, "decode_image(pdata)");
+    /* Overflow check, almost certainly superfluous, but let's be certain */
+    if (state->out_numcomps != 0 && bps / state->out_numcomps != state->bpp)
+        return_error(gs_error_rangecheck);
+
+    rowbytes = state->width * bps;
+    /* Overflow check */
+    if ((bps != 0 && rowbytes / bps != state->width) || rowbytes > max_int - 8)
+        return_error(gs_error_rangecheck);
+
+    rowbytes = (rowbytes + 7) / 8;
+
+    state->totalbytes = (ulong)rowbytes*state->height;
+    /* Overflow check */
+    if (rowbytes != 0 && state->totalbytes / rowbytes != state->height)
+        return_error(gs_error_rangecheck);
+
+    state->pdata = (int **)gs_alloc_byte_array(state->memory->non_gc_memory, sizeof(int*)*(size_t)state->image->numcomps, 1, "decode_image(pdata)");
     if (!state->pdata)
         return_error(gs_error_VMerror);
 
     /* compensate for signed data (signed => unsigned) */
-    state->sign_comps = (int *)gs_alloc_byte_array(state->memory->non_gc_memory, sizeof(int)*state->image->numcomps, 1, "decode_image(sign_comps)");
+    state->sign_comps = (int *)gs_alloc_byte_array(state->memory->non_gc_memory, sizeof(int)*(size_t)state->image->numcomps, 1, "decode_image(sign_comps)");
     if (!state->sign_comps)
         return_error(gs_error_VMerror);
 
@@ -669,7 +703,8 @@ static int process_one_trunk(stream_jpxd_state * const state, stream_cursor_writ
                 }
             }
 
-            if (state->image->color_space == OPJ_CLRSPC_SYCC || state->image->color_space == OPJ_CLRSPC_EYCC)
+            /* Check the number of components, if it's not 3 then we could be dealing with an indexed space and must not do this conversion */
+            if ((state->image->color_space == OPJ_CLRSPC_SYCC || state->image->color_space == OPJ_CLRSPC_EYCC) && state->image->numcomps == 3)
             {
                 /* bpp >= 8 always, as bpp < 8 only for grayscale */
                 if (state->bpp == 8)

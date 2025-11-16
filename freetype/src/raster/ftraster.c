@@ -297,8 +297,8 @@
   typedef unsigned int    UInt;
   typedef short           Short;
   typedef unsigned short  UShort, *PUShort;
-  typedef long            Long, *PLong;
-  typedef unsigned long   ULong;
+  typedef long long           Long, *PLong;
+  typedef unsigned long long   ULong;
 
   typedef unsigned char   Byte, *PByte;
   typedef char            Bool;
@@ -2643,7 +2643,7 @@
   static void
   ft_black_reset( FT_Raster  raster,
                   PByte      pool_base,
-                  ULong      pool_size )
+                  unsigned long      pool_size )
   {
     FT_UNUSED( raster );
     FT_UNUSED( pool_base );
@@ -2653,7 +2653,7 @@
 
   static int
   ft_black_set_mode( FT_Raster  raster,
-                     ULong      mode,
+                     unsigned long      mode,
                      void*      args )
   {
     FT_UNUSED( raster );

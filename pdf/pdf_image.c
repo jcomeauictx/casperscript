@@ -1751,7 +1751,7 @@ pdfi_do_image(pdf_context *ctx, pdf_dict *page_dict, pdf_dict *stream_dict, pdf_
         goto cleanupExit;
     /* If there is an OC dictionary, see if we even need to render this */
     if (image_info.OC) {
-        if (!(ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent && ctx->device_state.WantsOptionalContent)) {
+        if (!(ctx->device_state.writepdfmarks && ctx->device_state.WantsOptionalContent)) {
             if (!pdfi_oc_is_ocg_visible(ctx, image_info.OC))
                 goto cleanupExit;
         }
@@ -2016,6 +2016,8 @@ pdfi_do_image(pdf_context *ctx, pdf_dict *page_dict, pdf_dict *stream_dict, pdf_
         mask_stream = NULL;
         code = pdfi_image_setup_type3x(ctx, &image_info, &t3ximage, &smask_info, comps);
         if (code < 0) {
+            if ((code = pdfi_set_error_stop(ctx, gs_note_error(code), NULL, E_PDF_INVALID_MATTE, "pdfi_do_image", "")) < 0)
+                goto cleanupExitError;
             /* If this got an error, setup as a Type 1 image */
             /* NOTE: I did this error-handling the same as for Type 4 image below.
              * Dunno if it's better to do this or to just abort the whole image?
@@ -2023,6 +2025,7 @@ pdfi_do_image(pdf_context *ctx, pdf_dict *page_dict, pdf_dict *stream_dict, pdf_
             memset(&t1image, 0, sizeof(t1image));
             pim = (gs_pixel_image_t *)&t1image;
             gs_image_t_init_adjust(&t1image, pcs, true);
+            smask_stream = mask_stream = NULL;
         } else {
             pim = (gs_pixel_image_t *)&t3ximage;
         }
@@ -2186,6 +2189,7 @@ pdfi_do_image(pdf_context *ctx, pdf_dict *page_dict, pdf_dict *stream_dict, pdf_
     if (code < 0)
         code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_IMAGE_ERROR, "pdfi_do_image", NULL);
 
+ cleanupExitError:
     if (transparency_group) {
         pdfi_trans_end_isolated_group(ctx);
         if (need_smask_cleanup)
@@ -2659,7 +2663,9 @@ int pdfi_do_image_or_form(pdf_context *ctx, pdf_dict *stream_dict,
             return code;
 
         if (pdfi_type_of(OCDict) == PDF_DICT) {
-            if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent && ctx->device_state.WantsOptionalContent) {
+            char *label = NULL;
+
+            if (ctx->device_state.writepdfmarks && ctx->device_state.WantsOptionalContent) {
                 code = pdfi_pdfmark_dict(ctx, OCDict);
                 if (code < 0) {
                     if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_DO_OC_FAILED, "pdfi_do_image_or_form", NULL)) < 0) {
@@ -2667,8 +2673,17 @@ int pdfi_do_image_or_form(pdf_context *ctx, pdf_dict *stream_dict,
                         return code;
                     }
                 }
-                code = dev_proc(cdev, dev_spec_op)(cdev, gxdso_pending_optional_content, &OCDict->object_num, 0);
-                if (code < 0) {
+                code = pdfi_obj_get_label(ctx, (pdf_obj *)OCDict, &label);
+                if (code >= 0) {
+                    code = dev_proc(cdev, dev_spec_op)(cdev, gxdso_pending_optional_content, label, 0);
+                    gs_free_object(ctx->memory, label, "");
+                    if (code < 0) {
+                        if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_DO_OC_FAILED, "pdfi_do_image_or_form", NULL)) < 0) {
+                            pdfi_countdown(OCDict);
+                            return code;
+                        }
+                    }
+                } else {
                     if ((code = pdfi_set_warning_stop(ctx, code, NULL, W_PDF_DO_OC_FAILED, "pdfi_do_image_or_form", NULL)) < 0) {
                         pdfi_countdown(OCDict);
                         return code;

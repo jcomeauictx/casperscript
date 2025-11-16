@@ -315,7 +315,10 @@ pdfi_open_CIDFont_substitute_file(pdf_context *ctx, pdf_dict *font_dict, pdf_dic
                 pdfi_countdown(mname);
 
                 if (ctx->args.nocidfallback == true) {
-                    code = gs_note_error(gs_error_invalidfont);
+                    if (ctx->args.pdfstoponerror == true)
+                        code = gs_note_error(gs_error_Fatal);
+                    else
+                        code = gs_note_error(gs_error_invalidfont);
                 }
                 else {
                     if (ctx->args.cidfsubstpath.data == NULL) {
@@ -1207,7 +1210,8 @@ int pdfi_load_font(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict,
     }
     if (ppdffont == NULL || code < 0) {
         *ppfont = NULL;
-        code = gs_note_error(gs_error_invalidfont);
+        if (code != gs_error_Fatal)
+            code = gs_note_error(gs_error_invalidfont);
     }
     else {
         ppdffont->substitute = (substitute != font_embedded);
@@ -1672,7 +1676,7 @@ int pdfi_Tf(pdf_context *ctx, pdf_dict *stream_dict, pdf_dict *page_dict)
     code = pdfi_load_resource_font(ctx, stream_dict, page_dict, fontname, point_size);
 
     /* If we failed to load font, try to load an internal one */
-    if (code < 0)
+    if (code != gs_error_Fatal && code < 0)
         code = pdfi_font_set_internal_name(ctx, fontname, point_size);
  exit0:
     pdfi_countdown(fontname);
@@ -2257,7 +2261,7 @@ int pdfi_glyph_name(gs_font * pfont, gs_glyph glyph, gs_const_string * pstr)
 
     if (pfont->FontType == ft_encrypted || pfont->FontType == ft_encrypted2
      || pfont->FontType == ft_user_defined || pfont->FontType == ft_TrueType
-     || pfont->FontType == ft_PDF_user_defined) {
+     || pfont->FontType == ft_PDF_user_defined || pfont->FontType == ft_MicroType) {
         pdf_font *font = (pdf_font *)pfont->client_data;
 
         code = pdfi_name_from_index(font->ctx, glyph, (unsigned char **)&pstr->data, &pstr->size);
@@ -2460,7 +2464,7 @@ int pdfi_font_create_widths(pdf_context *ctx, pdf_dict *fontdict, pdf_font *font
             goto error;
         }
 
-        font->Widths = (double *)gs_alloc_bytes(OBJ_MEMORY(font), sizeof(double) * (font->LastChar - font->FirstChar + 1), "pdfi_font_create_widths(Widths)");
+        font->Widths = (double *)gs_alloc_bytes(OBJ_MEMORY(font), (size_t)sizeof(double) * (font->LastChar - font->FirstChar + 1), "pdfi_font_create_widths(Widths)");
         if (font->Widths == NULL) {
             code = gs_note_error(gs_error_VMerror);
             goto error;
@@ -2586,7 +2590,7 @@ int pdfi_font_generate_pseudo_XUID(pdf_context *ctx, pdf_dict *fontdict, gs_font
             else if (uid_is_valid(&pfont->UID))
                 xuidlen++;
 
-            xvalues = (long *)gs_alloc_bytes(pfont->memory, xuidlen * sizeof(long), "pdfi_font_generate_pseudo_XUID");
+            xvalues = (long *)gs_alloc_bytes(pfont->memory, (size_t)xuidlen * sizeof(long), "pdfi_font_generate_pseudo_XUID");
             if (xvalues == NULL) {
                 return 0;
             }

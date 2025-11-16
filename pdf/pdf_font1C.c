@@ -450,7 +450,7 @@ pdfi_cff_cid_glyph_data(gs_font_base *pbfont, gs_glyph glyph, gs_glyph_data_t *p
         code = pdfi_dict_get_by_key(pdffont9->ctx, pdffont9->CharStrings, glyphname, (pdf_obj **) &charstring);
         if (code >= 0 && charstring->length >= gscidfont->cidata.FDBytes) {
             if (gscidfont->cidata.FDBytes != 0) {
-                if ((int)charstring->data[0] > gscidfont->cidata.FDArray_size)
+                if ((int)charstring->data[0] >= gscidfont->cidata.FDArray_size)
                     code = gs_note_error(gs_error_invalidfont);
                 else
                     *pfidx = (int)charstring->data[0];
@@ -1928,7 +1928,7 @@ pdfi_read_cff(pdf_context *ctx, pdfi_gs_cff_font_priv *ptpriv)
 
         ptpriv->cidata.FDBytes = 1;     /* Basically, always 1 just now */
 
-        ptpriv->cidata.FDArray = (gs_font_type1 **) gs_alloc_bytes(ctx->memory, fdarray_size * sizeof(gs_font_type1 *), "pdfi_read_cff(fdarray)");
+        ptpriv->cidata.FDArray = (gs_font_type1 **) gs_alloc_bytes(ctx->memory, (size_t)fdarray_size * sizeof(gs_font_type1 *), "pdfi_read_cff(fdarray)");
         if (!ptpriv->cidata.FDArray)
             return_error(gs_error_VMerror);
         ptpriv->cidata.FDArray_size = fdarray_size;
@@ -2423,10 +2423,13 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
         if (code >= 0) {
             if (cffpriv.FontType == ft_CID_encrypted) {
                 pdf_obj *obj = NULL;
-                pdf_cidfont_type0 *cffcid;
-                gs_font_cid0 *pfont;
+                pdf_cidfont_type0 *cffcid = NULL;
+                gs_font_cid0 *pfont = NULL;
 
                 code = pdfi_alloc_cff_cidfont(ctx, &cffcid, font_dict->object_num);
+                if (code < 0)
+                    goto error;
+
                 pfont = (gs_font_cid0 *) cffcid->pfont;
                 ppdfont = (pdf_font *) cffcid;
 
@@ -2486,6 +2489,14 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 pfont->cidata.common.CIDSystemInfo.Ordering.data = cffcid->ordering->data;
                 pfont->cidata.common.CIDSystemInfo.Ordering.size = cffcid->ordering->length;
                 pfont->cidata.common.CIDSystemInfo.Supplement = cffcid->supplement;
+
+                /* We don't need to bounds check these strings because they were checked when parsing
+                 * from the CFF stream.
+                 */
+                memcpy(pfont->font_name.chars, cffpriv.font_name.chars, cffpriv.font_name.size);
+                pfont->font_name.size = cffpriv.font_name.size;
+                memcpy(pfont->key_name.chars, cffpriv.key_name.chars, cffpriv.key_name.size);
+                pfont->key_name.size = cffpriv.key_name.size;
 
                 cffcid->FontDescriptor = (pdf_dict *) fontdesc;
                 fontdesc = NULL;
@@ -2727,6 +2738,14 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 pfont->cidata.common.CIDSystemInfo.Supplement = cffcid->supplement;
                 pfont->client_data = cffcid;
 
+                /* We don't need to bounds check these strings because they were checked when parsing
+                 * from the CFF stream.
+                 */
+                memcpy(pfont->font_name.chars, cffpriv.font_name.chars, cffpriv.font_name.size);
+                pfont->font_name.size = cffpriv.font_name.size;
+                memcpy(pfont->key_name.chars, cffpriv.key_name.chars, cffpriv.key_name.size);
+                pfont->key_name.size = cffpriv.key_name.size;
+
                 cffcid->object_num = font_dict->object_num;
                 cffcid->generation_num = font_dict->generation_num;
                 cffcid->indirect_num = font_dict->indirect_num;
@@ -2800,11 +2819,14 @@ pdfi_read_cff_font(pdf_context *ctx, pdf_dict *font_dict, pdf_dict *stream_dict,
                 cffcid->pfont->id = gs_next_ids(ctx->memory, 1);
             }
             else {
-                pdf_font_cff *cfffont;
+                pdf_font_cff *cfffont = NULL;
                 gs_font_type1 *pfont = NULL;
                 pdf_obj *tounicode = NULL;
 
                 code = pdfi_alloc_cff_font(ctx, &cfffont, font_dict != NULL ? font_dict->object_num : 0, false);
+                if (code < 0)
+                    goto error;
+
                 pfont = (gs_font_type1 *) cfffont->pfont;
                 ppdfont = (pdf_font *) cfffont;
 

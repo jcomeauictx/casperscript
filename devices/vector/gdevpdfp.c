@@ -358,7 +358,7 @@ gdev_pdf_get_params(gx_device * dev, gs_param_list * plist)
                 break;
             case UseOCRAlways:
                 ocrstr.data = (const byte *)"Always";
-                ocrstr.size = 8;
+                ocrstr.size = 6;
                 ocrstr.persistent = false;
                 break;
         }
@@ -956,7 +956,7 @@ gdev_pdf_put_params_impl(gx_device * dev, const gx_device_pdf * save_dev, gs_par
          pdev->OwnerPassword.size) != 0)) {
         if (pdev->is_open) {
             if (pdev->PageCount == 0) {
-                gs_closedevice((gx_device *)save_dev);
+                gs_closedevice((gx_device *)pdev);
                 return 0;
             }
             else

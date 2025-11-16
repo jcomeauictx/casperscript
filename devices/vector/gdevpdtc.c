@@ -912,6 +912,7 @@ scan_cmap_text(pdf_text_enum_t *pte, void *vbuf)
                                          float2fixed(text_bbox.q.x) - x0,
                                          float2fixed(text_bbox.p.y) - y0,
                                          bx2, by2, &devc, lop_default);
+                gx_destroy_clip_device_on_stack(&cdev);
                 pdev->AccumulatingBBox--;
             }
             code = pdf_shift_text_currentpoint(pte, &wxy);
@@ -961,6 +962,8 @@ process_cmap_text(gs_text_enum_t *penum, void *vbuf, uint bsize)
      */
     save = (byte *)pte->text.data.bytes;
     pte->text.data.bytes = gs_alloc_string(pte->memory, pte->text.size, "pdf_text_process");
+    if (pte->text.data.bytes == NULL)
+        return_error(gs_error_VMerror);
     memcpy((byte *)pte->text.data.bytes, save, pte->text.size);
     code = scan_cmap_text(pte, vbuf);
     gs_free_string(pte->memory, (byte *)pte->text.data.bytes,  pte->text.size, "pdf_text_process");

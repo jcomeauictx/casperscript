@@ -88,14 +88,14 @@ The table below details the third party libraries that Ghostscript and/or GhostP
      - MIT LICENSE
      - http://www.ghostscript.com/
    * - libpng
-     - 1.6.44
+     - 1.6.50
      - PNG image encoding/decoding
      - libpng license - classified as
 
        "a permissive free software license"
      - http://www.libpng.org/
    * - OpenJPEG
-     - 2.5.2
+     - 2.5.3
      - JPEG2000 image decoding for the
 
        PDF interpreter
@@ -109,6 +109,11 @@ The table below details the third party libraries that Ghostscript and/or GhostP
 
        "a permissive free software license"
      - http://www.zlib.net/
+   * - brotli
+     - 1.0.9
+     - brotli compression/decompression
+     - MIT
+     - https://github.com/google/brotli
    * - libtiff
      - 4.7.0
      - TIFF image encoding/decoding

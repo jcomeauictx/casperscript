@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -490,12 +490,12 @@ int buffer_data(pl_main_instance_t *minst, const char *data, unsigned int len)
         chunk_max >>= BUFFERED_FILE_CHUNK_SHIFT;
         if (bf->index == NULL) {
             new_index = (byte **)gs_alloc_bytes(bf->memory,
-                                                sizeof(byte *) * chunk_max,
+                                                (size_t)sizeof(byte *) * chunk_max,
                                                 "buffered_file_index");
         } else {
             new_index = (byte **)gs_resize_object(bf->memory,
                                                   bf->index,
-                                                  sizeof(byte *) * chunk_max,
+                                                  (size_t)sizeof(byte *) * chunk_max,
                                                   "buffered_file_index");
         }
         if (new_index == NULL)
@@ -1244,7 +1244,7 @@ pl_main_languages_init(gs_memory_t * mem,        /* deallocator for devices */
 {
     int index;
     int count;
-    int sz;
+    size_t sz;
     pl_interp_implementation_t **impls;
 
     for (count = 0; pdl_implementations[count] != 0; ++count)
@@ -2342,7 +2342,7 @@ do_arg_match(const char **arg, const char *match, size_t match_len)
     if (strncmp(s, match, match_len) != 0)
         return 0;
     s += match_len;
-    if (*s == '=')
+    if (*s == '=' || *s == '#')
         *arg = ++s;
     else if (*s != 0)
         return 0;
@@ -2637,8 +2637,10 @@ help:
                                  "-K must be followed by a number\n");
                         code = -1;
                     }
-                    else
-                        rawheap->limit = (long)maxk << 10;
+                    else {
+                        if (rawheap != NULL)
+                            rawheap->limit = (long)maxk << 10;
+                    }
                 }
                 break;
             case 'l':          /* personality */

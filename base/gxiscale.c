@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -75,7 +75,7 @@ static irender_proc(image_render_interpolate_landscape_icc);
 static irender_proc(image_render_interpolate_landscape_masked);
 static irender_proc(image_render_interpolate_landscape_masked_hl);
 
-#if 0 // Unused now, but potentially useful in the future
+#if 0 /* Unused now, but potentially useful in the future */
 static bool
 is_high_level_device(gx_device *dev)
 {
@@ -112,7 +112,7 @@ device_allows_imagemask_interpolation(gx_device *dev)
     char data[] = "NoInterpolateImagemasks";
     dev_param_req_t request;
     gs_c_param_list list;
-    int nointerpolate = 0;
+    bool nointerpolate = false;
     int code;
 
     gs_c_param_list_write(&list, dev->memory);
@@ -1248,6 +1248,7 @@ image_render_interpolate(gx_image_enum * penum, const byte * buffer,
             int scaled_x_prev = 0;
             gx_dda_fixed save_x_dda = pss->params.scale_dda.x;
 
+            devc.tag = device_current_tag(dev);
             devc.type = gx_dc_type_none; /* Needed for coverity, in call to color_is_pure() if color_handler is NULL. */
             stream_w.limit = out + pss->params.WidthOut *
                 max(spp_decode * sizeofPixelOut, ARCH_SIZEOF_COLOR_INDEX) - 1;
@@ -1696,6 +1697,8 @@ irii_inner_template(gx_image_enum * penum, int xo, int xe, int spp_cm, unsigned 
     int scaled_h = 0;
     int scaled_y = 0;
 
+    devc.tag = device_current_tag(dev);
+
     if (abs_interp_limit > 1) {
         scaled_h = interpolate_scaled_expanded_height(1, pss);
         scaled_y = yo + (dy * dda_current(pss->params.scale_dda.y));
@@ -1922,6 +1925,7 @@ static int irii_inner_32bpp_4spp_1abs(gx_image_enum * penum, int xo, int xe, int
     int code;
     int ry = yo + penum->line_xy * dy;
 
+    devc.tag = device_current_tag(dev);
     for (x = xo; x < xe;) {
 
 #ifdef DEBUG
@@ -1999,6 +2003,7 @@ static int irii_inner_24bpp_3spp_1abs(gx_image_enum * penum, int xo, int xe, int
     int code;
     int ry = yo + penum->line_xy * dy;
 
+    devc.tag = device_current_tag(dev);
     for (x = xo; x < xe;) {
 #ifdef DEBUG
         if (gs_debug_c('B')) {
@@ -2072,6 +2077,7 @@ static int irii_inner_8bpp_1spp_1abs(gx_image_enum * penum, int xo, int xe, int 
     int code;
     int ry = yo + penum->line_xy * dy;
 
+    devc.tag = device_current_tag(dev);
     for (x = xo; x < xe;) {
 #ifdef DEBUG
         if (gs_debug_c('B')) {
@@ -2205,6 +2211,9 @@ image_render_interpolate_icc(gx_image_enum * penum, const byte * buffer,
                 (byte *) gs_alloc_bytes(pgs->memory,
                                         (size_t)num_bytes_decode * width_in * spp_cm,
                                         "image_render_interpolate_icc");
+            if (p_cm_buff == NULL)
+                return_error(gs_error_VMerror);
+
             /* Set up the buffer descriptors. We keep the bytes the same */
             gsicc_init_buffer(&input_buff_desc, spp_decode, num_bytes_decode,
                           false, false, false, 0, width_in * spp_decode,
@@ -2228,7 +2237,7 @@ image_render_interpolate_icc(gx_image_enum * penum, const byte * buffer,
                if needed.  16 bit operations if CM takes place.  */
             if (!penum->icc_link->is_identity) {
                 p_cm_buff = (byte *) gs_alloc_bytes(pgs->memory,
-                    sizeof(unsigned short) * width * spp_cm,
+                    sizeof(unsigned short) * (size_t)width * spp_cm,
                     "image_render_interpolate_icc");
                 if (!p_cm_buff) {
                     return gs_error_VMerror;
@@ -2360,6 +2369,7 @@ image_render_interpolate_landscape(gx_image_enum * penum,
             int scaled_w = 0;
             gx_dda_fixed save_x_dda;
 
+            devc.tag = device_current_tag(dev);
             if (abs_interp_limit > 1) {
                 save_x_dda = pss->params.scale_dda.x;
             }
@@ -2699,6 +2709,9 @@ image_render_interpolate_landscape_icc(gx_image_enum * penum,
                 (byte *) gs_alloc_bytes(pgs->memory,
                                         (size_t)num_bytes_decode * width_in * spp_cm,
                                         "image_render_interpolate_icc");
+            if (p_cm_buff == NULL)
+                return_error(gs_error_VMerror);
+
             /* Set up the buffer descriptors. We keep the bytes the same */
             gsicc_init_buffer(&input_buff_desc, spp_decode, num_bytes_decode,
                           false, false, false, 0, width_in * spp_decode,
@@ -2722,8 +2735,10 @@ image_render_interpolate_landscape_icc(gx_image_enum * penum,
                if needed.  16 bit operations if CM takes place.  */
             if (!penum->icc_link->is_identity) {
                 p_cm_buff = (byte *) gs_alloc_bytes(pgs->memory,
-                    sizeof(unsigned short) * width * spp_cm,
+                    sizeof(unsigned short) * (size_t)width * spp_cm,
                     "image_render_interpolate_icc");
+                if (p_cm_buff == NULL)
+                    return_error(gs_error_VMerror);
                 /* Set up the buffer descriptors. */
                 gsicc_init_buffer(&input_buff_desc, spp_decode, 2,
                               false, false, false, 0, width * spp_decode,
@@ -2742,6 +2757,7 @@ image_render_interpolate_landscape_icc(gx_image_enum * penum,
             int scaled_w = 0;
             gx_dda_fixed save_x_dda;
 
+            devc.tag = device_current_tag(dev);
             if (abs_interp_limit > 1) {
                 save_x_dda = pss->params.scale_dda.x;
             }

@@ -845,8 +845,16 @@ pdf_open(gx_device * dev)
     pdev->local_named_objects =
         pdev->global_named_objects =
         cos_dict_alloc(pdev, "pdf_open(global_named_objects)");
+    if (pdev->local_named_objects == NULL) {
+        code = gs_error_VMerror;
+        goto fail;
+    }
     /* Initialize internal structures that don't have IDs. */
     pdev->NI_stack = cos_array_alloc(pdev, "pdf_open(NI stack)");
+    if (pdev->NI_stack == NULL) {
+        code = gs_error_VMerror;
+        goto fail;
+    }
     pdev->vgstack = (pdf_viewer_state *)gs_alloc_bytes(pdev->pdf_memory, 11 * sizeof(pdf_viewer_state), "pdf_open(graphics state stack)");
     if (pdev->vgstack == 0) {
         code = gs_error_VMerror;
@@ -855,6 +863,10 @@ pdf_open(gx_device * dev)
     memset(pdev->vgstack, 0x00, 11 * sizeof(pdf_viewer_state));
     pdev->vgstack_size = 11;
     pdev->Namespace_stack = cos_array_alloc(pdev, "pdf_open(Namespace stack)");
+    if (pdev->Namespace_stack == NULL) {
+        code = gs_error_VMerror;
+        goto fail;
+    }
     pdf_initialize_ids(pdev);
     code = pdf_compute_fileID(pdev);
     if (code < 0)
@@ -875,6 +887,10 @@ pdf_open(gx_device * dev)
     /* Now create a new dictionary for the local named objects. */
     pdev->local_named_objects =
         cos_dict_alloc(pdev, "pdf_open(local_named_objects)");
+    if (pdev->local_named_objects == NULL) {
+        code = gs_error_VMerror;
+        goto fail;
+    }
     pdev->outlines_id = 0;
     pdev->next_page = 0;
     pdev->text = pdf_text_data_alloc(mem);
@@ -899,6 +915,11 @@ pdf_open(gx_device * dev)
                 pdev->resources[i].chains[j] = 0;
     }
     pdev->outline_levels = (pdf_outline_level_t *)gs_alloc_bytes(mem, INITIAL_MAX_OUTLINE_DEPTH * sizeof(pdf_outline_level_t), "outline_levels array");
+    if (pdev->outline_levels == NULL) {
+        code = gs_error_VMerror;
+        goto fail;
+    }
+
     memset(pdev->outline_levels, 0x00, INITIAL_MAX_OUTLINE_DEPTH * sizeof(pdf_outline_level_t));
     pdev->max_outline_depth = INITIAL_MAX_OUTLINE_DEPTH;
     pdev->outline_levels[0].first.id = 0;
@@ -962,7 +983,10 @@ pdf_ferror(gx_device_pdf *pdev)
 {
     int code = 0;
 
-    gp_fflush(pdev->file);
+    if (pdev->file != NULL) {
+        gp_fflush(pdev->file);
+        code = gp_ferror(pdev->file);
+    }
     gp_fflush(pdev->xref.file);
     if (pdev->strm->file != NULL)
         sflush(pdev->strm);
@@ -971,12 +995,13 @@ pdf_ferror(gx_device_pdf *pdev)
     if (pdev->streams.strm->file != NULL)
         sflush(pdev->streams.strm);
     if (pdev->ObjStm.strm != NULL && pdev->ObjStm.strm->file != NULL) {
+        int code2;
         sflush(pdev->ObjStm.strm);
-        code = gp_ferror(pdev->ObjStm.file);
+        code2 = gp_ferror(pdev->ObjStm.file);
+        if (code >= 0) code = code2;
     }
-    return gp_ferror(pdev->file) || gp_ferror(pdev->xref.file) ||
-        gp_ferror(pdev->asides.file) || gp_ferror(pdev->streams.file) ||
-        code;
+    return gp_ferror(pdev->xref.file) || gp_ferror(pdev->asides.file) ||
+           gp_ferror(pdev->streams.file) || code;
 }
 
 /* Compute the dominant text orientation of a page. */
@@ -2223,11 +2248,19 @@ static int pdf_linearise(gx_device_pdf *pdev, pdf_linearisation_t *linear_params
     memset(linear_params->HintBuffer, 0x00, 256);
     linear_params->HintBits = linear_params->HintByte = 0;
 
-    linear_params->PageHints = (page_hint_stream_t *)gs_alloc_bytes(pdev->pdf_memory, pdev->next_page * sizeof(page_hint_stream_t), "Hints for the pages");
+    linear_params->PageHints = (page_hint_stream_t *)gs_alloc_bytes(pdev->pdf_memory, (size_t)(pdev->next_page) * sizeof(page_hint_stream_t), "Hints for the pages");
+    if (linear_params->PageHints == NULL) {
+        code = gs_error_VMerror;
+        goto error;
+    }
     memset(linear_params->PageHints, 0x00, pdev->next_page * sizeof(page_hint_stream_t));
     linear_params->NumPageHints = pdev->next_page;
 
-    linear_params->SharedHints = (shared_hint_stream_t *)gs_alloc_bytes(pdev->pdf_memory, (linear_params->NumPage1Resources + linear_params->NumSharedResources) * sizeof(shared_hint_stream_t), "Hints for the shared objects");
+    linear_params->SharedHints = (shared_hint_stream_t *)gs_alloc_bytes(pdev->pdf_memory, (size_t)(linear_params->NumPage1Resources + linear_params->NumSharedResources) * sizeof(shared_hint_stream_t), "Hints for the shared objects");
+    if (linear_params->SharedHints == NULL) {
+        code = gs_error_VMerror;
+        goto error;
+    }
     memset(linear_params->SharedHints, 0x00, (linear_params->NumPage1Resources + linear_params->NumSharedResources) * sizeof(shared_hint_stream_t));
     linear_params->NumSharedHints = linear_params->NumPage1Resources + linear_params->NumSharedResources;
 
@@ -2270,12 +2303,20 @@ static int pdf_linearise(gx_device_pdf *pdev, pdf_linearisation_t *linear_params
 
                 pagehint = &linear_params->PageHints[page - 1];
                 if (pagehint->SharedObjectRef){
-                    int *Temp = (int *)gs_alloc_bytes(pdev->pdf_memory, (pagehint->NumSharedObjects + 1) * sizeof(int), "realloc shared object hints");
+                    int *Temp = (int *)gs_alloc_bytes(pdev->pdf_memory, (size_t)(pagehint->NumSharedObjects + 1) * sizeof(int), "realloc shared object hints");
+                    if (Temp == NULL) {
+                        code = gs_note_error(gs_error_VMerror);
+                        goto error;
+                    }
                     memcpy(Temp, pagehint->SharedObjectRef, (pagehint->NumSharedObjects) * sizeof(int));
                     gs_free_object(pdev->pdf_memory, pagehint->SharedObjectRef, "realloc shared object hints");
                     pagehint->SharedObjectRef = (unsigned int *)Temp;
                 } else {
-                    pagehint->SharedObjectRef = (unsigned int *)gs_alloc_bytes(pdev->pdf_memory, (pagehint->NumSharedObjects + 1) * sizeof(int), "shared object hints");
+                    pagehint->SharedObjectRef = (unsigned int *)gs_alloc_bytes(pdev->pdf_memory, (size_t)(pagehint->NumSharedObjects + 1) * sizeof(int), "shared object hints");
+                    if (pagehint->SharedObjectRef == NULL) {
+                        code = gs_note_error(gs_error_VMerror);
+                        goto error;
+                    }
                 }
                 pagehint->SharedObjectRef[pagehint->NumSharedObjects] = i;
                 pagehint->NumSharedObjects++;
@@ -2691,9 +2732,13 @@ int pdf_record_usage(gx_device_pdf *const pdev, int64_t resource_id, int page_nu
             pdev->ResourceUsageSize = resource_id + 1;
             pdev->ResourceUsage = gs_alloc_struct_array(pdev->pdf_memory->non_gc_memory, resource_id + 1, pdf_linearisation_record_t,
                               &st_pdf_linearisation_record_element, "start resource usage array");
+            if (pdev->ResourceUsage == NULL)
+                return_error(gs_error_VMerror);
             memset((char *)pdev->ResourceUsage, 0x00, (resource_id + 1) * sizeof(pdf_linearisation_record_t));
         } else {
             resize = gs_resize_object(pdev->pdf_memory->non_gc_memory, pdev->ResourceUsage, resource_id + 1, "resize resource usage array");
+            if (resize == NULL)
+                return_error(gs_error_VMerror);
             memset(&resize[pdev->ResourceUsageSize], 0x00, sizeof(pdf_linearisation_record_t) * (resource_id - pdev->ResourceUsageSize + 1));
             pdev->ResourceUsageSize = resource_id + 1;
             pdev->ResourceUsage = resize;
@@ -2723,7 +2768,9 @@ int pdf_record_usage(gx_device_pdf *const pdev, int64_t resource_id, int page_nu
                 return 0;
         }
     }
-    Temp = gs_alloc_bytes(pdev->pdf_memory->non_gc_memory, (pdev->ResourceUsage[resource_id].NumPagesUsing + 1) * sizeof (int), "Page usage records");
+    Temp = gs_alloc_bytes(pdev->pdf_memory->non_gc_memory, (size_t)(pdev->ResourceUsage[resource_id].NumPagesUsing + 1) * sizeof (int), "Page usage records");
+    if (Temp == NULL)
+        return_error(gs_error_VMerror);
     memset((char *)Temp, 0x00, (pdev->ResourceUsage[resource_id].NumPagesUsing + 1) * sizeof (int));
     memcpy((char *)Temp, pdev->ResourceUsage[resource_id].PageList, pdev->ResourceUsage[resource_id].NumPagesUsing * sizeof (int));
     gs_free_object(pdev->pdf_memory->non_gc_memory, (byte *)pdev->ResourceUsage[resource_id].PageList, "Free old page usage records");
@@ -3290,6 +3337,10 @@ pdf_close(gx_device * dev)
     if (pdev->Linearise) {
         linear_params.LastResource = pdev->next_id - 1;
         linear_params.Offsets = (gs_offset_t *)gs_alloc_bytes(pdev->pdf_memory, pdev->next_id * sizeof(gs_offset_t), "temp xref storage");
+        if (linear_params.Offsets == NULL) {
+            code = gs_error_VMerror;
+            goto error_cleanup;
+        }
         memset(linear_params.Offsets, 0x00, linear_params.LastResource * sizeof(gs_offset_t));
     }
 
@@ -3971,7 +4022,7 @@ error_cleanup:
     code1 = gdev_vector_close_file((gx_device_vector *) pdev);
     if (code >= 0)
         code = code1;
-    if (pdev->max_referred_page >= pdev->next_page + 1) {
+    if (pdev->max_referred_page >= pdev->next_page + 1 && pdev->next_page != 0 && !file_per_page) {
         /* Note : pdev->max_referred_page counts from 1,
            and pdev->next_page counts from 0. */
         emprintf2(pdev->memory, "ERROR: A pdfmark destination page %d "

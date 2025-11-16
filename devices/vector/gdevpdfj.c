@@ -422,9 +422,8 @@ pdf_begin_image_data(gx_device_pdf * pdev, pdf_image_writer * piw,
         gs_param_string param;
         cos_object_t *pco = NULL;
 
-        gs_snprintf(str, sizeof(str), "{Obj%dG0}", pdev->PendingOC);
-        param.data = (const byte *)str;
-        param.size = strlen(str);
+        param.data = (const byte *)pdev->PendingOC;
+        param.size = strlen(pdev->PendingOC);
         code = pdf_refer_named(pdev, &param, &pco);
         if(code < 0)
             return code;
@@ -433,7 +432,10 @@ pdf_begin_image_data(gx_device_pdf * pdev, pdf_image_writer * piw,
         if (piw->pres != NULL && piw->pres->object != NULL)
             code = cos_dict_put_string_copy((cos_dict_t *)piw->pres->object, "/OC", str);
 
-        pdev->PendingOC = 0;
+        gs_free_object(pdev->memory->non_gc_memory, pdev->PendingOC, "");
+        pdev->PendingOC = NULL;
+        if(code < 0)
+            return code;
     }
     return code;
 }

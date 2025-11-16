@@ -374,6 +374,8 @@ int pdf_make_sampled_base_space_function(gx_device_pdf *pdev, gs_function_t **pf
 
     str.size = nDstComp * (uint)pow(2, nSrcComp);
     str.data = gs_alloc_string(pdev->memory, str.size, "pdf_DeviceN");
+    if (str.data == NULL)
+        return_error(gs_error_VMerror);
     memcpy((void *)str.data, data, str.size);
 
     params.m = nSrcComp;
@@ -382,6 +384,9 @@ int pdf_make_sampled_base_space_function(gx_device_pdf *pdev, gs_function_t **pf
     params.BitsPerSample = 8;
 
     ptr1 = gs_alloc_byte_array(pdev->memory, nSrcComp, sizeof(int), "pdf_make_function(Domain)");
+    if (ptr1 == NULL)
+        return gs_note_error(gs_error_VMerror);
+
     for (i=0;i<nSrcComp;i++) {
         ((int *)ptr1)[i] = 2;
     }

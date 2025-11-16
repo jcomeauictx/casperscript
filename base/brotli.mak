@@ -19,7 +19,7 @@
 #	BROTLIGENDIR - the generated intermediate file directory
 #	BROTLIOBJDIR - the object directory
 #	SHARE_BROTLI - 0 to compile brotli, 1 to share
-#	BROTLI_NAME - if SHARE_BROTLI=1, the name of the shared library
+#	BROTLI_COMMON_NAME,  BROTLI_ENCODE_NAME, BROTLI_DECODE_NAME- if SHARE_BROTLI=1, the name of the shared libraries
 #	BROTLIAUXDIR - the directory for auxiliary objects
 
 # This partial makefile compiles the brotli library for use in Ghostscript.
@@ -38,7 +38,7 @@ BROTLIAO_=$(O_)$(BROTLIAUX)
 # We need D_, _D_, and _D because the OpenVMS compiler uses different
 # syntax from other compilers.
 # BROTLII_ and BROTLIF_ are defined in gs.mak.
-BROTLICCFLAGS=$(BROTLI_CFLAGS) $(I_)$(BROTLII_)$(_I) $(BROTLIF_) $(D_)verbose$(_D_)-1$(_D)
+BROTLICCFLAGS=$(BROTLI_CFLAGS) $(I_)$(BROTLII_)$(_I) $(I_)$(BROTLISRCDIR)$(D)c$(D)common$(_I) $(I_)$(BROTLISRCDIR)$(D)c$(D)dec$(_I) $(I_)$(BROTLISRCDIR)$(D)c$(D)enc$(_I)  $(BROTLIF_) $(D_)verbose$(_D_)-1$(_D)
 BROTLICC=$(CC) $(BROTLICCFLAGS) $(CCFLAGS)
 
 BROTLICCAUXFLAGS=$(BROTLI_CFLAGS) $(I_)$(BROTLII_)$(_I) $(BROTLIF_) $(D_)verbose$(_D_)-1$(_D)
@@ -68,8 +68,14 @@ brotlic_= \
 	  $(BROTLIOBJ)shared_dictionary.$(OBJ) \
 	  $(BROTLIOBJ)transform.$(OBJ)
 
-$(BROTLIGEN)brotlic.dev : $(BROTLI_MAK) $(ECHOGS_XE) $(brotlic_)
-	$(SETMOD) $(BROTLIGEN)brotlic $(brotlic_)
+$(BROTLIGEN)brotlic_0.dev : $(BROTLI_MAK) $(ECHOGS_XE) $(brotlic_)
+	$(SETMOD) $(BROTLIGEN)brotlic_0 $(brotlic_)
+
+$(BROTLIGEN)brotlic_1.dev : $(BROTLI_MAK) $(ECHOGS_XE)
+	$(SETMOD) $(BROTLIGEN)brotlic_1 -lib $(BROTLI_COMMON_NAME)
+
+$(BROTLIGEN)brotlic.dev : $(BROTLI_MAK) $(BROTLIGEN)brotlic_$(SHARE_BROTLI).dev $(MAKEDIRS)
+	$(CP_) $(BROTLIGEN)brotlic_$(SHARE_BROTLI).dev $(BROTLIGEN)brotlic.dev
 
 $(BROTLIOBJ)constants.$(OBJ) : $(BROTLISRC)c$(D)common$(D)constants.c $(BROTLIDEP)
 	$(BROTLICC) $(BROTLIO_)constants.$(OBJ) $(C_) $(BROTLISRC)c$(D)common$(D)constants.c
@@ -95,9 +101,10 @@ $(BROTLIGEN)brotlie.dev : $(BROTLI_MAK) $(BROTLIGEN)brotlie_$(SHARE_BROTLI).dev 
  $(MAKEDIRS)
 	$(CP_) $(BROTLIGEN)brotlie_$(SHARE_BROTLI).dev $(BROTLIGEN)brotlie.dev
 
-$(BROTLIGEN)brotli_1.dev : $(BROTLI_MAK) $(BROTLI_MAK) $(ECHOGS_XE) \
+$(BROTLIGEN)brotlie_1.dev : $(BROTLI_MAK) $(ECHOGS_XE) $(BROTLIGEN)brotlic.dev \
  $(MAKEDIRS)
-	$(SETMOD) $(BROTLIGEN)brotlie_1 -lib $(BROTLI_NAME)
+	$(SETMOD) $(BROTLIGEN)brotlie_1 -lib $(BROTLI_ENCODE_NAME)
+	$(ADDMOD) $(BROTLIGEN)brotlie_1 -include $(BROTLIGEN)brotlic.dev
 
 brotlie_= \
 	  $(BROTLIOBJ)backward_references.$(OBJ) \
@@ -117,7 +124,7 @@ brotlie_= \
 	  $(BROTLIOBJ)fast_log.$(OBJ) \
 	  $(BROTLIOBJ)histogram.$(OBJ) \
 	  $(BROTLIOBJ)literal_cost.$(OBJ) \
-	  $(BROTLIOBJ)memory.$(OBJ) \
+	  $(BROTLIOBJ)brotlimemory.$(OBJ) \
 	  $(BROTLIOBJ)metablock.$(OBJ) \
 	  $(BROTLIOBJ)static_dict.$(OBJ) \
 	  $(BROTLIOBJ)utf8_util.$(OBJ)
@@ -177,8 +184,9 @@ $(BROTLIOBJ)histogram.$(OBJ) : $(BROTLISRC)c$(D)enc$(D)histogram.c $(BROTLIDEP)
 $(BROTLIOBJ)literal_cost.$(OBJ) : $(BROTLISRC)c$(D)enc$(D)literal_cost.c $(BROTLIDEP)
 	$(BROTLICC) $(BROTLIO_)literal_cost.$(OBJ) $(C_) $(BROTLISRC)c$(D)enc$(D)literal_cost.c
 
-$(BROTLIOBJ)memory.$(OBJ) : $(BROTLISRC)c$(D)enc$(D)memory.c $(BROTLIDEP)
-	$(BROTLICC) $(BROTLIO_)memory.$(OBJ) $(C_) $(BROTLISRC)c$(D)enc$(D)memory.c
+$(BROTLIOBJ)brotlimemory.$(OBJ) : $(BROTLISRC)c$(D)enc$(D)memory.c $(BROTLIDEP)
+	$(CP_) $(BROTLISRC)c$(D)enc$(D)memory.c $(BROTLIOBJ)brotlimemory.c
+	$(BROTLICC) $(BROTLIO_)brotlimemory.$(OBJ) $(C_) $(BROTLIOBJ)brotlimemory.c
 
 $(BROTLIOBJ)metablock.$(OBJ) : $(BROTLISRC)c$(D)enc$(D)metablock.c $(BROTLIDEP)
 	$(BROTLICC) $(BROTLIO_)metablock.$(OBJ) $(C_) $(BROTLISRC)c$(D)enc$(D)metablock.c
@@ -193,6 +201,11 @@ $(BROTLIOBJ)utf8_util.$(OBJ) : $(BROTLISRC)c$(D)enc$(D)utf8_util.c $(BROTLIDEP)
 
 $(BROTLIGEN)brotlid.dev : $(BROTLI_MAK) $(BROTLIGEN)brotlid_$(SHARE_BROTLI).dev $(MAKEDIRS)
 	$(CP_) $(BROTLIGEN)brotlid_$(SHARE_BROTLI).dev $(BROTLIGEN)brotlid.dev
+
+$(BROTLIGEN)brotlid_1.dev : $(BROTLI_MAK) $(ECHOGS_XE) $(BROTLIGEN)brotlic.dev \
+ $(MAKEDIRS)
+	$(SETMOD) $(BROTLIGEN)brotlid_1 -lib $(BROTLI_DECODE_NAME)
+	$(ADDMOD) $(BROTLIGEN)brotlid_1 -include $(BROTLIGEN)brotlic.dev
 
 brotlid_= \
 	  $(BROTLIOBJ)bit_reader.$(OBJ) \

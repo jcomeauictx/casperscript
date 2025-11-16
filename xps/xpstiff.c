@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -505,7 +505,7 @@ putcomp(byte *line, int x, int bpc, int value)
 {
     int maxval = (1 << bpc) - 1;
 
-    // clear bits first
+    /* clear bits first  */
     switch (bpc)
     {
     case 1: line[x / 8] &= ~(maxval << (7 - (x % 8))); break;
@@ -1031,21 +1031,21 @@ xps_read_tiff_tag(xps_context_t *ctx, xps_tiff_t *tiff, unsigned offset)
         break;
 
     case StripOffsets:
-        tiff->stripoffsets = (unsigned*) xps_alloc(ctx, count * sizeof(unsigned));
+        tiff->stripoffsets = (unsigned*) xps_alloc(ctx, (size_t)count * sizeof(unsigned));
         if (!tiff->stripoffsets)
             return gs_throw(gs_error_VMerror, "could not allocate strip offsets");
         code = xps_read_tiff_tag_value(tiff->stripoffsets, tiff, type, value, count);
         break;
 
     case StripByteCounts:
-        tiff->stripbytecounts = (unsigned*) xps_alloc(ctx, count * sizeof(unsigned));
+        tiff->stripbytecounts = (unsigned*) xps_alloc(ctx, (size_t)count * sizeof(unsigned));
         if (!tiff->stripbytecounts)
             return gs_throw(gs_error_VMerror, "could not allocate strip byte counts");
         code = xps_read_tiff_tag_value(tiff->stripbytecounts, tiff, type, value, count);
         break;
 
     case ColorMap:
-        tiff->colormap = (unsigned*) xps_alloc(ctx, count * sizeof(unsigned));
+        tiff->colormap = (unsigned*) xps_alloc(ctx, (size_t)count * sizeof(unsigned));
         if (!tiff->colormap)
             return gs_throw(gs_error_VMerror, "could not allocate color map");
         code = xps_read_tiff_tag_value(tiff->colormap, tiff, type, value, count);
@@ -1174,6 +1174,15 @@ xps_decode_tiff(xps_context_t *ctx, byte *buf, int len, xps_image_t *image)
 
     if (tiff->rowsperstrip > tiff->imagelength)
         tiff->rowsperstrip = tiff->imagelength;
+
+    if (tiff->bitspersample != 1 && tiff->bitspersample != 4 && tiff->bitspersample != 8 && tiff->bitspersample != 16)
+        return gs_rethrow(error, "Illegal BitsPerSample in TIFF header");
+
+    if (tiff->samplesperpixel != 1 && tiff->samplesperpixel != 3 && tiff->samplesperpixel != 4 && tiff->samplesperpixel != 5)
+        return gs_rethrow(error, "Illegal SamplesPerPixel in TIFF header");
+
+    if (tiff->compression < 1 || (tiff->compression > 5 && (tiff->compression != 7 && tiff->compression != 32773)))
+        return gs_rethrow(error, "Illegal Compression in TIFF header");
 
     error = xps_decode_tiff_strips(ctx, tiff, image);
     if (error)

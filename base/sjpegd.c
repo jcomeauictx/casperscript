@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -24,16 +24,21 @@
 #include "strimpl.h"
 #include "sdct.h"
 #include "sjpeg.h"
+#include "setjmp_.h"
 
 /*
  * Interface routines.  This layer of routines exists solely to limit
  * side-effects from using setjmp.
  */
 
+OPTIMIZE_SETJMP
 int
 gs_jpeg_create_decompress(stream_DCT_state * st)
 {				/* Initialize error handling */
     gs_jpeg_error_setup(st);
+#if INIT_GS_JMPBUF==1
+    memset(&(st->data.common->exit_jmpbuf), 0x00, sizeof(st->data.common->exit_jmpbuf));
+#endif
     /* Establish the setjmp return context for gs_jpeg_error_exit to use. */
     if (setjmp(find_jmp_buf(st->data.common->exit_jmpbuf)))
         return_error(gs_jpeg_log_error(st));
@@ -47,18 +52,26 @@ gs_jpeg_create_decompress(stream_DCT_state * st)
     return 0;
 }
 
+OPTIMIZE_SETJMP
 int
 gs_jpeg_read_header(stream_DCT_state * st,
                     boolean require_image)
 {
+#if INIT_GS_JMPBUF==1
+    memset(&(st->data.common->exit_jmpbuf), 0x00, sizeof(st->data.common->exit_jmpbuf));
+#endif
     if (setjmp(find_jmp_buf(st->data.common->exit_jmpbuf)))
         return_error(gs_jpeg_log_error(st));
     return jpeg_read_header(&st->data.decompress->dinfo, require_image);
 }
 
+OPTIMIZE_SETJMP
 int
 gs_jpeg_start_decompress(stream_DCT_state * st)
 {
+#if INIT_GS_JMPBUF==1
+    memset(&(st->data.common->exit_jmpbuf), 0x00, sizeof(st->data.common->exit_jmpbuf));
+#endif
     if (setjmp(find_jmp_buf(st->data.common->exit_jmpbuf)))
         return_error(gs_jpeg_log_error(st));
 #if JPEG_LIB_VERSION > 55
@@ -70,21 +83,29 @@ gs_jpeg_start_decompress(stream_DCT_state * st)
 #endif
 }
 
+OPTIMIZE_SETJMP
 int
 gs_jpeg_read_scanlines(stream_DCT_state * st,
                        JSAMPARRAY scanlines,
                        int max_lines)
 {
+#if INIT_GS_JMPBUF==1
+    memset(&(st->data.common->exit_jmpbuf), 0x00, sizeof(st->data.common->exit_jmpbuf));
+#endif
     if (setjmp(find_jmp_buf(st->data.common->exit_jmpbuf)))
         return_error(gs_jpeg_log_error(st));
     return (int)jpeg_read_scanlines(&st->data.decompress->dinfo,
                                     scanlines, (JDIMENSION) max_lines);
 }
 
+OPTIMIZE_SETJMP
 int
 gs_jpeg_finish_decompress(stream_DCT_state * st)
 {
     int code = 0;
+#if INIT_GS_JMPBUF==1
+    memset(&(st->data.common->exit_jmpbuf), 0x00, sizeof(st->data.common->exit_jmpbuf));
+#endif
     if (setjmp(find_jmp_buf(st->data.common->exit_jmpbuf)))
         code = gs_note_error(gs_jpeg_log_error(st));
     if (code >= 0)

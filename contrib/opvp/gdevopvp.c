@@ -182,6 +182,7 @@ typedef struct {
 /* ----- private function prototypes ----- */
 
 /* Utilities */
+static  void *opvp_realloc(void **, size_t);
 static  int opvp_startpage(gx_device *);
 static  int opvp_endpage(gx_device*);
 static  char *opvp_alloc_string(char **, const char *);
@@ -265,7 +266,7 @@ static  int opvp_setdash(gx_device_vector *, const float *, uint, double);
 static  int opvp_setflat(gx_device_vector *, double);
 static  int opvp_setlogop(gx_device_vector *, gs_logical_operation_t,
                           gs_logical_operation_t);
-static  int opvp_can_handle_hl_color(gx_device_vector *, const gs_gstate *, const gx_drawing_color *);
+static  bool opvp_can_handle_hl_color(gx_device_vector *, const gs_gstate *, const gx_drawing_color *);
 static  int opvp_setfillcolor(gx_device_vector *, const gs_gstate *, const gx_drawing_color *);
 static  int opvp_setstrokecolor(gx_device_vector *, const gs_gstate *,const gx_drawing_color *);
 static  int opvp_vector_dopath(gx_device_vector *, const gx_path *,
@@ -320,6 +321,8 @@ static  dev_proc_fill_rectangle(opvp_fill_rectangle);
 static  dev_proc_begin_typed_image(opvp_begin_typed_image);
 static  image_enum_proc_plane_data(opvp_image_plane_data);
 static  image_enum_proc_end_image(opvp_image_end_image);
+static  image_enum_proc_flush(opvp_image_flush);
+static  image_enum_proc_planes_wanted(opvp_image_planes_wanted);
 
 gs_public_st_suffix_add0_final(
     st_device_opvp,
@@ -1414,7 +1417,9 @@ static  const
 gx_image_enum_procs_t opvp_image_enum_procs =
 {
     opvp_image_plane_data,
-    opvp_image_end_image
+    opvp_image_end_image,
+    opvp_image_flush,
+    opvp_image_planes_wanted
 };
 typedef enum _FastImageSupportMode {
     FastImageDisable,
@@ -1487,6 +1492,15 @@ InitGS(gx_device* dev)
     return 0;
 }
 
+static  void *
+opvp_realloc(void **old, size_t size)
+{
+    void *buf = realloc(*old, size);
+    if (buf)
+        *old = buf;
+    return buf;
+}
+
 static  int
 opvp_startpage(gx_device *dev)
 {
@@ -1496,8 +1510,13 @@ opvp_startpage(gx_device *dev)
     gx_device_opvp *opdev = (gx_device_opvp*)dev;
 
     /* page info */
-    page_info = opvp_alloc_string(&page_info, OPVP_INFO_PREFIX);
-    page_info = opvp_cat_string(&page_info, opvp_gen_page_info(dev));
+    if (opvp_alloc_string(&page_info, OPVP_INFO_PREFIX) == NULL)
+        return -1;
+
+    if (opvp_cat_string(&page_info, opvp_gen_page_info(dev)) == NULL) {
+        free (page_info);
+        return -1;
+    }
 
     /* call StartPage */
     if (opdev->globals.printerContext != -1) {
@@ -1539,7 +1558,10 @@ opvp_alloc_string(char **destin, const char *source)
 
     if (*destin) {
         if (source) {
-            *destin = realloc(*destin, strlen(source)+1);
+            if (opvp_realloc((void**)destin, strlen(source)+1) == NULL) {
+                free(*destin);
+                *destin = NULL;
+            }
         } else {
             free(*destin);
             *destin = NULL;
@@ -1565,8 +1587,11 @@ opvp_cat_string(char **destin, const char *string)
     if (!(*destin)) return opvp_alloc_string(destin, string);
 
     if (string) {
-        *destin = realloc(*destin, strlen(*destin) +strlen(string)+1);
-        strcat(*destin, string);
+        if (opvp_realloc((void**)destin, strlen(*destin) +strlen(string)+1) == NULL) {
+            free(*destin);
+            *destin = NULL;
+        } else
+            strcat(*destin, string);
     }
 
     return *destin;
@@ -1811,7 +1836,6 @@ opvp_get_sizestring(float width, float height)
     char nbuff[OPVP_BUFF_SIZE];
     char nbuff1[OPVP_BUFF_SIZE / 2];
     char nbuff2[OPVP_BUFF_SIZE / 2];
-    static char *buff = NULL;
 
     memset((void*)nbuff, 0, OPVP_BUFF_SIZE);
     memset((void*)nbuff1, 0, OPVP_BUFF_SIZE / 2);
@@ -1823,7 +1847,7 @@ opvp_get_sizestring(float width, float height)
                 opvp_adjust_num_string(nbuff1),
                 opvp_adjust_num_string(nbuff2));
 
-    return opvp_alloc_string(&buff, nbuff);
+    return opvp_alloc_string(NULL, nbuff);
 }
 
 static  char *
@@ -1831,7 +1855,7 @@ opvp_get_mediasize(gx_device *pdev)
 {
     int i;
     char wbuff[OPVP_BUFF_SIZE];
-    static char *buff = NULL;
+    char *buff = NULL;
     const char *region;
     const char *name;
     float width;
@@ -1884,6 +1908,8 @@ opvp_gen_page_info(gx_device *dev)
     bool landscape;
     char tbuff[OPVP_BUFF_SIZE];
     gx_device_opvp *opdev = (gx_device_opvp*)dev;
+    char *string_size = NULL;
+    char *media_size = NULL;
 
     /* copies */
     if (!(opdev->globals.inkjet)) {
@@ -1896,15 +1922,20 @@ opvp_gen_page_info(gx_device *dev)
 
     landscape = (dev->MediaSize[0] < dev->MediaSize[1] ? false
                                                        : true);
+    string_size = opvp_get_sizestring(dev->x_pixels_per_inch, dev->y_pixels_per_inch);
+    media_size = opvp_get_mediasize(dev);
+
     memset((void*)tbuff, 0, OPVP_BUFF_SIZE);
-    snprintf(tbuff, OPVP_BUFF_SIZE - 1,
+    gs_snprintf(tbuff, OPVP_BUFF_SIZE - 1,
        "MediaCopy=%d;DeviceResolution=deviceResolution_%s;"
        "MediaPageRotation=%s;MediaSize=%s",
        num_copies,
-       opvp_get_sizestring(dev->x_pixels_per_inch, dev->y_pixels_per_inch),
+       string_size,
        (landscape ? "landscape" : "portrait"),
-       opvp_get_mediasize(dev));
+       media_size);
 
+    free(string_size);
+    free(media_size);
     opvp_alloc_string(&buff, tbuff);
 
     return buff;
@@ -2391,12 +2422,20 @@ opvp_open(gx_device *dev)
         pdev->globals.apiEntry_0_2->QueryColorSpace) {
         int n = sizeof(cspace_available);
         int nn = n;
-        opvp_cspace_t *p = malloc(n*sizeof(opvp_cspace_t));
+        size_t csize = n*sizeof(opvp_cspace_t);
+        opvp_cspace_t *p = malloc(csize);
+
+        if (p == NULL)
+            return_error(gs_error_VMerror);
 
         if ((r = gsopvpQueryColorSpace(dev, pdev->globals.printerContext,&nn,p))
              == OPVP_PARAMERROR && nn > n) {
             /* realloc buffer and retry */
-            p = realloc(p,nn*sizeof(opvp_cspace_t));
+            if (opvp_realloc((void **)&p,nn*sizeof(opvp_cspace_t)) == NULL) {
+                 free(p);
+                 return_error(gs_error_VMerror);
+            }
+
             r = gsopvpQueryColorSpace(dev, pdev->globals.printerContext,&nn,p);
         }
         if (r == OPVP_OK) {
@@ -2415,20 +2454,34 @@ opvp_open(gx_device *dev)
         /* job info */
         if (pdev->globals.jobInfo) {
             if (strlen(pdev->globals.jobInfo) > 0) {
-                job_info = opvp_alloc_string(&job_info, pdev->globals.jobInfo);
+                if (opvp_alloc_string(&job_info, pdev->globals.jobInfo) == NULL)
+                    return_error(gs_error_VMerror);
             }
         }
-        tmp_info = opvp_alloc_string(&tmp_info, opvp_gen_job_info(dev));
-        if (tmp_info) {
+        if (opvp_alloc_string(&tmp_info, opvp_gen_job_info(dev)) != NULL) {
             if (strlen(tmp_info) > 0) {
                 if (job_info) {
                     if (strlen(job_info) > 0) {
-                        opvp_cat_string(&job_info, ";");
+                        if (opvp_cat_string(&job_info, ";") == NULL) {
+                            free(job_info);
+                            free(tmp_info);
+                            return_error(gs_error_VMerror);
+                        }
                     }
                 }
-                job_info = opvp_cat_string(&job_info,OPVP_INFO_PREFIX);
-                job_info = opvp_cat_string(&job_info,tmp_info);
+                if (opvp_cat_string(&job_info,OPVP_INFO_PREFIX) == NULL) {
+                    free(job_info);
+                    free(tmp_info);
+                    return_error(gs_error_VMerror);
+                }
+                if (opvp_cat_string(&job_info,tmp_info) == NULL) {
+                    free(job_info);
+                    free(tmp_info);
+                    return_error(gs_error_VMerror);
+                }
             }
+            free(tmp_info);
+            tmp_info = NULL;
         }
 
         /* call StartJob */
@@ -2446,19 +2499,39 @@ opvp_open(gx_device *dev)
         /* doc info */
         if (pdev->globals.docInfo) {
             if (strlen(pdev->globals.docInfo) > 0) {
-                doc_info = opvp_alloc_string(&doc_info, pdev->globals.docInfo);
+                if (opvp_alloc_string(&doc_info, pdev->globals.docInfo) == NULL) {
+                    free(job_info);
+                    return_error(gs_error_VMerror);
+                }
             }
         }
-        tmp_info = opvp_alloc_string(&tmp_info, opvp_gen_doc_info(dev));
-        if (tmp_info) {
-            if (strlen(tmp_info) > 0) {
-                if (doc_info) {
-                    if (strlen(doc_info) > 0) {
-                        opvp_cat_string(&doc_info, ";");
+        if (opvp_alloc_string(&tmp_info, opvp_gen_doc_info(dev)) == NULL) {
+            free(doc_info);
+            free(job_info);
+            return_error(gs_error_VMerror);
+        }
+        if (strlen(tmp_info) > 0) {
+            if (doc_info) {
+                if (strlen(doc_info) > 0) {
+                    if (opvp_cat_string(&doc_info, ";") == NULL) {
+                        free(doc_info);
+                        free(job_info);
+                        free(tmp_info);
+                        return_error(gs_error_VMerror);
                     }
                 }
-                doc_info = opvp_cat_string(&doc_info,OPVP_INFO_PREFIX);
-                doc_info = opvp_cat_string(&doc_info,tmp_info);
+            }
+            if (opvp_cat_string(&doc_info,OPVP_INFO_PREFIX) == NULL) {
+                free(doc_info);
+                free(job_info);
+                free(tmp_info);
+                return_error(gs_error_VMerror);
+            }
+            if (opvp_cat_string(&doc_info,tmp_info) == NULL) {
+                free(doc_info);
+                free(job_info);
+                free(tmp_info);
+                return_error(gs_error_VMerror);
             }
         }
 
@@ -2504,32 +2577,35 @@ opvp_get_initial_matrix(gx_device *dev, gs_matrix *pmat)
 {
     gx_device_opvp * opdev = (gx_device_opvp *)dev;
     opvp_ctm_t omat;
+    bool is_opdev = (strncmp(dev->dname, gs_oprp_device.dname, strlen(gs_oprp_device.dname)) == 0 || strncmp(dev->dname, gs_opvp_device.dname, strlen(gs_opvp_device.dname)) == 0);
 
     gx_default_get_initial_matrix(dev,pmat);
-    if (opdev->globals.zooming) {
-        /* gs matrix */
-        pmat->xx *= opdev->globals.zoom[0];
-        pmat->xy *= opdev->globals.zoom[1];
-        pmat->yx *= opdev->globals.zoom[0];
-        pmat->yy *= opdev->globals.zoom[1];
-        pmat->tx = pmat->tx * opdev->globals.zoom[0] + opdev->globals.shift[0];
-        pmat->ty = pmat->ty * opdev->globals.zoom[1] + opdev->globals.shift[1];
-    }
+    if (is_opdev == true) {
+        if (opdev->globals.zooming) {
+            /* gs matrix */
+            pmat->xx *= opdev->globals.zoom[0];
+            pmat->xy *= opdev->globals.zoom[1];
+            pmat->yx *= opdev->globals.zoom[0];
+            pmat->yy *= opdev->globals.zoom[1];
+            pmat->tx = pmat->tx * opdev->globals.zoom[0] + opdev->globals.shift[0];
+            pmat->ty = pmat->ty * opdev->globals.zoom[1] + opdev->globals.shift[1];
+        }
 
-    if (opdev->is_open) {
-        /* call ResetCTM */
-        if (opdev->globals.apiEntry->opvpResetCTM) {
-            opdev->globals.apiEntry->opvpResetCTM(opdev->globals.printerContext);
-        } else {
-            /* call SetCTM */
-            omat.a = 1;
-            omat.b = 0;
-            omat.c = 0;
-            omat.d = 1;
-            omat.e = 0;
-            omat.f = 0;
-            if (opdev->globals.apiEntry->opvpSetCTM) {
-                opdev->globals.apiEntry->opvpSetCTM(opdev->globals.printerContext, &omat);
+        if (opdev->is_open) {
+            /* call ResetCTM */
+            if (opdev->globals.apiEntry->opvpResetCTM) {
+                opdev->globals.apiEntry->opvpResetCTM(opdev->globals.printerContext);
+            } else {
+                /* call SetCTM */
+                omat.a = 1;
+                omat.b = 0;
+                omat.c = 0;
+                omat.d = 1;
+                omat.e = 0;
+                omat.f = 0;
+                if (opdev->globals.apiEntry->opvpSetCTM) {
+                    opdev->globals.apiEntry->opvpSetCTM(opdev->globals.printerContext, &omat);
+                }
             }
         }
     }
@@ -3116,7 +3192,7 @@ opvp_copy_mono(
 
     if (reverse) {
         /* 0/1 reverse image */
-        int n = adj_raster*h;
+        size_t n = adj_raster*h;
 
         if (buff == data) {
             /* buff was not allocated from this function yet */
@@ -3210,12 +3286,14 @@ opvp_copy_color(
 
     /* data offset */
     if (data_x) {
+        size_t bufsize = 0;
         depth = opdev->color_info.depth;
         pixel = (depth + 7) >> 3;
         byte_length = pixel * w;
         adj_raster = ((byte_length + 3) >> 2) << 2;
+        bufsize = adj_raster * h;
 
-        buff = mybuf = malloc(adj_raster * h);
+        buff = mybuf = malloc(bufsize);
         if (!mybuf) {
             /* memory error */
             return -1;
@@ -3463,9 +3541,17 @@ _put_params(gx_device *dev, gs_param_list *plist)
             return_error(gs_error_invalidaccess);
         }
         buff = realloc(buff, vdps.size + 1);
+        if (opvp_realloc((void**)&buff, vdps.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, vdps.data, vdps.size);
         buff[vdps.size] = 0;
-        opvp_alloc_string(&(opdev->globals.vectorDriver), buff);
+        if (opvp_alloc_string(&(opdev->globals.vectorDriver), buff) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+        }
         break;
     case 1:
         /* opvp_alloc_string(&(opdev->globals.vectorDriver), NULL);*/
@@ -3483,7 +3569,10 @@ _put_params(gx_device *dev, gs_param_list *plist)
         buff = realloc(buff, pmps.size + 1);
         memcpy(buff, pmps.data, pmps.size);
         buff[pmps.size] = 0;
-        opvp_alloc_string(&(opdev->globals.printerModel), buff);
+        if (opvp_alloc_string(&(opdev->globals.printerModel), buff) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+        }
         break;
     case 1:
         /*opvp_alloc_string(&(opdev->globals.printerModel), NULL);*/
@@ -3499,9 +3588,17 @@ _put_params(gx_device *dev, gs_param_list *plist)
     switch (code) {
     case 0:
         buff = realloc(buff, jips.size + 1);
+        if (opvp_realloc((void**)&buff, jips.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, jips.data, jips.size);
         buff[jips.size] = 0;
-        opvp_alloc_string(&(opdev->globals.jobInfo), buff);
+        if (opvp_alloc_string(&(opdev->globals.jobInfo), buff) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+        }
         break;
     case 1:
         /*opvp_alloc_string(&(opdev->globals.jobInfo), NULL);*/
@@ -3517,9 +3614,17 @@ _put_params(gx_device *dev, gs_param_list *plist)
     switch (code) {
     case 0:
         buff = realloc(buff, dips.size + 1);
+        if (opvp_realloc((void**)&buff, dips.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, dips.data, dips.size);
         buff[dips.size] = 0;
-        opvp_alloc_string(&(opdev->globals.docInfo), buff);
+        if (opvp_alloc_string(&(opdev->globals.docInfo), buff) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+        }
         break;
     case 1:
         /*opvp_alloc_string(&(opdev->globals.docInfo), NULL);*/
@@ -3534,10 +3639,18 @@ _put_params(gx_device *dev, gs_param_list *plist)
     code = param_read_string(plist, pname, &fips);
     switch (code) {
     case 0:
-        buff = realloc(buff, fips.size + 1);
+        if (opvp_realloc((void**)&buff, fips.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, fips.data, fips.size);
         buff[fips.size] = 0;
-        opvp_alloc_string(&fastImage, buff);
+        if (opvp_alloc_string(&fastImage, buff) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         if (strcasecmp(fastImage,"NoCTM")==0) {
             FastImageMode = FastImageNoCTM;
         } else if (strncasecmp(fastImage,"NoRotate",8)==0) {
@@ -3565,7 +3678,11 @@ _put_params(gx_device *dev, gs_param_list *plist)
     code = param_read_string(plist, pname, &mlps);
     switch (code) {
     case 0:
-        buff = realloc(buff, mlps.size + 1);
+        if (opvp_realloc((void**)&buff, mlps.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, mlps.data, mlps.size);
         buff[mlps.size] = 0;
         opdev->globals.margins[0] = atof(buff);
@@ -3580,7 +3697,11 @@ _put_params(gx_device *dev, gs_param_list *plist)
     code = param_read_string(plist, pname, &mtps);
     switch (code) {
     case 0:
-        buff = realloc(buff, mtps.size + 1);
+        if (opvp_realloc((void**)&buff, mtps.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, mtps.data, mtps.size);
         buff[mtps.size] = 0;
         opdev->globals.margins[3] = atof(buff);
@@ -3595,7 +3716,11 @@ _put_params(gx_device *dev, gs_param_list *plist)
     code = param_read_string(plist, pname, &mrps);
     switch (code) {
     case 0:
-        buff = realloc(buff, mrps.size + 1);
+        if (opvp_realloc((void**)&buff, mrps.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, mrps.data, mrps.size);
         buff[mrps.size] = 0;
         opdev->globals.margins[2] = atof(buff);
@@ -3610,7 +3735,11 @@ _put_params(gx_device *dev, gs_param_list *plist)
     code = param_read_string(plist, pname, &mbps);
     switch (code) {
     case 0:
-        buff = realloc(buff, mbps.size + 1);
+        if (opvp_realloc((void**)&buff, mbps.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, mbps.data, mbps.size);
         buff[mbps.size] = 0;
         opdev->globals.margins[1] = atof(buff);
@@ -3627,7 +3756,11 @@ _put_params(gx_device *dev, gs_param_list *plist)
     code = param_read_string(plist, pname, &zmps);
     switch (code) {
     case 0:
-        buff = realloc(buff, zmps.size + 1);
+        if (opvp_realloc((void**)&buff, zmps.size + 1) == NULL) {
+            ecode = gs_error_VMerror;
+            param_signal_error(plist, pname, ecode);
+            break;
+        }
         memcpy(buff, zmps.data, zmps.size);
         buff[zmps.size] = 0;
         if (strncasecmp(buff, "Auto", 4)) {
@@ -4680,6 +4813,28 @@ opvp_image_end_image(gx_image_enum_common_t *info, bool draw_last)
     return gdev_vector_end_image(vdev, vinfo, draw_last, vdev->white);
 }
 
+static int
+opvp_image_flush(gx_image_enum_common_t* info)
+{
+    gdev_vector_image_enum_t* pie = (gdev_vector_image_enum_t*)info;
+    gx_device* saved_dev = pie->dev;
+    int code = 0;
+
+    code = pie->default_info->procs->flush(pie->default_info);
+    return code;
+}
+
+static bool
+opvp_image_planes_wanted(const gx_image_enum_common_t* info, byte* wanted)
+{
+    gdev_vector_image_enum_t* pie = (gdev_vector_image_enum_t*)info;
+    if (pie->default_info->procs->planes_wanted)
+        return pie->default_info->procs->planes_wanted(pie->default_info, wanted);
+    else
+        memset(wanted, 0xff, info->num_planes);
+    return true;
+}
+
 /* ----- vector driver procs ----- */
 /*
  * begin page
@@ -4947,7 +5102,7 @@ opvp_setlogop(
 }
 
 /*--- added for Ghostscript 8.15 ---*/
-static int
+static bool
 opvp_can_handle_hl_color(gx_device_vector * vdev,
               const gs_gstate * pgs1, const gx_drawing_color * pdc)
 {
@@ -5088,7 +5243,10 @@ opvp_vector_dopath(
 
 #ifdef  OPVP_OPT_MULTI_PATH
             npoints = 1;
-            points = realloc(points, sizeof(_fPoint));
+            if (opvp_realloc((void**)&points, sizeof(_fPoint)) == NULL) {
+                ecode = gs_error_VMerror;
+                goto exit;
+            }
             current = start;
 #endif
 
@@ -5097,7 +5255,10 @@ opvp_vector_dopath(
 #ifdef  OPVP_OPT_MULTI_PATH
         } else if (op != pop) {
             /* convert float to Fix */
-            opvp_p = realloc(opvp_p, sizeof(opvp_point_t) * npoints);
+            if (opvp_realloc((void**)&opvp_p, sizeof(opvp_point_t) * npoints) == NULL) {
+                ecode = gs_error_VMerror;
+                goto exit;
+            }
             for (i = 0; i < npoints; i++) {
                 OPVP_F2FIX(points[i].x, opvp_p[i].x);
                 OPVP_F2FIX(points[i].y, opvp_p[i].y);
@@ -5148,7 +5309,10 @@ opvp_vector_dopath(
 
             /* reset */
             npoints = 1;
-            points = realloc(points, sizeof(_fPoint));
+            if (opvp_realloc((void**)&points, sizeof(_fPoint)) == NULL) {
+                ecode = gs_error_VMerror;
+                goto exit;
+            }
             points[0] = current;
 #endif
         }
@@ -5161,7 +5325,10 @@ opvp_vector_dopath(
             /* move to */
             i = npoints;
             npoints += 1;
-            points = realloc(points, sizeof(_fPoint) * npoints);
+            if (opvp_realloc((void**)&points, sizeof(_fPoint) * npoints) == NULL) {
+                ecode = gs_error_VMerror;
+                goto exit;
+            }
             points[i].x = fixed2float(vs[0]) / scale.x;
             points[i].y = fixed2float(vs[1]) / scale.y;
             current = points[i];
@@ -5188,6 +5355,10 @@ opvp_vector_dopath(
             /* line to */
             i = npoints;
             npoints += 1;
+            if (opvp_realloc((void**)&points, sizeof(_fPoint) * npoints) == NULL) {
+                ecode = gs_error_VMerror;
+                goto exit;
+            }
             points = realloc(points, sizeof(_fPoint) * npoints);
             points[i].x = fixed2float(vs[0]) / scale.x;
             points[i].y = fixed2float(vs[1]) / scale.y;
@@ -5212,7 +5383,10 @@ opvp_vector_dopath(
 
             i = npoints;
             npoints += 3;
-            points = realloc(points, sizeof(_fPoint) * npoints);
+            if (opvp_realloc((void**)&points, sizeof(_fPoint) * npoints) == NULL) {
+                ecode = gs_error_VMerror;
+                goto exit;
+            }
             points[i  ].x = fixed2float(vs[0]) / scale.x;
             points[i  ].y = fixed2float(vs[1]) / scale.y;
             points[i+1].x = fixed2float(vs[2]) / scale.x;

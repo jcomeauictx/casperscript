@@ -168,7 +168,7 @@ gx_default_copy_alpha_hl_color(gx_device * dev, const byte * data, int data_x,
     gs_memory_t *mem = dev->memory;
     int bpp = dev->color_info.depth;
     uchar ncomps = dev->color_info.num_components;
-    uint out_raster;
+    uint64_t out_raster, product = 0;
     int code = 0;
     gx_color_value src_cv[GS_CLIENT_COLOR_MAX_COMPONENTS];
     gx_color_value curr_cv[GS_CLIENT_COLOR_MAX_COMPONENTS];
@@ -190,8 +190,10 @@ gx_default_copy_alpha_hl_color(gx_device * dev, const byte * data, int data_x,
 
     fit_copy(dev, data, data_x, raster, id, x, y, width, height);
     row_alpha = data;
-    out_raster = bitmap_raster(width * byte_depth);
-    gb_buff = gs_alloc_bytes(mem, out_raster * ncomps, "copy_alpha_hl_color(gb_buff)");
+    out_raster = bitmap_raster(width * (size_t)byte_depth);
+    if (check_64bit_multiply(out_raster, ncomps, (int64_t *) &product) != 0)
+        return gs_note_error(gs_error_undefinedresult);
+    gb_buff = gs_alloc_bytes(mem, product, "copy_alpha_hl_color(gb_buff)");
     if (gb_buff == 0) {
         code = gs_note_error(gs_error_VMerror);
         return code;
@@ -385,7 +387,7 @@ gx_default_copy_alpha(gx_device * dev, const byte * data, int data_x,
                               GB_RASTER_STANDARD | GB_PACKING_CHUNKY |
                               GB_COLORS_NATIVE | GB_ALPHA_NONE);
             params.x_offset = 0;
-            params.raster = bitmap_raster(dev->width * dev->color_info.depth);
+            params.raster = bitmap_raster(dev->width * (size_t)dev->color_info.depth);
             params.data[0] = lin;
             rect.p.y = ry;
             rect.q.y = ry+1;
@@ -539,6 +541,7 @@ gx_default_fill_mask(gx_device * orig_dev,
 {
     gx_device *dev = orig_dev;
     gx_device_clip cdev;
+    int code = 0;
 
     if (w == 0 || h == 0)
         return 0;
@@ -577,12 +580,15 @@ gx_default_fill_mask(gx_device * orig_dev,
     }
     if (depth > 1) {
         /****** CAN'T DO ROP OR HALFTONE WITH ALPHA ******/
-        return (*dev_proc(dev, copy_alpha))
+        code = (*dev_proc(dev, copy_alpha))
             (dev, data, dx, raster, id, x, y, w, h,
              gx_dc_pure_color(pdcolor), depth);
     } else
-        return pdcolor->type->fill_masked(pdcolor, data, dx, raster, id,
+        code = pdcolor->type->fill_masked(pdcolor, data, dx, raster, id,
                                           x, y, w, h, dev, lop, false);
+    if (dev != orig_dev)
+        gx_destroy_clip_device_on_stack(&cdev);
+    return code;
 }
 
 /* Default implementation of strip_tile_rect_devn.  With the current design

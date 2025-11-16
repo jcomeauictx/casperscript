@@ -1124,7 +1124,7 @@ static int write_key_as_string_encrypted(const gx_device_pdf *pdev, const byte *
     stream_arcfour_state sarc4;
     int i, j = 0;
 
-    buffer = gs_alloc_bytes(pdev->pdf_memory, size * 2, "encryption buffer");
+    buffer = gs_alloc_bytes(pdev->pdf_memory, (size_t)size * 2, "encryption buffer");
     if (buffer == 0L)
         return 0;
 
@@ -1658,6 +1658,8 @@ cos_param_put_typed(gs_param_list * plist, gs_param_name pkey,
         /****** NYI ******/
         return_error(gs_error_typecheck);
     }
+    if (key_len > 99)
+        return_error(gs_error_rangecheck);
     memcpy(key_chars + 1, pkey, key_len);
     key_chars[0] = '/';
     return cos_dict_put_no_copy(pclist->pcd, key_chars, key_len + 1, &value);

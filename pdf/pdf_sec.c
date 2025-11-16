@@ -230,7 +230,7 @@ static int check_user_password_R5(pdf_context *ctx, char *Password, int Len, int
     if (NewLen > 127)
         NewLen = 127;
 
-    Test = (char *)gs_alloc_bytes(ctx->memory, NewLen + 8, "R5 password test");
+    Test = (char *)gs_alloc_bytes(ctx->memory, (size_t)NewLen + 8, "R5 password test");
     if (Test == NULL) {
         code = gs_note_error(gs_error_VMerror);
         goto error;
@@ -256,7 +256,7 @@ static int check_user_password_R5(pdf_context *ctx, char *Password, int Len, int
     gs_free_object(ctx->memory, Test, "R5 password test");
 
     /* Password + last 8 bytes of /U */
-    Test = (char *)gs_alloc_bytes(ctx->memory, NewLen + 8, "R5 password test");
+    Test = (char *)gs_alloc_bytes(ctx->memory, (size_t)NewLen + 8, "R5 password test");
     if (Test == NULL) {
         code = gs_note_error(gs_error_VMerror);
         goto error;
@@ -294,8 +294,8 @@ static int check_user_password_R5(pdf_context *ctx, char *Password, int Len, int
     sfread(Buffer, 1, 32, filter_stream->s);
     pdfi_close_file(ctx, filter_stream);
     pdfi_close_memory_stream(ctx, NULL, stream);
-    pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
-    if (ctx->encryption.EKey == NULL)
+    code = pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
+    if (code < 0)
         goto error;
     memcpy(ctx->encryption.EKey->data, Buffer, 32);
     pdfi_countup(ctx->encryption.EKey);
@@ -413,6 +413,7 @@ static int check_user_password_R6(pdf_context *ctx, char *Password, int Len, int
 {
 	unsigned char validation[32];
 	unsigned char output[32];
+    int code = 0;
 
     pdf_compute_encryption_key_r6((unsigned char *)Password, Len, (unsigned char *)ctx->encryption.O, (unsigned char *)ctx->encryption.OE,
                                   (unsigned char *)ctx->encryption.U, (unsigned char *)ctx->encryption.UE, 0, validation, output);
@@ -420,8 +421,8 @@ static int check_user_password_R6(pdf_context *ctx, char *Password, int Len, int
     if (memcmp(validation, ctx->encryption.U, 32) != 0)
         return_error(gs_error_unknownerror);
 
-    pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
-    if (ctx->encryption.EKey == NULL)
+    code = pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
+    if (code < 0)
         return_error(gs_error_VMerror);;
     memcpy(ctx->encryption.EKey->data, output, 32);
     pdfi_countup(ctx->encryption.EKey);
@@ -631,7 +632,7 @@ static int check_owner_password_R5(pdf_context *ctx, char *Password, int Len, in
     if (NewLen > 127)
         NewLen = 127;
 
-    Test = (char *)gs_alloc_bytes(ctx->memory, NewLen + 8 + 48, "r5 password test");
+    Test = (char *)gs_alloc_bytes(ctx->memory, (size_t)NewLen + 8 + 48, "r5 password test");
     if (Test == NULL) {
         code = gs_note_error(gs_error_VMerror);
         goto error;
@@ -659,7 +660,7 @@ static int check_owner_password_R5(pdf_context *ctx, char *Password, int Len, in
     gs_free_object(ctx->memory, Test, "R5 password test");
 
     /* Password + last 8 bytes of /O */
-    Test = (char *)gs_alloc_bytes(ctx->memory, NewLen + 8 + 48, "R5 password test");
+    Test = (char *)gs_alloc_bytes(ctx->memory, (size_t)NewLen + 8 + 48, "R5 password test");
     if (Test == NULL) {
         code = gs_note_error(gs_error_VMerror);
         goto error;
@@ -699,8 +700,8 @@ static int check_owner_password_R5(pdf_context *ctx, char *Password, int Len, in
     sfread(Buffer, 1, 32, filter_stream->s);
     pdfi_close_file(ctx, filter_stream);
     pdfi_close_memory_stream(ctx, NULL, stream);
-    pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
-    if (ctx->encryption.EKey == NULL)
+    code = pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
+    if (code < 0)
         goto error;
     memcpy(ctx->encryption.EKey->data, Buffer, 32);
     pdfi_countup(ctx->encryption.EKey);
@@ -719,6 +720,7 @@ static int check_owner_password_R6(pdf_context *ctx, char *Password, int Len, in
 {
 	unsigned char validation[32];
 	unsigned char output[32];
+    int code = 0;
 
     pdf_compute_encryption_key_r6((unsigned char *)Password, Len, (unsigned char *)ctx->encryption.O, (unsigned char *)ctx->encryption.OE,
                                   (unsigned char *)ctx->encryption.U, (unsigned char *)ctx->encryption.UE, 1, validation, output);
@@ -726,8 +728,8 @@ static int check_owner_password_R6(pdf_context *ctx, char *Password, int Len, in
     if (memcmp(validation, ctx->encryption.O, 32) != 0)
         return_error(gs_error_unknownerror);
 
-    pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
-    if (ctx->encryption.EKey == NULL)
+    code = pdfi_object_alloc(ctx, PDF_STRING, 32, (pdf_obj **)&ctx->encryption.EKey);
+    if (code < 0)
         return_error(gs_error_VMerror);;
     memcpy(ctx->encryption.EKey->data, output, 32);
     pdfi_countup(ctx->encryption.EKey);
@@ -1042,7 +1044,7 @@ static int pdfi_read_Encrypt_dict(pdf_context *ctx, int *KeyLen)
     if (!pdfi_name_is((pdf_name *)o, "Standard")) {
         char *Str = NULL;
 
-        Str = (char *)gs_alloc_bytes(ctx->memory, ((pdf_name *)o)->length + 1, "temp string for warning");
+        Str = (char *)gs_alloc_bytes(ctx->memory, (size_t)((pdf_name *)o)->length + 1, "temp string for warning");
         if (Str == NULL) {
             code = gs_note_error(gs_error_VMerror);
             goto done;

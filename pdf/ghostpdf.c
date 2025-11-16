@@ -28,6 +28,7 @@
 #include "pdf_gstate.h"
 #include "stream.h"
 #include "strmio.h"
+#include "assert_.h"
 #include "pdf_colour.h"
 #include "pdf_font.h"
 #include "pdf_text.h"
@@ -66,7 +67,7 @@ static int dump_info_string(pdf_context *ctx, pdf_dict *source_dict, const char 
 
     code = pdfi_dict_knownget_type(ctx, source_dict, Key, PDF_STRING, (pdf_obj **)&s);
     if (code > 0) {
-        Cstr = (char *)gs_alloc_bytes(ctx->memory, s->length + 1, "Working memory for string dumping");
+        Cstr = (char *)gs_alloc_bytes(ctx->memory, (size_t)s->length + 1, "Working memory for string dumping");
         if (Cstr) {
             memcpy(Cstr, s->data, s->length);
             Cstr[s->length] = 0x00;
@@ -149,7 +150,7 @@ static int pdfi_output_metadata(pdf_context *ctx)
 
         code = pdfi_dict_knownget_type(ctx, ctx->Info, "Trapped", PDF_NAME, (pdf_obj **)&n);
         if (code > 0) {
-            Cstr = (char *)gs_alloc_bytes(ctx->memory, n->length + 1, "Working memory for string dumping");
+            Cstr = (char *)gs_alloc_bytes(ctx->memory, (size_t)n->length + 1, "Working memory for string dumping");
             if (Cstr) {
                 memcpy(Cstr, n->data, n->length);
                 Cstr[n->length] = 0x00;
@@ -701,7 +702,10 @@ pdfi_report_errors(pdf_context *ctx)
                     if (ctx->pdf_errors[i] & 1 << j) {
                         int error_num = (i * sizeof(char) * 8) + j;
 
-                        errprintf(ctx->memory, "\t%s\n", pdf_error_strings[error_num]);
+                        /* Bits higher than E_PDF_MAX_ERROR - 1 in pdf_errors should never be set, but just in case */
+                        assert(error_num < E_PDF_MAX_ERROR);
+                        if (error_num < E_PDF_MAX_ERROR)
+                            errprintf(ctx->memory, "\t%s\n", pdf_error_strings[error_num]);
                     }
                 }
             }
@@ -717,7 +721,10 @@ pdfi_report_errors(pdf_context *ctx)
                     if (ctx->pdf_warnings[i] & 1 << j) {
                         int warning_num = (i * sizeof(char) * 8) + j;
 
-                        outprintf(ctx->memory, "\t%s\n", pdf_warning_strings[warning_num]);
+                        /* Bits higher than W_PDF_MAX_WARNING - 1 in pdf_warnings should never be set, but just in case */
+                        assert(warning_num < W_PDF_MAX_WARNING);
+                        if (warning_num < W_PDF_MAX_WARNING)
+                            outprintf(ctx->memory, "\t%s\n", pdf_warning_strings[warning_num]);
                     }
                 }
             }
@@ -737,7 +744,7 @@ pdfi_report_errors(pdf_context *ctx)
         if (code > 0) {
             char *cs;
 
-            cs = (char *)gs_alloc_bytes(ctx->memory, s->length + 1, "temporary string for error report");
+            cs = (char *)gs_alloc_bytes(ctx->memory, (size_t)s->length + 1, "temporary string for error report");
             if (cs == NULL) {
                 errprintf(ctx->memory, "   **** Out of memory while trying to display Producer ****\n");
             } else {
@@ -799,7 +806,7 @@ int pdfi_get_name_index(pdf_context *ctx, char *name, int len, unsigned int *ret
     if (new_entry == NULL)
         return_error(gs_error_VMerror);
     memset(new_entry, 0x00, sizeof(pdfi_name_entry_t));
-    new_entry->name = (char *)gs_alloc_bytes(ctx->memory, len+1, "Alloc name table name");
+    new_entry->name = (char *)gs_alloc_bytes(ctx->memory, (size_t)len+1, "Alloc name table name");
     if (new_entry->name == NULL) {
         gs_free_object(ctx->memory, new_entry, "Failed to allocate name entry");
             return_error(gs_error_VMerror);
@@ -880,13 +887,13 @@ int pdfi_separation_name_from_index(gs_gstate *pgs, gs_separation_name index, un
 int pdfi_finish_pdf_file(pdf_context *ctx)
 {
     if (ctx->Root) {
-        if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent && ctx->device_state.WantsOptionalContent) {
+        if (ctx->device_state.writepdfmarks && ctx->device_state.WantsOptionalContent) {
             pdf_obj *o = NULL;
             int code = 0;
 
             code = pdfi_dict_knownget_type(ctx, ctx->Root, "OCProperties", PDF_DICT, &o);
             if (code > 0) {
-                // Build and send the OCProperties structure
+                /* Build and send the OCProperties structure */
                 code = pdfi_pdfmark_from_objarray(ctx, &o, 1, NULL, "OCProperties");
                 pdfi_countdown(o);
                 if (code < 0)
@@ -901,7 +908,7 @@ int pdfi_finish_pdf_file(pdf_context *ctx)
 int pdfi_close_pdf_file(pdf_context *ctx)
 {
     if (ctx->Root) {
-        if (ctx->device_state.writepdfmarks && ctx->args.preservemarkedcontent && ctx->device_state.WantsOptionalContent) {
+        if (ctx->device_state.writepdfmarks && ctx->device_state.WantsOptionalContent) {
             pdf_obj *o = NULL;
             int code = 0;
 
@@ -988,16 +995,16 @@ int pdfi_prep_collection(pdf_context *ctx, uint64_t *TotalFiles, char ***names_a
     pdf_obj *EF = NULL, *F = NULL;
     char **working_array = NULL;
 
-    if (pdfi_dict_knownget_type(ctx, ctx->Root, "Names", PDF_DICT, &Names)) {
-        if(pdfi_dict_knownget_type(ctx, (pdf_dict *)Names, "EmbeddedFiles", PDF_DICT, &EmbeddedFiles)) {
-            if (pdfi_dict_knownget_type(ctx, (pdf_dict *)EmbeddedFiles, "Names", PDF_ARRAY, (pdf_obj **)&FileNames)) {
+    if (pdfi_dict_knownget_type(ctx, ctx->Root, "Names", PDF_DICT, &Names) > 0) {
+        if(pdfi_dict_knownget_type(ctx, (pdf_dict *)Names, "EmbeddedFiles", PDF_DICT, &EmbeddedFiles) > 0) {
+            if (pdfi_dict_knownget_type(ctx, (pdf_dict *)EmbeddedFiles, "Names", PDF_ARRAY, (pdf_obj **)&FileNames) > 0) {
                 int ix = 0, index = 0;
                 gp_file *scratch_file = NULL;
                 char scratch_name[gp_file_name_sizeof];
 
                 NumEmbeddedFiles = pdfi_array_size(FileNames) / 2;
 
-                working_array = (char **)gs_alloc_bytes(ctx->memory, NumEmbeddedFiles * 2 * sizeof(char *), "Collection file working names array");
+                working_array = (char **)gs_alloc_bytes(ctx->memory, (size_t)NumEmbeddedFiles * 2 * sizeof(char *), "Collection file working names array");
                 if (working_array == NULL) {
                     code = gs_note_error(gs_error_VMerror);
                     goto exit;
@@ -1013,8 +1020,8 @@ int pdfi_prep_collection(pdf_context *ctx, uint64_t *TotalFiles, char ***names_a
                         goto exit;
 
                     if (pdfi_type_of(File) == PDF_DICT) {
-                        if (pdfi_dict_knownget_type(ctx, (pdf_dict *)File, "EF", PDF_DICT, &EF)) {
-                            if (pdfi_dict_knownget_type(ctx, (pdf_dict *)EF, "F", PDF_STREAM, &F)) {
+                        if (pdfi_dict_knownget_type(ctx, (pdf_dict *)File, "EF", PDF_DICT, &EF) > 0) {
+                            if (pdfi_dict_knownget_type(ctx, (pdf_dict *)EF, "F", PDF_STREAM, &F) > 0) {
                                 pdf_dict *stream_dict = NULL;
                                 pdf_c_stream *s = NULL;
 
@@ -1023,7 +1030,7 @@ int pdfi_prep_collection(pdf_context *ctx, uint64_t *TotalFiles, char ***names_a
                                  */
                                 code = pdfi_dict_from_obj(ctx, F, &stream_dict);
                                 if (code >= 0) {
-                                    if (!pdfi_dict_knownget_type(ctx, stream_dict, "Subtype", PDF_NAME, &Subtype)) {
+                                    if (pdfi_dict_knownget_type(ctx, stream_dict, "Subtype", PDF_NAME, &Subtype) <= 0) {
                                         /* No Subtype, (or not a name) we can't check the Mime type, so try to read the first 2Kb
                                          * and look for a %PDF- in that. If not present, assume its not a PDF
                                          */
@@ -1034,11 +1041,12 @@ int pdfi_prep_collection(pdf_context *ctx, uint64_t *TotalFiles, char ***names_a
                                                 char Buffer[2048];
                                                 int bytes;
 
-                                                bytes = pdfi_read_bytes(ctx, (byte *)Buffer, 1, 2048, s);
+                                                bytes = pdfi_read_bytes(ctx, (byte *)Buffer, 1, 2047, s);
                                                 pdfi_close_file(ctx, s);
                                                 s = NULL;
                                                 /* Assertion; the smallest real PDF file is at least 400 bytes */
                                                 if (bytes >= 400) {
+                                                    Buffer[bytes] = 0x00;
                                                     if (strstr(Buffer, "%PDF-") == NULL)
                                                         code = -1;
                                                 } else
@@ -1088,7 +1096,7 @@ int pdfi_prep_collection(pdf_context *ctx, uint64_t *TotalFiles, char ***names_a
                                                     code = pdfi_array_get(ctx, FileNames, ix * 2, (pdf_obj **)&Name);
                                                     if (code >= 0) {
                                                         if (pdfi_type_of((pdf_obj *)Name) == PDF_STRING) {
-                                                            working_array[(index * 2) + 1] = (char *)gs_alloc_bytes(ctx->memory, Name->length + 3, "Collection file names array entry");
+                                                            working_array[(index * 2) + 1] = (char *)gs_alloc_bytes(ctx->memory, (size_t)Name->length + 3, "Collection file names array entry");
                                                             if (working_array[(index * 2) + 1] != NULL) {
                                                                 memset(working_array[(index * 2) + 1], 0x00, Name->length + 3);
                                                                 memcpy(working_array[(index * 2) + 1], Name->data, Name->length);
@@ -1099,7 +1107,7 @@ int pdfi_prep_collection(pdf_context *ctx, uint64_t *TotalFiles, char ***names_a
                                                     }
 
                                                     /* And now the scratch file name */
-                                                    working_array[index * 2] = (char *)gs_alloc_bytes(ctx->memory, strlen(scratch_name) + 3, "Collection file names array entry");
+                                                    working_array[index * 2] = (char *)gs_alloc_bytes(ctx->memory, (size_t)strlen(scratch_name) + 3, "Collection file names array entry");
                                                     if (working_array[index * 2] != NULL) {
                                                         memset(working_array[index * 2], 0x00, strlen(scratch_name) + 3);
                                                         strcpy(working_array[index * 2], scratch_name);
@@ -1146,20 +1154,28 @@ exit:
     if (code >= 0) {
         uint64_t ix = 0;
 
-        (*names_array) = (char **)gs_alloc_bytes(ctx->memory, *TotalFiles * 2 * sizeof(char *), "Collection file namesarray");
-        for (i = 0; i < NumEmbeddedFiles;i++) {
-            if (working_array[i * 2] != NULL && working_array[(i * 2) + 1] != NULL) {
-                (*names_array)[ix * 2] = working_array[i * 2];
-                working_array[i * 2] = NULL;
-                (*names_array)[(ix * 2) + 1] = working_array[(i * 2) + 1];
-                working_array[(i * 2) + 1] = NULL;
-                ix++;
+        (*names_array) = (char **)gs_alloc_bytes(ctx->memory, *TotalFiles * (size_t)2 * sizeof(char *), "Collection file namesarray");
+        if (*names_array == NULL)
+            code = gs_note_error(gs_error_VMerror);
+        else {
+            memset((*names_array), 0x00, *TotalFiles * (size_t)2 * sizeof(char *));
+            for (i = 0; i < NumEmbeddedFiles;i++) {
+                if (working_array[i * 2] != NULL && working_array[(i * 2) + 1] != NULL) {
+                    (*names_array)[ix * 2] = working_array[i * 2];
+                    working_array[i * 2] = NULL;
+                    (*names_array)[(ix * 2) + 1] = working_array[(i * 2) + 1];
+                    working_array[(i * 2) + 1] = NULL;
+                    ix++;
+                }
             }
         }
     }
 
     if (working_array != NULL) {
-        for (i = 0; i < NumEmbeddedFiles;i++)
+        /* Each embedded file stores an embedded file name, and a scratch file name
+         * Hence we need to iterate NumEmbeddedFiles * 2 to free _all_ the strings.
+         */
+        for (i = 0; i < NumEmbeddedFiles * 2;i++)
             gs_free_object(ctx->memory, working_array[i], "free collection temporary filenames");
         gs_free_object(ctx->memory, working_array, "free collection working array");
     }
@@ -1618,7 +1634,7 @@ int pdfi_open_pdf_file(pdf_context *ctx, char *filename)
     if (ctx->args.pdfdebug)
         outprintf(ctx->memory, "%% Attempting to open %s as a PDF file\n", filename);
 
-    ctx->filename = (char *)gs_alloc_bytes(ctx->memory, strlen(filename) + 1, "copy of filename");
+    ctx->filename = (char *)gs_alloc_bytes(ctx->memory, (size_t)strlen(filename) + 1, "copy of filename");
     if (ctx->filename == NULL)
         return_error(gs_error_VMerror);
     strcpy(ctx->filename, filename);
@@ -1676,7 +1692,7 @@ int pdfi_add_paths_to_search_paths(pdf_context *ctx, const char *ppath, int l, b
         int new_npaths = ctx->search_paths.num_resource_paths + npaths;
 
         if (fontpath != true) {
-            pathstrings = (gs_param_string *)gs_alloc_bytes(ctx->memory, sizeof(gs_param_string) * new_npaths, "array of paths");
+            pathstrings = (gs_param_string *)gs_alloc_bytes(ctx->memory, (size_t)sizeof(gs_param_string) * new_npaths, "array of paths");
             if (pathstrings == NULL)
                 return_error(gs_error_VMerror);
 
@@ -1731,7 +1747,7 @@ int pdfi_add_paths_to_search_paths(pdf_context *ctx, const char *ppath, int l, b
         }
         else {
             p = ppath;
-            pathstrings = (gs_param_string *)gs_alloc_bytes(ctx->memory, sizeof(gs_param_string) * (npaths + ctx->search_paths.num_font_paths), "array of font paths");
+            pathstrings = (gs_param_string *)gs_alloc_bytes(ctx->memory, (size_t)sizeof(gs_param_string) * (npaths + ctx->search_paths.num_font_paths), "array of font paths");
             if (pathstrings == NULL)
                 return_error(gs_error_VMerror);
 
@@ -1825,7 +1841,7 @@ int pdfi_add_fontmapfiles(pdf_context *ctx, const char *ppath, int l)
            nfilenames++;
     }
     if (nfilenames > 0) {
-        ctx->fontmapfiles = (gs_string *)gs_alloc_bytes(ctx->memory, sizeof(gs_string) * nfilenames, "array of fontmap files");
+        ctx->fontmapfiles = (gs_string *)gs_alloc_bytes(ctx->memory, (size_t)sizeof(gs_string) * nfilenames, "array of fontmap files");
         if (ctx->fontmapfiles == NULL) {
             return_error(gs_error_VMerror);
         }
@@ -1960,6 +1976,7 @@ pdf_context *pdfi_create_context(gs_memory_t *mem)
     ctx->args.preservemarkedcontent = true;
     ctx->args.preserveembeddedfiles = true;
     ctx->args.preservedocview = true;
+    ctx->args.PDFCacheSize = MAX_OBJECT_CACHE_SIZE;
     /* NOTE: For testing certain annotations on cluster, might want to set this to false */
     ctx->args.printed = false; /* True if OutputFile is set, false otherwise see pdftop.c, pdf_impl_set_param() */
 

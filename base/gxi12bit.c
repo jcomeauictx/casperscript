@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -120,26 +120,8 @@ gs_image_class_2_fracs(gx_image_enum * penum, irender_proc_t *render_fn)
                 penum->mask_color.values[i] =
                     bits2frac(penum->mask_color.values[i], 12);
         }
-        /* If the device has some unique color mapping procs due to its color space,
-           then we will need to use those and go through pixel by pixel instead
-           of blasting through buffers.  This is true for example with many of
-           the color spaces for CUPs */
-        std_cmap_procs = gx_device_uses_std_cmap_procs(penum->dev, penum->pgs);
-        if ( (gs_color_space_get_index(penum->pcs) == gs_color_space_index_DeviceN &&
-            penum->pcs->cmm_icc_profile_data == NULL) ||
-            (gs_color_space_get_index(penum->pcs) == gs_color_space_index_Separation &&
-            penum->pcs->cmm_icc_profile_data == NULL) ||
-            penum->use_mask_color ||
-            penum->bps != 16 || !std_cmap_procs ||
-            gs_color_space_get_index(penum->pcs) == gs_color_space_index_DevicePixel ||
-            gs_color_space_get_index(penum->pcs) == gs_color_space_index_Indexed) {
-            /* DevicePixel color space used in mask from 3x type.  Basically
-               a simple color space that just is scaled to the device bit
-               depth when remapped. No CM needed */
-            if_debug0m('b', penum->memory, "[b]render=frac\n");
-            *render_fn =  &image_render_frac;
-            return 0;
-        } else {
+        if (penum->pcs->cmm_icc_profile_data != NULL)
+        {
             /* Set up the link now */
             const gs_color_space *pcs;
             gsicc_rendering_param_t rendering_params;
@@ -183,6 +165,27 @@ gs_image_class_2_fracs(gx_image_enum * penum, irender_proc_t *render_fn)
                 penum->icc_link = gsicc_get_link(penum->pgs, penum->dev, pcs, NULL,
                     &rendering_params, penum->memory);
             }
+        }
+        /* If the device has some unique color mapping procs due to its color space,
+           then we will need to use those and go through pixel by pixel instead
+           of blasting through buffers.  This is true for example with many of
+           the color spaces for CUPs */
+        std_cmap_procs = gx_device_uses_std_cmap_procs(penum->dev, penum->pgs);
+        if ( (gs_color_space_get_index(penum->pcs) == gs_color_space_index_DeviceN &&
+            penum->pcs->cmm_icc_profile_data == NULL) ||
+            (gs_color_space_get_index(penum->pcs) == gs_color_space_index_Separation &&
+            penum->pcs->cmm_icc_profile_data == NULL) ||
+            penum->use_mask_color ||
+            penum->bps != 16 || !std_cmap_procs ||
+            gs_color_space_get_index(penum->pcs) == gs_color_space_index_DevicePixel ||
+            gs_color_space_get_index(penum->pcs) == gs_color_space_index_Indexed) {
+            /* DevicePixel color space used in mask from 3x type.  Basically
+               a simple color space that just is scaled to the device bit
+               depth when remapped. No CM needed */
+            if_debug0m('b', penum->memory, "[b]render=frac\n");
+            *render_fn =  &image_render_frac;
+            return 0;
+        } else {
             /* Use the direct unpacking proc */
             penum->unpack = sample_unpackicc_16;
             if_debug0m('b', penum->memory, "[b]render=icc16\n");
@@ -273,6 +276,7 @@ image_render_frac(gx_image_enum * penum, const byte * buffer, int data_x,
 
     if (h == 0)
         return 0;
+    devc1.tag = devc2.tag = device_current_tag(dev);
     pnext = penum->dda.pixel0;
     xrun = xl = dda_current(pnext.x);
     irun = fixed2int_var_rounded(xrun);
@@ -409,8 +413,11 @@ image_render_frac(gx_image_enum * penum, const byte * buffer, int data_x,
                 }
                 break;
         }
-        mcode = remap_color(&cc, pcs, pdevc_next, pgs, dev,
-                           gs_color_select_source);
+        if (penum->icc_link == NULL || pcs->cmm_icc_profile_data == NULL)
+            mcode = remap_color(&cc, pcs, pdevc_next, pgs, dev, gs_color_select_source);
+        else
+            mcode = gx_remap_ICC_with_link(&cc, pcs, pdevc_next, pgs, dev,
+                                           gs_color_select_source, penum->icc_link);
         if (mcode < 0)
             goto fill;
 f:
@@ -620,6 +627,7 @@ image_render_icc16(gx_image_enum * penum, const byte * buffer, int data_x,
         return gs_rethrow(-1, "ICC Link not created during image render icc16");
     }
     gx_get_cmapper(&data, pgs, dev, has_transfer, must_halftone, gs_color_select_source);
+    data.devc.tag = device_current_tag(dev);
     mapper = data.set_color;
     /* Needed for device N */
     code = dev_proc(dev, get_profile)(dev, &dev_profile);
@@ -635,8 +643,11 @@ image_render_icc16(gx_image_enum * penum, const byte * buffer, int data_x,
     } else {
         spp_cm = num_des_comps;
         psrc_cm = (unsigned short*) gs_alloc_bytes(pgs->memory,
-                        sizeof(unsigned short)  * w * spp_cm/spp,
+                        sizeof(unsigned short)  * (size_t)w * spp_cm/spp,
                         "image_render_icc16");
+        if (psrc_cm == NULL)
+            return_error(gs_error_VMerror);
+
         psrc_cm_start = psrc_cm;
         bufend = psrc_cm +  w * spp_cm/spp;
         if (penum->icc_link->is_identity) {
@@ -659,8 +670,12 @@ image_render_icc16(gx_image_enum * penum, const byte * buffer, int data_x,
             if (need_decode) {
                 /* Need decode and CM.  This is slow but does not happen that often */
                 psrc_decode = (unsigned short*) gs_alloc_bytes(pgs->memory,
-                                sizeof(unsigned short) * w * spp,
+                                sizeof(unsigned short) * (size_t)w * spp,
                                 "image_render_icc16");
+                if (psrc_decode == NULL) {
+                    gs_free_object(pgs->memory, (byte *)psrc_cm_start, "image_render_icc16");
+                    return_error(gs_error_VMerror);
+                }
                 if (!penum->use_cie_range) {
                     decode_row16(penum, psrc, spp, psrc_decode,
                                     (const unsigned short*) (psrc_decode+w));

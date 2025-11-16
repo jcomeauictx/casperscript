@@ -34,7 +34,7 @@
 % Interpreter library version number
 % NOTE: the interpreter code requires that the first non-comment token
 % in this file be an integer, and that it match the compiled-in version!
-10060
+10070
 
 % Check the interpreter revision.
 dup revision ne
@@ -894,9 +894,6 @@ currentdict /.makeinternaldict .undef
            { /undefinedfilename signalerror }
           ifelse
         } .internalbind def
-/selectdevice
-        { (    **** The selectdevice operator has been deprecated and will be removed in the next release.\n    **** You should use the setpagedevice operator and a dictionary parameter\n    **** containing the /OutputDevice key instead.\n) print
-        finddevice setdevice .setdefaultscreen } .internalbind odef
 /signalerror		% <object> <errorname> signalerror -
         { /errordict .systemvar exch get exec } .internalbind def
 /signaloperror {	% <object> <errorname> signaloperror -
@@ -2324,8 +2321,11 @@ gsave
 <1b45> cvn { } def		% PJL reset prologue (ESC E)
 <1b451b> cvn <1b> cvn load def	% PJL reset epilogue (ESC E + UEL)
 (\001M) cvn			% TBCP initiator
- { currentfile /TBCPDecode filter cvx exec
- } .internalbind def
+ { (\n!! ERROR !!\n) print
+ (In-job PJL tried to select TBCP communications Protocol which is no longer supported.\n) print
+ (You must recreate the input file without requiring TBCP support.\n\n) print
+ /TBCPDecode /filter /undefined signalerror.
+ } odef
 /@PJL				% H-P job control
  {
    % Windows 2000 driver includes PJL into %%BeginFeature block.

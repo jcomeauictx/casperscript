@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2023 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -24,12 +24,28 @@
  */
 #define FORCE_TESTING_SUBCLASSING 0
 
+/* This is used to mark the various internal subclass devices as having already
+ * been pushed, so that opening the device won't result in us trying to push
+ * them again, which leads to trouble. Currently this is only used by the PDF14
+ * transparency compositor but there may be more users in future. It is mainly here
+ * so tht only one file (this one) needs to be updated if we add more internal
+ * classes.
+ */
+int mark_internal_subclass_devices(gx_device *new_device)
+{
+    new_device->PageHandlerPushed = true;
+    new_device->ObjectHandlerPushed = true;
+    new_device->NupHandlerPushed = true;
+
+    return 0;
+}
+
 /* This installs the 'kernel' device classes. If you add any devices here you should
  * almost certainly edit gdevp14.c, gs_pdf14_device_push() and add the new device to the list
  * of devices which the push of the compositor claims are already installed (to prevent
  * a second copy being installed by gdev_prn_open).
  */
-int install_internal_subclass_devices(gx_device **ppdev, int *devices_loaded)
+int install_internal_subclass_devices(gx_device **ppdev, bool *devices_loaded)
 {
     int code = 0;
     gx_device *dev = (gx_device *)*ppdev, *saved;

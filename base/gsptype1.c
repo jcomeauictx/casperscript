@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -2205,9 +2205,9 @@ gx_dc_pattern_read_trans_buff(gx_color_tile *ptile, int64_t offset,
     int left = size;
     int64_t offset1 = offset;
     gx_pattern_trans_t *trans_pat = ptile->ttrans;
-    int data_size;
+    int64_t data_size;
 
-    data_size = trans_pat->planestride * trans_pat->n_chan;
+    data_size = (int64_t)trans_pat->planestride * trans_pat->n_chan;
     if (trans_pat->has_tags)
         data_size += trans_pat->planestride;
 
@@ -2358,6 +2358,8 @@ gx_dc_pattern_read(
                 /* Make a new ttrans object */
 
                 ptile->ttrans = new_pattern_trans_buff(mem);
+                if (ptile->ttrans == NULL)
+                    return_error(gs_error_VMerror);
                 /* trans_info was loaded above */
 
                 ptile->ttrans->height = trans_info.height;

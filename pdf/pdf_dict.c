@@ -300,7 +300,7 @@ static int pdfi_dict_find_key(pdf_context *ctx, pdf_dict *d, const pdf_name *Key
     char *Test = NULL;
     int index = 0;
 
-    Test = (char *)gs_alloc_bytes(ctx->memory, Key->length + 1, "pdfi_dict_find_key");
+    Test = (char *)gs_alloc_bytes(ctx->memory, (size_t)Key->length + 1, "pdfi_dict_find_key");
     if (Test == NULL)
         return_error(gs_error_VMerror);
 
@@ -827,6 +827,9 @@ int pdfi_make_float_array_from_dict(pdf_context *ctx, float **parray, pdf_dict *
 
     arr = (float *)gs_alloc_byte_array(ctx->memory, array_size,
                                        sizeof(float), "array_from_dict_key");
+    if (arr == NULL)
+        return_error(gs_error_VMerror);
+
     *parray = arr;
 
     for (i=0;i< array_size;i++) {
@@ -863,6 +866,9 @@ int pdfi_make_int_array_from_dict(pdf_context *ctx, int **parray, pdf_dict *dict
     array_size = pdfi_array_size(a);
     arr = (int *)gs_alloc_byte_array(ctx->memory, array_size,
                                      sizeof(int), "array_from_dict_key");
+    if (arr == NULL)
+        return_error(gs_error_VMerror);
+
     *parray = arr;
 
     for (i=0;i< array_size;i++) {
@@ -924,7 +930,7 @@ int pdfi_dict_put_obj(pdf_context *ctx, pdf_dict *d, pdf_obj *Key, pdf_obj *valu
         }
     }
 
-    new_list = (pdf_dict_entry *)gs_alloc_bytes(ctx->memory, (d->size + 1) * sizeof(pdf_dict_entry), "pdfi_dict_put reallocate dictionary key/values");
+    new_list = (pdf_dict_entry *)gs_alloc_bytes(ctx->memory, (size_t)(d->size + 1) * sizeof(pdf_dict_entry), "pdfi_dict_put reallocate dictionary key/values");
     if (new_list == NULL) {
         return_error(gs_error_VMerror);
     }
@@ -987,7 +993,7 @@ int pdfi_dict_put_unchecked(pdf_context *ctx, pdf_dict *d, const char *Key, pdf_
         } while(1);
     }
 
-    new_list = (pdf_dict_entry *)gs_alloc_bytes(ctx->memory, (d->size + 1) * sizeof(pdf_dict_entry), "pdfi_dict_put reallocate dictionary key/values");
+    new_list = (pdf_dict_entry *)gs_alloc_bytes(ctx->memory, (size_t)(d->size + 1) * sizeof(pdf_dict_entry), "pdfi_dict_put reallocate dictionary key/values");
     if (new_list == NULL) {
         return_error(gs_error_VMerror);
     }
@@ -1028,9 +1034,9 @@ int pdfi_dict_put_int(pdf_context *ctx, pdf_dict *d, const char *key, int64_t va
     pdf_num *obj;
 
     code = pdfi_object_alloc(ctx, PDF_INT, 0, (pdf_obj **)&obj);
-    obj->value.i = value;
     if (code < 0)
         return code;
+    obj->value.i = value;
 
     return pdfi_dict_put(ctx, d, key, (pdf_obj *)obj);
 }
@@ -1242,6 +1248,81 @@ int pdfi_dict_next(pdf_context *ctx, pdf_dict *d, pdf_obj **Key, pdf_obj **Value
 
             code = pdfi_dereference(ctx, r->ref_object_num, r->ref_generation_num, &o);
             if (code < 0) {
+                if (code == gs_error_circular_reference) {
+                    /* Replace circular references with NULL objects to prevent future
+                     * circular dereferencing.
+                     */
+                    pdfi_countdown(d->list[*index].value);
+                    d->list[*index].value = PDF_NULL_OBJ;
+                }
+                *Key = *Value = NULL;
+                return code;
+            }
+            /* The file Bug690138.pdf has font dictionaries which contain ToUnicode keys where
+             * the value is an indirect reference to the same font object. If we replace the
+             * indirect reference in the dictionary with the font dictionary it becomes self
+             * referencing and never counts down to 0, leading to a memory leak.
+             * This is clearly an error, so flag it and don't replace the indirect reference.
+             */
+            if ((o) < (pdf_obj *)(uintptr_t)(TOKEN__LAST_KEY)) {
+                /* "FAST" object, therefore can't be a problem. */
+                pdfi_countdown(d->list[*index].value);
+                d->list[*index].value = o;
+            } else if (o->object_num == 0 || o->object_num != d->object_num) {
+                pdfi_countdown(d->list[*index].value);
+                d->list[*index].value = o;
+            } else {
+                code = pdfi_set_error_stop(ctx, gs_note_error(gs_error_undefinedresult), NULL, E_DICT_SELF_REFERENCE, "pdfi_dict_next", NULL);
+                return code;
+            }
+            *Value = o;
+            pdfi_countup(*Value);
+            break;
+        } else {
+            *Value = d->list[*index].value;
+            pdfi_countup(*Value);
+            break;
+        }
+    }
+
+    pdfi_countup(*Key);
+    (*index)++;
+    return 0;
+}
+
+int pdfi_dict_next_no_store_R(pdf_context *ctx, pdf_dict *d, pdf_obj **Key, pdf_obj **Value, uint64_t *index)
+{
+    int code;
+
+    if (pdfi_type_of(d) != PDF_DICT)
+        return_error(gs_error_typecheck);
+
+    while (1) {
+        if (*index >= d->entries) {
+            *Key = NULL;
+            *Value= NULL;
+            return gs_error_undefined;
+        }
+
+        /* If we find NULL keys skip over them. This should never
+         * happen as we check the number of entries above, and we
+         * compact dictionaries on deletion of key/value pairs.
+         * This is a belt and braces check in case creation of the
+         * dictionary somehow ends up with NULL keys in the allocated
+         * section.
+         */
+        *Key = d->list[*index].key;
+        if (*Key == NULL) {
+            (*index)++;
+            continue;
+        }
+
+        if (pdfi_type_of(d->list[*index].value) == PDF_INDIRECT) {
+            pdf_indirect_ref *r = (pdf_indirect_ref *)d->list[*index].value;
+            pdf_obj *o;
+
+            code = pdfi_dereference(ctx, r->ref_object_num, r->ref_generation_num, &o);
+            if (code < 0) {
                 *Key = *Value = NULL;
                 return code;
             }
@@ -1265,6 +1346,14 @@ int pdfi_dict_first(pdf_context *ctx, pdf_dict *d, pdf_obj **Key, pdf_obj **Valu
 
     *i = 0;
     return pdfi_dict_next(ctx, d, Key, Value, index);
+}
+
+int pdfi_dict_first_no_store_R(pdf_context *ctx, pdf_dict *d, pdf_obj **Key, pdf_obj **Value, uint64_t *index)
+{
+    uint64_t *i = index;
+
+    *i = 0;
+    return pdfi_dict_next_no_store_R(ctx, d, Key, Value, index);
 }
 
 int pdfi_dict_key_next(pdf_context *ctx, pdf_dict *d, pdf_obj **Key, uint64_t *index)

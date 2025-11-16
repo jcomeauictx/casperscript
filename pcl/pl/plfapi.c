@@ -399,7 +399,7 @@ pl_fapi_ufst_get_font_dir(gs_memory_t * mem)
     return (UFSTFONTDIR);
 }
 
-static void
+static int
 pl_get_server_param(gs_fapi_server * I, const char *subtype,
                     char **server_param, int *server_param_size)
 {
@@ -426,6 +426,7 @@ pl_get_server_param(gs_fapi_server * I, const char *subtype,
         *server_param = NULL;
         *server_param_size = length;
     }
+    return 1;
 }
 
 
@@ -488,8 +489,10 @@ pl_show_text_is_width_only(const gs_text_enum_t *pte)
 
 void pl_text_release(gs_text_enum_t *pte, client_name_t cname)
 {
-  (void)pte;
-  (void)cname;
+   gx_cpath_free((gx_clip_path *)pte->pcpath, "gx_default_text_release");
+   pte->pcpath = NULL;
+   rc_decrement_only(pte->dev, cname);
+   rc_decrement_only(pte->imaging_dev, cname);
   return;
 }
 
@@ -653,9 +656,7 @@ pl_fapi_passfont(pl_font_t * plfont, int subfont, char *fapi_request,
     code =
         gs_fapi_passfont(pfont, subfont, (char *)file_name, &fdata,
                          (char *)fapi_request, NULL, (char **)&fapi_id,
-                         NULL,
-                         (gs_fapi_get_server_param_callback)
-                         pl_get_server_param);
+                         NULL, pl_get_server_param);
 
     if (code < 0 || fapi_id == NULL) {
         return code;
@@ -675,9 +676,7 @@ bool
 pl_fapi_ufst_available(gs_memory_t * mem)
 {
     gs_fapi_server *serv = NULL;
-    int code = gs_fapi_find_server(mem, (char *)"UFST", &serv,
-                                   (gs_fapi_get_server_param_callback)
-                                   pl_get_server_param);
+    int code = gs_fapi_find_server(mem, (char *)"UFST", &serv, pl_get_server_param);
 
     if (code == 0 && serv != NULL) {
         return (true);

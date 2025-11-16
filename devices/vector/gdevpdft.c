@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -201,9 +201,8 @@ pdf_make_form_dict(gx_device_pdf * pdev, const gs_pdf14trans_params_t * pparams,
             gs_param_string param;
             cos_object_t *pco = NULL;
 
-            gs_snprintf(str, sizeof(str), "{Obj%dG0}", pdev->PendingOC);
-            param.data = (const byte *)str;
-            param.size = strlen(str);
+            param.data = (const byte *)pdev->PendingOC;
+            param.size = strlen(pdev->PendingOC);
             code = pdf_refer_named(pdev, &param, &pco);
             if(code < 0)
                 return code;
@@ -213,7 +212,8 @@ pdf_make_form_dict(gx_device_pdf * pdev, const gs_pdf14trans_params_t * pparams,
             if (code < 0)
                 return code;
 
-            pdev->PendingOC = 0;
+            gs_free_object(pdev->memory->non_gc_memory, pdev->PendingOC, "");
+            pdev->PendingOC = NULL;
         }
     }
     return cos_dict_put_c_key_object(form_dict, "/Group", (cos_object_t *)group_dict);
@@ -305,6 +305,8 @@ pdf_end_transparency_group(gs_gstate * pgs, gx_device_pdf * pdev)
         int code;
         uint ignore;
 
+        if (pres == NULL)
+            return_error(gs_error_unregistered);
         pdev->FormDepth--;
         pdev->PatternsSinceForm = 0;
         code = pdf_exit_substream(pdev);
@@ -411,6 +413,8 @@ pdf_end_transparency_mask(gs_gstate * pgs, gx_device_pdf * pdev,
         int code;
         char buf[20];
 
+        if (pres == NULL)
+            return_error(gs_error_unregistered);
         code = pdf_exit_substream(pdev);
         if (code < 0)
             return code;

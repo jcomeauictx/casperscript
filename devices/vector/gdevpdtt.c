@@ -1,4 +1,4 @@
-/* Copyright (C) 2001-2024 Artifex Software, Inc.
+/* Copyright (C) 2001-2025 Artifex Software, Inc.
    All Rights Reserved.
 
    This software is provided AS-IS with no warranty, either express or
@@ -129,7 +129,7 @@ pdf_text_set_cache(gs_text_enum_t *pte, const double *pw,
             return_error(gs_error_typecheck);
     }
 
-    if (pdev->type3charpath)
+    if (pdev->type3charpath || (penum->current_font->FontType == ft_PDF_user_defined && pdev->OCRStage == OCR_Rendering))
         return gs_text_set_cache(penum->pte_default, pw, control);
 
     switch (control) {
@@ -273,6 +273,8 @@ pdf_text_set_cache(gs_text_enum_t *pte, const double *pw,
                but now we re-decided to go with the default implementation.
                Cancel the stream now.
              */
+            if (pres == NULL)
+                return_error(gs_error_unregistered);
             code = pdf_exit_substream(pdev);
             if (code < 0)
                 return code;
@@ -1289,8 +1291,14 @@ pdf_find_font_resource(gx_device_pdf *pdev, gs_font *font,
             if (uid_is_XUID(&cfont->UID)){
                 int size = uid_XUID_size(&cfont->UID);
                 long *xvalues = uid_XUID_values(&cfont->UID);
-                if (xvalues && size >= 2 && xvalues[0] == 1000000) {
-                    if (xvalues[size - 1] != pdfont->XUID)
+
+                if (xvalues && size >= 3 && xvalues[0] == 1000000) {
+                    int XUIDi = 0;
+
+                    for (XUIDi = 0;XUIDi < 3; XUIDi++)
+                        if (pdfont->XUID_Vals[XUIDi] != xvalues[XUIDi])
+                            break;
+                    if (XUIDi < size)
                         continue;
                 }
             }
@@ -1552,7 +1560,8 @@ pdf_make_font_resource(gx_device_pdf *pdev, gs_font *font,
     pdf_standard_font_t *const psfa =
         pdev->text->outline_fonts->standard_fonts;
     int code = 0;
-    long XUID = 0;
+    long XUID[3] = {0,0,0};
+    int XUIDi = 0;
     gs_font_base *bfont = (gs_font_base *)font;
 
     if (pdev->version < psdf_version_level2_with_TT) {
@@ -1604,8 +1613,9 @@ pdf_make_font_resource(gx_device_pdf *pdev, gs_font *font,
     if (uid_is_XUID(&bfont->UID)){
         int size = uid_XUID_size(&bfont->UID);
         long *xvalues = uid_XUID_values(&bfont->UID);
-        if (xvalues && size >= 2 && xvalues[0] == 1000000) {
-            XUID = xvalues[size - 1];
+        if (xvalues && size >= 3 && xvalues[0] == 1000000) {
+            for (XUIDi = 0;XUIDi < 3; XUIDi++)
+                XUID[XUIDi] = xvalues[XUIDi];
         }
     }
 
@@ -1628,7 +1638,8 @@ pdf_make_font_resource(gx_device_pdf *pdev, gs_font *font,
         code = pdf_make_font3_resource(pdev, font, ppdfont);
         if (code < 0)
             return code;
-        (*ppdfont)->XUID = XUID;
+        for (XUIDi = 0;XUIDi < 3; XUIDi++)
+            (*ppdfont)->XUID_Vals[XUIDi] = XUID[XUIDi];
         return 1;
     default:
         return_error(gs_error_invalidfont);
@@ -1670,7 +1681,9 @@ pdf_make_font_resource(gx_device_pdf *pdev, gs_font *font,
         )
         return code;
 
-    pdfont->XUID = XUID;
+    for (XUIDi = 0;XUIDi < 3; XUIDi++)
+        pdfont->XUID_Vals[XUIDi] = XUID[XUIDi];
+
     pdf_do_subset_font(pdev, pfd->base_font, -1);
     if (!embed)
         pfd->base_font->do_subset = false;
@@ -1925,7 +1938,7 @@ static int
 pdf_alloc_text_glyphs_table(gx_device_pdf *pdev, pdf_text_enum_t *penum, const gs_string *pstr)
 {
     const int go = (pstr != NULL ? pstr->size : penum->text.size);
-    const int struct_size = sizeof(pdf_char_glyph_pairs_t) +
+    const size_t struct_size = sizeof(pdf_char_glyph_pairs_t) +
                             sizeof(pdf_char_glyph_pair_t) * (2 * go - 1);
     pdf_char_glyph_pairs_t *cgp = (pdf_char_glyph_pairs_t *)gs_alloc_bytes(penum->memory,
                 struct_size, "pdf_alloc_text_glyphs_table");
@@ -3272,18 +3285,14 @@ static void pdf_type3_get_initial_matrix(gx_device * dev, gs_matrix * pmat)
     gs_matrix_scale(pmat, pdev->HWResolution[0] / 72.0, pdev->HWResolution[0] / 72.0, pmat);
 }
 
-static int pdf_query_purge_cached_char(const gs_memory_t *mem, cached_char *cc, void *data)
+static bool pdf_query_purge_cached_char(const gs_memory_t *mem, cached_char *cc, void *data)
 {
     cached_char *to_purge = (cached_char *)data;
 
-
-    if (cc->code == to_purge->code && cc_pair(cc) == cc_pair(to_purge) &&
-        cc->subpix_origin.x == to_purge->subpix_origin.x &&
-        cc->subpix_origin.y == to_purge->subpix_origin.y &&
-        cc->wmode == to_purge->wmode && cc_depth(cc) == cc_depth(to_purge)
-        )
-        return 1;
-    return 0;
+    return cc->code == to_purge->code && cc_pair(cc) == cc_pair(to_purge) &&
+           cc->subpix_origin.x == to_purge->subpix_origin.x &&
+           cc->subpix_origin.y == to_purge->subpix_origin.y &&
+           cc->wmode == to_purge->wmode && cc_depth(cc) == cc_depth(to_purge);
 }
 
 static int ProcessTextForOCR(gs_text_enum_t *pte)

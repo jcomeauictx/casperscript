@@ -1751,7 +1751,7 @@ chp2200_print_page(gx_device_printer * pdev, gp_file * prn_stream)
 {
     gs_memory_t *mem = pdev->memory;
     int width_in_pixels = pdev->width;
-    int width_in_bytes = width_in_pixels * 3; /* assume 24 bits (3 bytes per pixel) */
+    size_t width_in_bytes = width_in_pixels * 3; /* assume 24 bits (3 bytes per pixel) */
     byte *lbuf = gs_alloc_bytes(mem, width_in_bytes,
                                 "(input)chp2200_print_page");
     byte *lseedbuf = gs_alloc_bytes(mem, width_in_bytes,
@@ -1856,7 +1856,7 @@ cdnj500_print_page(gx_device_printer * pdev, gp_file * prn_stream)
 
     gs_memory_t *mem = pdev->memory;
     int width_in_pixels = pdev->width;
-    int width_in_bytes = width_in_pixels * 3; /* assume 24 bits (3 bytes per pixel) */
+    size_t width_in_bytes = width_in_pixels * 3; /* assume 24 bits (3 bytes per pixel) */
     byte *lbuf = gs_alloc_bytes(mem, width_in_bytes,
                                 "(input)cdnj500_print_page");
     byte *lseedbuf = gs_alloc_bytes(mem, width_in_bytes,
@@ -2513,9 +2513,6 @@ do_gcr(int bytecount, byte * inbyte, const byte kvalues[256],
           debug_print_string(output, strlen(output));
         }
 #endif /* 0 */
-        if (   *cyan > 255)    *cyan = 255;
-        if (*magenta > 255) *magenta = 255;
-        if ( *yellow > 255)  *yellow = 255;
 
         *cyan = *(cvalues + *cyan);
         *magenta = *(mvalues + *magenta);

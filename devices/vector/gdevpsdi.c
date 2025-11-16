@@ -267,7 +267,12 @@ setup_image_compression(psdf_binary_writer *pbw, const psdf_image_params *pdip,
             templat = lossless_template;
         } else if (templat == NULL || templat == &s_zlibE_template ||
                    templat == &s_LZWE_template) {
-            templat = &s_DCTE_template;
+            /* Although technically we can have a JPEG with width/height of65535 the DCT Encoder
+             * limits the dimensions to 65500. If the image would break that, then don't use
+             * DCT Encoding, or this will throw an error later.
+             */
+            if (pim->Width < 65500 && pim->Height < 65500)
+                templat = &s_DCTE_template;
         }
         dict = pdip->ACSDict;
     } else if (!lossless)
@@ -707,6 +712,9 @@ psdf_setup_image_filters(gx_device_psdf * pdev, psdf_binary_writer * pbw,
             stream_C2R_state *ss = (stream_C2R_state *)
                 s_alloc_state(mem, s_C2R_template.stype, "C2R state");
             int code = pixel_resize(pbw, pim->Width, 3, 8, bpc_out);
+
+            if (ss == 0)
+                return_error(gs_error_VMerror);
 
             if (code < 0 ||
                 (code = psdf_encode_binary(pbw, &s_C2R_template,
