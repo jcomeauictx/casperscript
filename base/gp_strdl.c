@@ -72,6 +72,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
     uint replysize = 0;
     char *buffer, promptstring[MAXPROMPT] = "";
     int promptsize = 0, count = *pcount, code = EOF;
+    int cha_promptsize = strlen(CHA);
     int digit = 'R', offset = 2, multiplier = 1;
     uint nsize;
     byte *ndata;
@@ -93,7 +94,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
              * with <ESC>[{ROW};{COLUMN}R
              */
             if (isatty(CS_STDIN)) {
-                int columnlength = 0, cha_promptsize = strlen(CHA);
+                int columnlength = 0;
                 /*FIXME: this needs to be wrapped in timeout and ^C trap */
                 tcgetattr(CS_STDIN, &settings[0]);  /* for reference */
                 settings[1] = settings[0];  /* let gcc generate the code */
@@ -120,6 +121,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 promptsize -= 1;  /* column returned is one *past* prompt */
                 memset(promptstring, '.', promptsize);
                 promptstring[promptsize] = '\0';
+                cha_promptsize = promptsize;  /* for adding to history */
 #else
                 /* the `%d' will be replaced by the actual column number */
                 /* but add 1 for final "\0" in `size` arg to snprintf */
@@ -147,7 +149,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     buf->data = ndata;
                     buf->size = nsize;
                 }
-                add_history(buffer);
+                add_history((const char *) &buffer[cha_promptsize]);
                 syslog(LOG_USER | LOG_DEBUG,
                        "count: %d, buffer: %*s", count, count, buffer);
                 DISCARD(strncpy((char *)(buf->data + *pcount), buffer, count));
