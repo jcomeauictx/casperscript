@@ -58,7 +58,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXREPLY 12
 #define MINREPLY 5  /* 5 is absolute minimum reply: <CSI>1;1R */
 #define QUERY "\033[6n"
-#define CHA "\033[%dG"  /* Cursor Horizontal Absolute */
+#define CHA "\001\033[%dG\002"  /* Cursor Horizontal Absolute */
     const byte *query = (byte *)QUERY;
     /* uint querysize = strlen((char *)query); */ /* no need using outprintf */
     /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[
