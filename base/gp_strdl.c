@@ -121,7 +121,6 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 promptsize -= 1;  /* column returned is one *past* prompt */
                 memset(promptstring, '.', promptsize);
                 promptstring[promptsize] = '\0';
-                cha_promptsize = promptsize;  /* for adding to history */
 #else
                 /* the `%d' will be replaced by the actual column number */
                 /* but add 1 for final "\0" in `size` arg to snprintf */
@@ -150,7 +149,6 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     buf->size = nsize;
                 }
                 add_history(buffer);
-                add_history((const char *) &buffer[cha_promptsize]);
                 syslog(LOG_USER | LOG_DEBUG,
                        "count: %d, buffer: %*s", count, count, buffer);
                 DISCARD(strncpy((char *)(buf->data + *pcount), buffer, count));
