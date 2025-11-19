@@ -149,6 +149,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     buf->data = ndata;
                     buf->size = nsize;
                 }
+                add_history(buffer);
                 add_history((const char *) &buffer[cha_promptsize]);
                 syslog(LOG_USER | LOG_DEBUG,
                        "count: %d, buffer: %*s", count, count, buffer);
