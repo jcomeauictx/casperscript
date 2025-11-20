@@ -64,6 +64,24 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXREPLY 12
 #define MINREPLY 5  /* 5 is absolute minimum reply: <CSI>1;1R */
 #define QUERY "\033[6n"
+/* on using CHA sequence as prompt:
+ *
+ * supposedly \001 and \002 are supposed to be used to wrap any escape
+ * sequences, which don't count as "physical" character positions. but if
+ * you use them with no pad characters, the cursor is always at the start of
+ * the line; and if you use them *with* pad characters, the cursor position
+ * is the number of pad characters *less* the length of the CHA sequence.
+ *
+ * and, if you use the "unwrapped" CHA sequence with no pad characters, it
+ * sort of works, but when you up-arrow to a previously entered line that had
+ * a smaller stack, e.g. "ccs<10>" to "ccs<3>" or "ccs>", the hidden
+ * prompt length metrics stored by readline are recalled, and shorten the
+ * "ccs<10>" prompt to "ccs<"
+ *
+ * so, the latest approach is to use pad characters to satisfy the prompt
+ * metrics calculations, and unwrapped escape sequences to set the cursor
+ * position to the current prompt length.
+ */
 #define CHA "\033[%dG"  /* Cursor Horizontal Absolute */
 #define MAX_CHA sizeof(CHA) - sizeof("%d") + MAXDEPTH_LENGTH
 #ifndef USE_CHA_PROMPT
