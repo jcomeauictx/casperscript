@@ -164,7 +164,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                         CHA,
                         promptsize + 1
                     )
-                ); 
+                );
 #endif
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
                        promptstring);
