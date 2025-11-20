@@ -64,8 +64,13 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 #define MAXREPLY 12
 #define MINREPLY 5  /* 5 is absolute minimum reply: <CSI>1;1R */
 #define QUERY "\033[6n"
-#define CHA "\001\033[%dG\002"  /* Cursor Horizontal Absolute */
+#define CHA "\033[%dG"  /* Cursor Horizontal Absolute */
 #define MAX_CHA sizeof(CHA) - sizeof("%d") + MAXDEPTH_LENGTH
+#ifndef USE_CHA_PROMPT
+#define PADDING '.'
+#else
+#define PADDING '\x16'  /* SYN character should not echo anything visible */
+#endif
     const byte *query = (byte *)QUERY;
     /* uint querysize = strlen((char *)query); */ /* no need using outprintf */
     /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[
@@ -88,8 +93,9 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
     syslog(LOG_USER | LOG_DEBUG, "MAX_CHA=%ld, MAXPROMPT=%d",
            MAX_CHA, MAXPROMPT);
     DISCARD(rl_bind_key('\t', rl_insert));
-    syslog(LOG_USER | LOG_DEBUG, "gp_readline called with count %d, buf %.*s",
-            count, min(count, 64), (char *)buf->data);
+    syslog(LOG_USER | LOG_DEBUG,
+           "gp_readline called with count %d, buf \"%.*s\"",
+           count, min(count, 64), (char *)buf->data);
     if (prompt && prompt->size > (MAXPROMPT - 1)) {
         code = ERRC;
     } else {
@@ -125,19 +131,25 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     multiplier *= 10;
                     columnlength += 1;
                 }
-#ifndef USE_CHA_PROMPT
                 promptsize -= 1;  /* column returned is one *past* prompt */
-                memset(promptstring, '.', promptsize);
+                memset(promptstring, PADDING, promptsize);
                 promptstring[promptsize] = '\0';
-#else
+#ifdef USE_CHA_PROMPT
                 /* the `%d' will be replaced by the actual column number */
                 /* but add 1 for final "\0" in `size` arg to snprintf */
                 syslog(LOG_USER | LOG_DEBUG, "columnlength: %d", columnlength);
                 cha_promptsize += (columnlength - 2) + 1;
-                DISCARD(snprintf(promptstring, cha_promptsize, CHA, promptsize)); 
+                DISCARD(
+                    snprintf(
+                        promptstring + strlen(promptstring),
+                        cha_promptsize,
+                        CHA,
+                        promptsize + 1
+                    )
+                ); 
 #endif
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
-                        promptstring);
+                       promptstring);
                 tcsetattr(CS_STDIN, TCSANOW, &settings[0]);  /* restore term */
             }
         }
