@@ -134,6 +134,9 @@ distclean:
 required:
 	sudo apt update
 	sudo apt install $(REQUIRED)
+float-edit: $(wildcard psi/iref.h psi/oper.h base/gsfixed.h \
+	 psi/zarith.c psi/zmath.c)
+	vim $+
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)

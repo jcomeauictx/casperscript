@@ -452,6 +452,7 @@ struct ref_s {
         struct stream_s *pfile;
         struct psi_device_ref_s *pdevice;
         obj_header_t *pstruct;
+        double dblval;  /* add support for double-precision floating point */
         uint64_t dummy; /* force 8-byte ref on 32-bit platforms */
     } value;
 };
