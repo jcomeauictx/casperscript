@@ -65,6 +65,10 @@
  *
  */
 
+/* Note: the following tricks don't work on the default toolchain
+ * on iSH (alpine); the macros get redefined to be nonfunctional;
+ * so we need another approach for casperscript
+ */
 /* prevent gp.h redefining fopen */
 #define fopen fopen
 /* prevent gp.h redefining sprintf */
