@@ -651,7 +651,7 @@ inode_write(FILE *out, romfs_inode *node, int compression, int inode_count, int 
                 which = i;
         }
 
-        sprintf(splits->outname_formatted, splits->outname, which);
+        snprintf(splits->outname_formatted, strlen(splits->outname) + 32, splits->outname, which);
         if (splits->sizes[which] == 0) {
             out2 = fopen(splits->outname_formatted, "w");
             start_file(out2);
@@ -2204,8 +2204,10 @@ wsc(const byte *str, int len)
 
     for (i = 0; i < len; ++i) {
         int c = str[i];
-
-        sprintf(linebuf,
+        /* "'\\c',", the longest possible output, is 6 chars,
+	 * so need to restrict to 7, allowing the final null byte */
+        snprintf(linebuf,
+                7,
                 (c < 32 || c >= 127 ? "%d," :
                  c == '\'' || c == '\\' ? "'\\%c'," : "'%c',"),
                 c);
@@ -2500,7 +2502,7 @@ merge_to_ps(const char *os_prefix, const char *inname, FILE * in, FILE * config,
     char line[LINE_SIZE + 1];
 
     while ((rl(in, line, LINE_SIZE), line[0])) {
-        sprintf(linebuf, "%s", line );
+        snprintf(linebuf, LINE_SIZE + 1, "%s", line);
         wl(linebuf);
     }
     mergefile(os_prefix, inname, in, config, false, verbose);
@@ -2709,7 +2711,7 @@ main(int argc, char *argv[])
     for (i = 0; i < splits.max_splits; i++) {
         if (splits.sizes[i] == 0) {
             FILE *out2;
-            sprintf(splits.outname_formatted, splits.outname, i);
+            snprintf(splits.outname_formatted, strlen(splits.outname) + 32, splits.outname, i);
             out2 = fopen(splits.outname_formatted, "w");
             fprintf(out2, "const int mkromfs_dummy_chunk%d;\n", i);
             fclose(out2);
