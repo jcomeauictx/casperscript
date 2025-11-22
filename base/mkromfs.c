@@ -73,6 +73,12 @@
 #define fopen fopen
 /* prevent gp.h redefining sprintf */
 #define sprintf sprintf
+/* we will be using snprintf instead of sprintf to avoid the problem
+ * mentioned above on alpine; but in case snprintf isn't available, fallback
+ * to sprintf, assuming the above #define statements work */
+#ifndef HAVE_SNPRINTF
+#define snprintf(outbuf, maxlen, ...) sprintf(outbuf, __VA_ARGS__)
+#endif
 
 #include "stdpre.h"
 #include "stdint_.h"
@@ -2204,10 +2210,10 @@ wsc(const byte *str, int len)
 
     for (i = 0; i < len; ++i) {
         int c = str[i];
-        /* "'\\c',", the longest possible output, is 6 chars,
+        /* "'\\Z',", the longest possible output, is 6 chars,
 	 * so need to restrict to 7, allowing the final null byte */
         snprintf(linebuf,
-                7,
+                max(sizeof("255,"), sizeof("'\\Z',")),
                 (c < 32 || c >= 127 ? "%d," :
                  c == '\'' || c == '\\' ? "'\\%c'," : "'%c',"),
                 c);
