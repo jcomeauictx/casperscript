@@ -172,6 +172,9 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
                        promptstring);
                 tcsetattr(CS_STDIN, TCSANOW, &settings[0]);  /* restore term */
+#ifdef USE_CHA_PROMPT  /* fix cursor overlap on stacksize change */
+                rl_redisplay();
+#endif
             }
         }
         while ((buffer = readline(promptstring)) != NULL) {
