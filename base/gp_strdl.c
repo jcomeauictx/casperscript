@@ -100,7 +100,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
      * assumed on earlier attempt. */
     char reply[MAXREPLY] = "";
     uint replysize = 0;
-    char *buffer, promptstring[MAXPROMPT + MAX_CHA] = "";
+    char *buffer, promptstring[MAXPROMPT + MAX_CHA] = "", *prompttail;
     int promptsize = 0, count = *pcount, code = EOF;
     int digit = 'R', offset = 2, multiplier = 1;
     uint nsize;
@@ -150,22 +150,25 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     columnlength += 1;
                 }
                 promptsize -= 1;  /* column returned is one *past* prompt */
-                memset(promptstring, PADDING, promptsize);
-                promptstring[promptsize] = '\0';
+                prompttail = promptstring;
 #ifdef USE_CHA_PROMPT
                 /* the `%d' will be replaced by the actual column number */
                 /* but add 1 for final "\0" in `size` arg to snprintf */
                 syslog(LOG_USER | LOG_DEBUG, "columnlength: %d", columnlength);
                 cha_promptsize += (columnlength - 2) + 1;
-                DISCARD(
-                    snprintf(
-                        promptstring + strlen(promptstring),
-                        cha_promptsize,
-                        CHA,
-                        promptsize + 1
-                    )
+                prompttail += snprintf(
+                    promptstring + strlen(promptstring),
+                    cha_promptsize,
+                    CHA,
+                    promptsize + 1
                 );
+                if (prompttail < promptstring) {
+                    code = ERRC;
+                    goto abort;
+                }
 #endif
+                memset(prompttail, PADDING, promptsize);
+                prompttail[promptsize] = '\0';
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
                        promptstring);
                 tcsetattr(CS_STDIN, TCSANOW, &settings[0]);  /* restore term */
@@ -202,6 +205,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
          * and it's needed here because of the `break` statements above */
         free(buffer);
     }
+    abort:
     return code;
 #endif
 }
