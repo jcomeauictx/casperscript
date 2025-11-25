@@ -24,7 +24,7 @@ XCFLAGS += -DUSE_LIBREADLINE
 # fix problem with off64_t after merge with artifex-ghostpdl
 # https://stackoverflow.com/a/34853360/493161
 XCFLAGS += -Doff64_t=__off64_t
-# CHA prompt was an attempt to fix prompt on Termux, but it fails on xterm
+# CHA prompt was an attempt to fix prompt on Termux, but it still has problems
 XCFLAGS += -DUSE_CHA_PROMPT
 #XCFLAGS += -DTEST_ZCASPER=1
 CASPERLIBS += -lreadline
@@ -53,7 +53,7 @@ all:	Makefile | configure
 	[ -e configure ] || $(MAKE) configure
 	[ -e Makefile ] || $(MAKE) Makefile
 	@echo building casperscript version $(CS_VERSION)
-	XCFLAGS="$(XCFLAGS)" $(MAKE) -f $< 2>&1 | tee make.log
+	set -o pipefail; XCFLAGS="$(XCFLAGS)" $(MAKE) -f $< 2>&1 | tee make.log
 	# trick for cstestcmd.cs test on unix-y systems
 	cd bin && ln -sf $(GSNAME) cs.exe
 	# make the same symlinks as for install, but in $(CWD)/bin

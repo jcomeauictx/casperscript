@@ -54,41 +54,11 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
 /* //stackoverflow.com/a/59923166/493161 */
 #define CS_STDIN 0
 #define CS_STDOUT 1
-#define MAXPROMPT 8192  /* largest supported character terminal width */
-#define MAXDEPTH 8192  /* largest supported casperscript operand stack depth */
-/* now some stringification stuff to calculate the prompt length
- * remember to subtract 1 for final '\0' byte of strings */
-#define STRINGIFY(x) #x
-#define TOSTRING(x) STRINGIFY(x)
-#define MAXDEPTH_LENGTH sizeof(TOSTRING(MAXDEPTH)) - 1
+#define MAXPROMPT 8192  /* largest conceivable character terminal width */
 #define MAXREPLY 12
 #define MINREPLY 5  /* 5 is absolute minimum reply: <CSI>1;1R */
 #define QUERY "\033[6n"
-/* on using CHA sequence as prompt:
- *
- * supposedly \001 and \002 are supposed to be used to wrap any escape
- * sequences, which don't count as "physical" character positions. but if
- * you use them with no pad characters, the cursor is always at the start of
- * the line; and if you use them *with* pad characters, the cursor position
- * is the number of pad characters *less* the length of the CHA sequence.
- *
- * and, if you use the "unwrapped" CHA sequence with no pad characters, it
- * sort of works, but when you up-arrow to a previously entered line that had
- * a smaller stack, e.g. "ccs<10>" to "ccs<3>" or "ccs>", the hidden
- * prompt length metrics stored by readline are recalled, and shorten the
- * "ccs<10>" prompt to "ccs<"
- *
- * so, the latest approach is to use pad characters to satisfy the prompt
- * metrics calculations, and unwrapped escape sequences to set the cursor
- * position to the current prompt length.
- */
 #define CHA "\033[%dG"  /* Cursor Horizontal Absolute */
-#define MAX_CHA sizeof(CHA) - sizeof("%d") + MAXDEPTH_LENGTH
-#ifndef USE_CHA_PROMPT
-#define PADDING '.'
-#else
-#define PADDING '\x16'  /* SYN character should not echo anything visible */
-#endif
     const byte *query = (byte *)QUERY;
     /* uint querysize = strlen((char *)query); */ /* no need using outprintf */
     /* "\033[{ROW};{COLUMN}R", minimum 5 bytes with CSI, 6 with <ESC>[
@@ -100,7 +70,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
      * assumed on earlier attempt. */
     char reply[MAXREPLY] = "";
     uint replysize = 0;
-    char *buffer, promptstring[MAXPROMPT + MAX_CHA] = "";
+    char *buffer, promptstring[MAXPROMPT] = "";
     int promptsize = 0, count = *pcount, code = EOF;
     int digit = 'R', offset = 2, multiplier = 1;
     uint nsize;
@@ -108,12 +78,9 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
     struct termios settings[2];
 
     /* disable auto-complete with filenames */
-    syslog(LOG_USER | LOG_DEBUG, "MAX_CHA=%ld, MAXPROMPT=%d",
-           MAX_CHA, MAXPROMPT);
     DISCARD(rl_bind_key('\t', rl_insert));
-    syslog(LOG_USER | LOG_DEBUG,
-           "gp_readline called with count %d, buf \"%.*s\"",
-           count, min(count, 64), (char *)buf->data);
+    syslog(LOG_USER | LOG_DEBUG, "gp_readline called with count %d, buf %.*s",
+            count, min(count, 64), (char *)buf->data);
     if (prompt && prompt->size > (MAXPROMPT - 1)) {
         code = ERRC;
     } else {
@@ -149,25 +116,19 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                     multiplier *= 10;
                     columnlength += 1;
                 }
+#ifndef USE_CHA_PROMPT
                 promptsize -= 1;  /* column returned is one *past* prompt */
-                memset(promptstring, PADDING, promptsize);
+                memset(promptstring, '.', promptsize);
                 promptstring[promptsize] = '\0';
-#ifdef USE_CHA_PROMPT
+#else
                 /* the `%d' will be replaced by the actual column number */
                 /* but add 1 for final "\0" in `size` arg to snprintf */
                 syslog(LOG_USER | LOG_DEBUG, "columnlength: %d", columnlength);
                 cha_promptsize += (columnlength - 2) + 1;
-                DISCARD(
-                    snprintf(
-                        promptstring + strlen(promptstring),
-                        cha_promptsize,
-                        CHA,
-                        promptsize + 1
-                    )
-                );
+                DISCARD(snprintf(promptstring, cha_promptsize, CHA, promptsize)); 
 #endif
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
-                       promptstring);
+                        promptstring);
                 tcsetattr(CS_STDIN, TCSANOW, &settings[0]);  /* restore term */
             }
         }
