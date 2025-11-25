@@ -36,8 +36,9 @@ zop_add(i_ctx_t *i_ctx_p)
 {
     register os_ptr op = osp;
     float result;
+#ifdef REALS_HAVE_DOUBLES
     double dblresult;
-
+#endif
     check_op(2);
     switch (r_type(op)) {
     default:
@@ -48,7 +49,9 @@ zop_add(i_ctx_t *i_ctx_p)
             return_op_typecheck(op - 1);
         case t_real:
             result = op[-1].value.realval + op->value.realval;
+#ifdef REALS_HAVE_DOUBLES
             dblresult = op[-1].value.dblval + op->value.dblval;
+#endif
 #ifdef HAVE_ISINF
             if (isinf(result))
                 return_error(gs_error_undefinedresult);
@@ -58,9 +61,16 @@ zop_add(i_ctx_t *i_ctx_p)
                 return_error(gs_error_undefinedresult);
 #endif
             op[-1].value.realval = result;
+#ifdef REALS_HAVE_DOUBLES
+            op[-1].value.dblval = dblresult;
+#endif
             break;
         case t_integer:
+#ifdef REALS_HAVE_DOUBLES
+            make_real(op - 1, (double)op[-1].value.intval + op->value.dblval);
+#else
             make_real(op - 1, (double)op[-1].value.intval + op->value.realval);
+#endif
         }
         break;
     case t_integer:
@@ -68,7 +78,11 @@ zop_add(i_ctx_t *i_ctx_p)
         default:
             return_op_typecheck(op - 1);
         case t_real:
+#ifdef REALS_HAVE_DOUBLES
+            result = op[-1].value.dblval + (double)op->value.intval;
+#else
             result = op[-1].value.realval + (double)op->value.intval;
+#endif
 #ifdef HAVE_ISINF
             if (isinf(result))
                 return_error(gs_error_undefinedresult);
@@ -78,7 +92,9 @@ zop_add(i_ctx_t *i_ctx_p)
                 return_error(gs_error_undefinedresult);
 #endif
             op[-1].value.realval = result;
+#ifdef REALS_HAVE_DOUBLES
             op[-1].value.dblval = dblresult;
+#endif
             break;
         case t_integer: {
             if (sizeof(ps_int) != 4 && gs_currentcpsimode(imemory)) {

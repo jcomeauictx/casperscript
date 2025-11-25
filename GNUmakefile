@@ -25,7 +25,9 @@ XCFLAGS += -DUSE_LIBREADLINE
 # https://stackoverflow.com/a/34853360/493161
 XCFLAGS += -Doff64_t=__off64_t
 # CHA prompt was an attempt to fix prompt on Termux, but it still has problems
-XCFLAGS += -DUSE_CHA_PROMPT
+# REALS_HAVE_DOUBLES adds doubles to t_real and floating point operations
+# USE_C_STRINGS adds \0 to t_strings so C conversion is less messy.
+XCFLAGS += -DUSE_CHA_PROMPT -DREALS_HAVE_DOUBLES -DUSE_C_STRINGS
 #XCFLAGS += -DTEST_ZCASPER=1
 CASPERLIBS += -lreadline
 XTRALIBS += $(CASPERLIBS)
@@ -134,7 +136,7 @@ distclean:
 required:
 	sudo apt update
 	sudo apt install $(REQUIRED)
-float-edit: $(wildcard psi/iref.h psi/oper.h base/gsfixed.h \
+float-edit: $(wildcard psi/iref.h psi/oper.h \
 	 psi/zarith.c psi/zmath.c)
 	vim $+
 %:	*/%.c
