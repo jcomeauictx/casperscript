@@ -139,6 +139,8 @@ required:
 float-edit: $(wildcard psi/iref.h psi/oper.h \
 	 psi/zarith.c psi/zmath.c)
 	vim $+
+float-test:
+	echo '64 string (%.010f) [3.1415926535] sprintf == ==' | ccs -
 %:	*/%.c
 	[ "$<" ] || (echo Nothing to do >&2; false)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" $(<:.c=)
