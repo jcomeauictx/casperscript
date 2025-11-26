@@ -177,11 +177,7 @@ int gsprintf(ref *formatted, ref *format, ref *args)
 	    case 'G':
 	      {
                 NEXT_ARG(t_real);
-#ifdef REALS_HAVE_DOUBLES
-                doublevalue = (DEFAULT_REAL_TYPE) arg.value.dblval;
-#else
                 doublevalue = (DEFAULT_REAL_TYPE) arg.value.realval;
-#endif
                 syslog(LOG_USER | LOG_DEBUG, "doublevalue: %f", doublevalue);
 		PRINT_TYPE(double, doublevalue);
 	      }

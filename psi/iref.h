@@ -431,7 +431,11 @@ struct ref_s {
     union ref_value {			/* name the union to keep gdb happy */
         ps_int intval;
         ushort boolval;
+#ifdef REALS_HAVE_DOUBLES
+	double realval;
+#else
         float realval;
+#endif
         ulong saveid;
         byte *bytes;
         const byte *const_bytes;
@@ -452,9 +456,6 @@ struct ref_s {
         struct stream_s *pfile;
         struct psi_device_ref_s *pdevice;
         obj_header_t *pstruct;
-#ifdef REALS_HAVE_DOUBLES
-        double dblval;  /* add support for double-precision floating point */
-#endif
         uint64_t dummy; /* force 8-byte ref on 32-bit platforms */
     } value;
 };
