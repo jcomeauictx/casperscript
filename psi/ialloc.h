@@ -21,6 +21,12 @@
 
 #include "imemory.h"
 
+#ifdef USE_C_STRINGS  /* for casperscript, extra byte for trailing '\0' */
+#define STRING_SIZE(size) (size + 1)
+#else
+#define STRING_SIZE(size) (size)
+#endif
+
 /*
  * Define the interpreter memory manager instance.
  */
@@ -51,13 +57,13 @@
 #define ifree_const_object(data, cname)\
   gs_free_const_object(imemory, data, cname)
 #define ialloc_string(nbytes, cname)\
-  gs_alloc_string(imemory, nbytes, cname)
+  gs_alloc_string(imemory, REAL_STRING_SIZE(nbytes), cname)
 #define iresize_string(data, oldn, newn, cname)\
-  gs_resize_string(imemory, data, oldn, newn, cname)
+  gs_resize_string(imemory, data, REAL_STRING_SIZE(oldn), REAL_STRING_SIZE(newn), cname)
 #define ifree_string(data, nbytes, cname)\
-  gs_free_string(imemory, data, nbytes, cname)
+  gs_free_string(imemory, data, REAL_STRING_SIZE(nbytes), cname)
 #define ifree_const_string(data, nbytes, cname)\
-  gs_free_const_string(imemory, data, nbytes, cname)
+  gs_free_const_string(imemory, data, REAL_STRING_SIZE(nbytes), cname)
 
 /* Initialize the interpreter's allocator. */
 int ialloc_init(gs_dual_memory_t *, gs_memory_t *, uint, bool);

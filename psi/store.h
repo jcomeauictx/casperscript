@@ -235,7 +235,7 @@
 #define make_string(pref,attrs,size,chars)\
   make_tasv(pref, t_string, attrs, size, bytes, chars)
 #define make_const_string(pref,attrs,size,chars)\
-  make_tasv(pref, t_string, attrs, size, const_bytes, chars)
+  make_tasv(pref, t_string, attrs, REAL_STRING_SIZE(size), const_bytes, chars)
 #define make_empty_string(pref,attrs)\
   make_string(pref, attrs, 0, (byte *)NULL)
 #define make_empty_const_string(pref,attrs)\
