@@ -2,6 +2,8 @@
 SHELL := /bin/bash
 REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev libtesseract-dev libxt-dev libxext-dev
 CASPER ?= 1
+BRANCH := $(shell git branch --show-current)
+REMOTES := $(filter-out original, $(shell git remote))
 # review `install` recipe if using other CONFIG_ARGS
 INSTALL_PREFIX ?= /usr/local/casperscript
 CONFIG_ARGS ?= --with-x --prefix=$(INSTALL_PREFIX)
@@ -116,8 +118,9 @@ rebuild:
 	 (echo 'commit changes before `make rebuild`' >&2; false)
 	$(MAKE) distclean all install  # after all that, we can rebuild
 push:
-	git push  # to default repository
-	git push githost  # to personal repository
+	$(foreach remote, $(REMOTES), \
+	 git push $(remote) $(BRANCH); \
+	)
 test_splitargs:
 	XCFLAGS=-DTEST_SPLITARGS=1 $(MAKE) splitargs
 	./splitargs -option0 -option1 -- arg0 arg1
