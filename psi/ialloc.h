@@ -22,9 +22,9 @@
 #include "imemory.h"
 
 #ifdef USE_C_STRINGS  /* for casperscript, extra byte for trailing '\0' */
-#define STRING_SIZE(size) (size + 1)
+#define REAL_STRING_SIZE(size) (size + 1)
 #else
-#define STRING_SIZE(size) (size)
+#define REAL_STRING_SIZE(size) (size)
 #endif
 
 /*
