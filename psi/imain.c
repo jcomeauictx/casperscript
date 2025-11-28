@@ -410,6 +410,9 @@ gs_main_set_language_param(gs_main_instance *minst,
                 if (body == NULL)
                     return gs_error_Fatal;
                 memcpy(body, pvalue.value.s.data, len);
+#ifdef USE_C_STRINGS
+                body[len] = '\0';
+#endif
                 make_const_string(&value, a_readonly | avm_system, len, body);
             }
             break;

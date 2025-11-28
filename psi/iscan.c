@@ -268,6 +268,9 @@ gs_scanner_error_object(i_ctx_t *i_ctx_p, const scanner_state *pstate,
             if (estr == 0)
                 return -1;              /* VMerror */
             memcpy(estr, (const byte *)pstate->s_error.string, len);
+#ifdef USE_C_STRINGS
+            estr[len] = '\0';
+#endif
             make_string(pseo, a_all | icurrent_space, len, estr);
             return 0;
         }
@@ -379,6 +382,9 @@ scan_comment(i_ctx_t *i_ctx_p, ref *pref, scanner_state *pstate,
         if (cstr == 0)
             return_error(gs_error_VMerror);
         memcpy(cstr, base, len);
+#ifdef USE_C_STRINGS
+        cstr[len] = '\0';
+#endif
         make_string(pref, a_all | icurrent_space, len, cstr);
     }
     return code;

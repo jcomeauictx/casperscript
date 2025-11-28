@@ -242,9 +242,11 @@ zgetenv(i_ctx_t *i_ctx_p)
     }
     DISCARD(gp_getenv(str, (char *)value, &len));	/* can't fail */
     ifree_string((byte *) str, r_size(op) + 1, "getenv key");
+#ifndef USE_C_STRINGS
     /* Delete the stupid C string terminator. */
     value = iresize_string(value, len, len - 1,
                            "getenv value");	/* can't fail */
+#endif
     push(1);
     make_string(op - 1, a_all | icurrent_space, len - 1, value);
     make_true(op);
