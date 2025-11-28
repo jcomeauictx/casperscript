@@ -650,6 +650,9 @@ static int PDFobj_to_PSobj(i_ctx_t *i_ctx_p, pdfctx_t *pdfctx, pdf_obj *PDFobj, 
                 } else {
                     make_string(PSobj, a_all | icurrent_space, size, sbody);
                     memcpy(sbody, ((pdf_name *)PDFobj)->data, size);
+#ifdef USE_C_STRINGS
+                    sbody[size] = '\0';
+#endif
                 }
             }
             break;
@@ -785,7 +788,7 @@ static int zPDFinfo(i_ctx_t *i_ctx_p)
                         goto error;
                     }
                     make_string(&stringref, a_all | icurrent_space, size, sbody);
-                    memset(sbody, 0x00, size);
+                    memset(sbody, 0x00, REAL_STRING_SIZE(size));
                     memcpy(sbody, names_array[ix], size);
                     gs_free_object(pdfctx->ctx->memory, names_array[ix], "free collection temporary filenames");
                     names_array[ix] = NULL;
