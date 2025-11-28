@@ -32,7 +32,7 @@ XCFLAGS += -Doff64_t=__off64_t
 # CHA prompt was an attempt to fix prompt on Termux, but it still has problems
 # REALS_HAVE_DOUBLES adds doubles to t_real and floating point operations
 # USE_C_STRINGS adds \0 to t_strings so C conversion is less messy.
-XCFLAGS += -DUSE_CHA_PROMPT -DREALS_HAVE_DOUBLES -DUSE_C_STRINGS
+XCFLAGS += -DUSE_CHA_PROMPT -DREALS_HAVE_DOUBLES #-DUSE_C_STRINGS
 #XCFLAGS += -DTEST_ZCASPER=1
 CASPERLIBS += -lreadline
 XTRALIBS += $(CASPERLIBS)

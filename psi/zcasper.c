@@ -159,6 +159,11 @@ int zsymlink(i_ctx_t *i_ctx_p) {
     check_op(2);
     check_read_type(op[-1], t_string);
     check_read_type(*op, t_string);
+#ifdef USE_C_STRINGS
+    syslog(LOG_USER | LOG_DEBUG, "symlinking target %s as %s\n",
+           (char *)(op - 1) -> value.bytes, (char *)op->value.bytes);
+    result = symlink((char *)(op - 1)->value.bytes, (char *)op->value.bytes);
+#else
     target = ref_to_string(op - 1, imemory, "symlink target");
     if (target == 0) return_error(gs_error_VMerror);
     linkpath = ref_to_string(op, imemory, "symlink linkpath");
@@ -166,6 +171,7 @@ int zsymlink(i_ctx_t *i_ctx_p) {
     result = symlink(target, linkpath);
     ifree_string((byte *) linkpath, r_size(op - 1) + 1, "symlink target");
     ifree_string((byte *) target, r_size(op) + 1, "symlink linkpath");
+#endif
     pop(1);
     make_bool(op - 1, !result);
     return 0;
