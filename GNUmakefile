@@ -2,6 +2,9 @@
 SHELL := /bin/bash
 REQUIRED := autoconf gcc g++ libreadline-dev libx11-dev libtesseract-dev libxt-dev libxext-dev
 CASPER ?= 1
+DATEFORMAT := %Y%m%d%H%M%S
+MTIME = $(shell date --reference $1 +$(DATEFORMAT))
+$(info timestamp on GNUmakefile: $(call MTIME, GNUmakefile))
 BRANCH := $(shell git branch --show-current)
 REMOTES := $(filter-out original, $(shell git remote))
 # review `install` recipe if using other CONFIG_ARGS
@@ -67,6 +70,8 @@ all:	Makefile | configure
 	  ln -sf $(GSNAME) $$symlink-$(CS_VERSION); \
 	 ln -sf $(GSNAME) $$symlink; \
 	done
+%.backup: %
+	[ -e $< ] && mv -f $< $(basename $<).$(call MTIME, $<)$(suffix $<)
 install: $(CS_MAKEFILES)
 	make -f $< install
 	# make other aliases:
@@ -151,3 +156,4 @@ float-test:
 	rm -f $(<:.c=.o)
 %:	| $(CS_MAKEFILES)
 	$(MAKE) XCFLAGS="$(XCFLAGS)" -f $(CS_DEFAULT) "$@"
+.PHONY: all %.backup float-edit float-test required
