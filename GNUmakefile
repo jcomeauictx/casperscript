@@ -55,7 +55,7 @@ else
 	CS_DEFAULT := $(ARCH).mak
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
-all:	Makefile | configure
+all:	Makefile | configure make.log.backup
 	# these following two rules shouldn't be necessary, but leave them
 	[ -e configure ] || $(MAKE) configure
 	[ -e Makefile ] || $(MAKE) Makefile
@@ -71,7 +71,7 @@ all:	Makefile | configure
 	 ln -sf $(GSNAME) $$symlink; \
 	done
 %.backup: %
-	[ -e $< ] && mv -f $< $(basename $<).$(call MTIME, $<)$(suffix $<)
+	-[ -e $< ] && mv -f $< $(basename $<).$(call MTIME, $<)$(suffix $<)
 install: $(CS_MAKEFILES)
 	make -f $< install
 	# make other aliases:
@@ -115,8 +115,9 @@ gscasper:
 	$(GSCASPER)
 caspertest:
 	echo '$(CASPERTEST)' | $(GSCASPER)
-remake: # unlike `rebuild`, just uses last build's version number
-	XCFLAGS="-DDEBUG" $(MAKE) CS_VERSION=$(GS_BUILDVERSION)
+# remake, unlike `rebuild`, just uses last build's version number
+remake:
+	XCFLAGS="$(XCFLAGS)" $(MAKE) CS_VERSION=$(GS_BUILDVERSION)
 rebuild:
 	# if we changed anything, make sure we commit it before rebuild
 	git diff --name-only --exit-code || \
