@@ -411,10 +411,17 @@ int
 gs_alloc_string_ref(gs_ref_memory_t * mem, ref * psref,
                     uint attrs, uint nbytes, client_name_t cname)
 {
+#ifdef USE_C_STRINGS
+    byte *str = gs_alloc_string((gs_memory_t *) mem, nbytes + 1, cname);
+#else
     byte *str = gs_alloc_string((gs_memory_t *) mem, nbytes, cname);
+#endif
 
     if (str == 0)
         return_error(gs_error_VMerror);
+#ifdef USE_C_STRINGS
+    str[nbytes] = '\0';
+#endif
     make_string(psref, attrs | mem->space, nbytes, str);
     return 0;
 }
