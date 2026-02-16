@@ -55,7 +55,8 @@ else
 	CS_DEFAULT := $(ARCH).mak
 	CS_MAKEFILES := $(CS_DEFAULT) Makefile
 endif
-all:	Makefile | configure make.log.backup
+all:	Makefile | configure
+	[ -f make.log ] && $(MAKE) make.log.backup || true
 	# these following two rules shouldn't be necessary, but leave them
 	[ -e configure ] || $(MAKE) configure
 	[ -e Makefile ] || $(MAKE) Makefile
