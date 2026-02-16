@@ -153,10 +153,13 @@ static int
 dynamic_make_string(i_ctx_t *i_ctx_p, ref * pref, da_ptr pda, byte * next)
 {
     uint size = (pda->next = next) - pda->base;
-    int code = dynamic_resize(pda, size);
+    int code = dynamic_resize(pda, REAL_STRING_SIZE(size));
 
     if (code < 0)
         return code;
+#ifdef USE_C_STRINGS
+    pda->base[size] = '\0';
+#endif
     make_tasv_new(pref, t_string,
                   a_all | imemory_space((gs_ref_memory_t *) pda->memory),
                   size, bytes, pda->base);
