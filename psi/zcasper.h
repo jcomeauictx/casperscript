@@ -4,4 +4,7 @@
 /* add support for casperscript extensions */
 int cs_sleep(double seconds);  /* actual implementation of `sleep` */
 int zcasperinit(i_ctx_t *i_ctx_p);
+#ifdef USE_LIBREADLINE
+void cs_set_readline_prompt(const char *prompt, int len);
+#endif
 // vim: tabstop=8 shiftwidth=4 expandtab softtabstop=4

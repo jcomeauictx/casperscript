@@ -24,6 +24,7 @@
 #include <readline/readline.h>
 #include <readline/history.h>
 #include <stdlib.h>
+#include <string.h>
 #include <termios.h>  /* for turning off and on echoing */
 #include <unistd.h>  /* for read() and write() */
 #include "gssyslog.h"
@@ -31,6 +32,23 @@
 #endif
 
 extern int rl_tty_set_echoing PARAMS((int));
+
+#ifdef USE_LIBREADLINE
+/* Prompt text last set by PostScript via .setprompt.  When non-empty,
+ * gp_readline passes it directly to readline so history-scroll redraws
+ * reproduce the real prompt instead of overwriting it with dots. */
+static char cs_readline_prompt_buf[8192] = "";
+
+void
+cs_set_readline_prompt(const char *prompt, int len)
+{
+    if (len < 0) len = strlen(prompt);
+    if (len >= (int)sizeof(cs_readline_prompt_buf))
+        len = sizeof(cs_readline_prompt_buf) - 1;
+    memcpy(cs_readline_prompt_buf, prompt, len);
+    cs_readline_prompt_buf[len] = '\0';
+}
+#endif
 
 int
 gp_readline_init(void **preadline_data, gs_memory_t * mem)
@@ -87,10 +105,23 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
         if (!count && s_out && prompt) {
             DISCARD(strncpy(promptstring, (char *)prompt->data, prompt->size));
             promptstring[prompt->size] = '\0';
+        } else if (cs_readline_prompt_buf[0] != '\0') {
+            /* PostScript called .setprompt before printing the prompt, so we
+             * have the exact text that is on-screen.  Pass it to readline with
+             * rl_already_prompted so readline:
+             *   (a) skips the initial display (it's already there), AND
+             *   (b) correctly redraws "GS> " (not dots) during history scroll.
+             * Redrawing "GS> " over existing "GS> " is idempotent. */
+            DISCARD(strncpy(promptstring, cs_readline_prompt_buf, MAXPROMPT - 1));
+            promptstring[MAXPROMPT - 1] = '\0';
+            rl_already_prompted = (int)true;
+            syslog(LOG_USER | LOG_DEBUG, "using stored prompt: \"%s\"",
+                    promptstring);
         } else {
             rl_already_prompted = (int)true;
-            /* attempt to get cursor position using <ESC>[6n which replies
-             * with <ESC>[{ROW};{COLUMN}R
+            /* Fallback: attempt to get cursor position using <ESC>[6n which
+             * replies with <ESC>[{ROW};{COLUMN}R.  This is used when
+             * .setprompt has not been called (e.g. plain gs without casper).
              */
             if (isatty(CS_STDIN)) {
                 int columnlength = 0, cha_promptsize = strlen(CHA);
@@ -125,7 +156,7 @@ gp_readline(stream *s_in, stream *s_out, void *readline_data,
                 /* but add 1 for final "\0" in `size` arg to snprintf */
                 syslog(LOG_USER | LOG_DEBUG, "columnlength: %d", columnlength);
                 cha_promptsize += (columnlength - 2) + 1;
-                DISCARD(snprintf(promptstring, cha_promptsize, CHA, promptsize)); 
+                DISCARD(snprintf(promptstring, cha_promptsize, CHA, promptsize));
 #endif
                 syslog(LOG_USER | LOG_DEBUG, "prompt now: \"%s\"",
                         promptstring);

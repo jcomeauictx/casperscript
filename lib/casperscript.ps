@@ -740,6 +740,10 @@ casperdict begin
       {(>) string.add 4 -1 roll pop}
       {(<) string.add 4 -1 roll 6 string cvs string.add (>) string.add}
       ifelse put
+    % tell libreadline what the prompt text is so it can redraw correctly
+    % during history scrolling (avoids the dots-overwrite bug);
+    % .setprompt only exists when built with USE_LIBREADLINE
+    /.setprompt where {pop .promptstr .setprompt} if
     .promptstr #only
   } bind def
   % now copying almost verbatim from gs_init.ps

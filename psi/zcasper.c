@@ -206,6 +206,20 @@ int zreadlink(i_ctx_t *i_ctx_p) {
 }
 #endif  /* TEST_ZCASPER */
 
+#ifdef USE_LIBREADLINE
+/* <string> .setprompt -
+ * Store the prompt string so gp_readline can pass it directly to readline,
+ * fixing the history-scroll overwrite bug (issue #18 / scrolling corruption). */
+static int zsetprompt(i_ctx_t *i_ctx_p);
+static int zsetprompt(i_ctx_t *i_ctx_p) {
+    os_ptr op = osp;
+    check_read_type(*op, t_string);
+    cs_set_readline_prompt((const char *)op->value.bytes, r_size(op));
+    pop(1);
+    return 0;
+}
+#endif
+
 /* ------ Initialization procedure ------ */
 const op_def zcasper_op_defs[] =
 {
@@ -216,6 +230,9 @@ const op_def zcasper_op_defs[] =
     {"2.symlink", zsymlink},
     {"2.mkdir", zmkdir},
     {"3sprintf", zsprintf},
+#ifdef USE_LIBREADLINE
+    {"1.setprompt", zsetprompt},
+#endif
     op_def_end(0)
 };
 
