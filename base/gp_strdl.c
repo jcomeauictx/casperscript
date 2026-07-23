@@ -29,9 +29,9 @@
 #include <unistd.h>  /* for read() and write() */
 #include "gssyslog.h"
 #include "files.h"
-#endif
 
 extern int rl_tty_set_echoing PARAMS((int));
+#endif
 
 #ifdef USE_LIBREADLINE
 /* Prompt text last set by PostScript via .setprompt.  When non-empty,

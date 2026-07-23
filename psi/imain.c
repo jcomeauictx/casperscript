@@ -60,7 +60,7 @@
 #include "zfile.h"
 #include "valgrind.h"
 #include "gssyslog.h"
-#include "base/casper.h"  /* stringizing and casperscript-related stuff */
+#include "casper.h"  /* stringizing and casperscript-related stuff */
 
 /* ------ Exported data ------ */
 
