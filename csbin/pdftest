@@ -3,5 +3,5 @@
 (testing again) #
 (ARGUMENTS: ) # ARGUMENTS ###
 (sys.argv: ) # sys.argv ###
-sys.argv 1 get (.pdf) stradd /outfile exch def
+sys.argv 1 get (.pdf) string.add /outfile exch def
 <</OutputFile outfile>> setpagedevice
