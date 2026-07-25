@@ -1,0 +1,5 @@
+#!/usr/local/casperscript/bin/bccs -S -sDEVICE=pdfwrite --
+(testing) =
+(testing again) #
+(ARGUMENTS: ) # ARGUMENTS ###
+(sys.argv: ) # sys.argv ###
