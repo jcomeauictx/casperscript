@@ -1,7 +1,8 @@
-#!/usr/local/casperscript/bin/bccs -S -sDEVICE=pdfwrite --
-(testing) =
-(testing again) #
-(ARGUMENTS: ) # ARGUMENTS ###
-(sys.argv: ) # sys.argv ###
-sys.argv 1 get (.pdf) string.add /outfile exch def
+#!/usr/local/casperscript/bin/bccs -S -sDEVICE=pdfwrite -o/tmp/null.pdf --
+%(testing) =
+%(testing again) #
+%(ARGUMENTS: ) # ARGUMENTS ###
+(sys.argv: ) #only sys.argv ###
+sys.argv 1 get dup /infile exch def (.pdf) string.add /outfile exch def
+currentpagedevice ###
 <</OutputFile outfile>> setpagedevice
