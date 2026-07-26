@@ -6,3 +6,6 @@
 sys.argv 1 get dup /infile exch def (.pdf) string.add /outfile exch def
 currentpagedevice ###
 <</OutputFile outfile>> setpagedevice
+/showpage /showpage.orig alias
+/showpage {100 100 moveto (watermark) show showpage.orig} def
+infile run
